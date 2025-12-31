@@ -1,0 +1,238 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import api from '../api';
+
+// This is the component for our /register route
+const RegisterSuperAdmin: React.FC = () => {
+  const [formData, setFormData] = useState({
+    organizationName: '',
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    phone: '',
+  });
+
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const navigate = useNavigate();
+  const orgNameInputRef = useRef<HTMLInputElement>(null);
+
+  const { organizationName, firstName, lastName, email, password, phone } = formData;
+
+  // Auto-focus first input on mount
+  useEffect(() => {
+    orgNameInputRef.current?.focus();
+  }, []);
+
+  const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+    // Clear error when user starts typing
+    if (error) setError('');
+  };
+
+  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setMessage('');
+    setError('');
+    setIsSubmitting(true);
+
+    try {
+      // This is the API endpoint from Step 1
+      const response = await api.post('/api/auth/register-super-admin', formData);
+
+      setMessage(`${response.data.msg} Redirecting to login...`); // Show success message
+      setFormData({ // Clear the form
+        organizationName: '',
+        firstName: '',
+        lastName: '',
+        email: '',
+        password: '',
+        phone: '',
+      });
+      
+      // Redirect to login after 2 seconds
+      setTimeout(() => {
+        navigate('/login');
+      }, 2000);
+    } catch (err: any) {
+      // Handle errors
+      if (err.response && err.response.data) {
+        // Handle express-validator errors (array format)
+        if (err.response.data.errors && Array.isArray(err.response.data.errors)) {
+          const errorMessages = err.response.data.errors.map((e: any) => e.msg).join(', ');
+          setError(errorMessages);
+        } else {
+          // Handle custom error messages (string format)
+          setError(err.response.data.msg || 'Registration failed');
+        }
+      } else {
+        setError('Registration failed. Please check your connection and try again.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="relative flex min-h-screen w-full flex-col group/design-root">
+      <div className="flex-1">
+        <div className="grid min-h-screen lg:grid-cols-2">
+          <div className="hidden lg:flex flex-col items-center justify-center bg-[#111827] text-white p-12">
+            <Link to="/landing" className="flex flex-col items-center justify-center text-center max-w-md cursor-pointer hover:opacity-80 transition-opacity">
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-primary text-5xl">checklist</span>
+                <h2 className="text-4xl font-bold tracking-tighter">AttendMark</h2>
+              </div>
+              <p className="mt-4 text-lg text-gray-300">Seamless Attendance Tracking for Modern Organizations.</p>
+            </Link>
+          </div>
+
+          <div className="flex w-full items-center justify-center bg-white dark:bg-zinc-900 p-6 sm:p-8 lg:p-12">
+            <div className="w-full max-w-md space-y-6">
+              <div className="space-y-2 text-left">
+                <h1 className="text-[#181511] dark:text-gray-100 text-3xl sm:text-4xl font-black leading-tight tracking-[-0.033em]">Create your account</h1>
+                <p className="text-gray-500 dark:text-gray-400">Enter your details to get started.</p>
+              </div>
+
+              {/* Success Message */}
+              {message && (
+                <div className="flex items-center gap-3 rounded-lg border border-green-500/50 bg-green-500/10 p-4">
+                  <span className="material-symbols-outlined text-green-500" style={{ fontSize: '24px' }}>check_circle</span>
+                  <p className="text-sm font-medium text-green-500">{message}</p>
+                </div>
+              )}
+
+              {/* Error Message */}
+              {error && (
+                <div className="flex items-center gap-3 rounded-lg border border-red-500/50 bg-red-500/10 p-4">
+                  <span className="material-symbols-outlined text-red-500" style={{ fontSize: '24px' }}>error</span>
+                  <p className="text-sm font-medium text-red-500">{error}</p>
+                </div>
+              )}
+
+              <form onSubmit={onSubmit} className="space-y-4">
+                <div className="flex flex-col">
+                  <label className="flex flex-col min-w-40 flex-1">
+                    <p className="text-[#181511] dark:text-gray-200 text-base font-medium leading-normal pb-2">Organization Name</p>
+                    <input
+                      ref={orgNameInputRef}
+                      className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-gray-100 focus:outline-0 focus:ring-2 focus:ring-primary/50 dark:focus:ring-primary/50 border border-[#e6e2db] dark:border-gray-700 bg-white dark:bg-gray-800 h-14 placeholder:text-[#8a7b60] dark:placeholder:text-gray-500 p-[15px] text-base font-normal leading-normal transition-shadow"
+                      placeholder="Enter your organization's name"
+                      type="text"
+                      name="organizationName"
+                      value={organizationName}
+                      onChange={onChange}
+                      required
+                      autoComplete="organization"
+                    />
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <label className="flex flex-col min-w-40 flex-1">
+                    <p className="text-[#181511] dark:text-gray-200 text-base font-medium leading-normal pb-2">First Name</p>
+                    <input
+                      className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-gray-100 focus:outline-0 focus:ring-2 focus:ring-primary/50 dark:focus:ring-primary/50 border border-[#e6e2db] dark:border-gray-700 bg-white dark:bg-gray-800 h-14 placeholder:text-[#8a7b60] dark:placeholder:text-gray-500 p-[15px] text-base font-normal leading-normal transition-shadow"
+                      placeholder="Enter your first name"
+                      type="text"
+                      name="firstName"
+                      value={firstName}
+                      onChange={onChange}
+                      required
+                    />
+                  </label>
+
+                  <label className="flex flex-col min-w-40 flex-1">
+                    <p className="text-[#181511] dark:text-gray-200 text-base font-medium leading-normal pb-2">Last Name</p>
+                    <input
+                      className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-gray-100 focus:outline-0 focus:ring-2 focus:ring-primary/50 dark:focus:ring-primary/50 border border-[#e6e2db] dark:border-gray-700 bg-white dark:bg-gray-800 h-14 placeholder:text-[#8a7b60] dark:placeholder:text-gray-500 p-[15px] text-base font-normal leading-normal transition-shadow"
+                      placeholder="Enter your last name"
+                      type="text"
+                      name="lastName"
+                      value={lastName}
+                      onChange={onChange}
+                      required
+                    />
+                  </label>
+                </div>
+
+                <div className="flex flex-col">
+                  <label className="flex flex-col min-w-40 flex-1">
+                    <p className="text-[#181511] dark:text-gray-200 text-base font-medium leading-normal pb-2">Email</p>
+                    <input
+                      className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-gray-100 focus:outline-0 focus:ring-2 focus:ring-primary/50 dark:focus:ring-primary/50 border border-[#e6e2db] dark:border-gray-700 bg-white dark:bg-gray-800 h-14 placeholder:text-[#8a7b60] dark:placeholder:text-gray-500 p-[15px] text-base font-normal leading-normal transition-shadow"
+                      placeholder="Enter your email address"
+                      type="email"
+                      name="email"
+                      value={email}
+                      onChange={onChange}
+                      required
+                      autoComplete="email"
+                    />
+                  </label>
+                </div>
+
+                <div className="flex flex-col">
+                  <label className="flex flex-col min-w-40 flex-1">
+                    <p className="text-[#181511] dark:text-gray-200 text-base font-medium leading-normal pb-2">
+                      Phone <span className="text-gray-400 dark:text-gray-500">(optional)</span>
+                    </p>
+                    <input
+                      className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-gray-100 focus:outline-0 focus:ring-2 focus:ring-primary/50 dark:focus:ring-primary/50 border border-[#e6e2db] dark:border-gray-700 bg-white dark:bg-gray-800 h-14 placeholder:text-[#8a7b60] dark:placeholder:text-gray-500 p-[15px] text-base font-normal leading-normal transition-shadow"
+                      placeholder="Enter your phone number"
+                      type="text"
+                      name="phone"
+                      value={phone}
+                      onChange={onChange}
+                    />
+                  </label>
+                </div>
+
+                <div className="flex flex-col">
+                  <label className="flex flex-col min-w-40 flex-1">
+                    <p className="text-[#181511] dark:text-gray-200 text-base font-medium leading-normal pb-2">Password</p>
+                    <div className="relative flex items-center">
+                      <input
+                        className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-gray-100 focus:outline-0 focus:ring-2 focus:ring-primary/50 dark:focus:ring-primary/50 border border-[#e6e2db] dark:border-gray-700 bg-white dark:bg-gray-800 h-14 placeholder:text-[#8a7b60] dark:placeholder:text-gray-500 p-[15px] pr-12 text-base font-normal leading-normal transition-shadow"
+                        placeholder="Enter your password"
+                        type="password"
+                        name="password"
+                        value={password}
+                        onChange={onChange}
+                        minLength={6}
+                        required
+                        autoComplete="new-password"
+                      />
+                      <button type="button" className="absolute right-0 mr-4 text-gray-500 dark:text-gray-400 hover:text-[#181511] dark:hover:text-gray-200">
+                        <span className="material-symbols-outlined">visibility_off</span>
+                      </button>
+                    </div>
+                  </label>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className={`flex h-14 w-full items-center justify-center gap-2 rounded-lg bg-primary px-6 text-base font-bold text-white shadow-sm transition-all hover:bg-[#d63a25] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+                    isSubmitting ? 'opacity-70 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {isSubmitting ? 'Registering...' : 'Register'}
+                </button>
+              </form>
+
+              <div className="text-center text-sm text-gray-500 dark:text-gray-400">
+                Already have an account? <Link to="/login" className="font-semibold text-primary hover:underline">Login here</Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default RegisterSuperAdmin;
+
