@@ -10,8 +10,6 @@ interface BulkImportStaffProps {
 
 const BulkImportStaff: React.FC<BulkImportStaffProps> = ({ isOpen, onClose, onSuccess }) => {
   const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [temporaryPassword, setTemporaryPassword] = useState('');
-  const [useRandomPassword, setUseRandomPassword] = useState(false);
   const [isBulkImporting, setIsBulkImporting] = useState(false);
   const [csvPreview, setCsvPreview] = useState<any[]>([]);
   const [error, setError] = useState('');
@@ -109,8 +107,6 @@ const BulkImportStaff: React.FC<BulkImportStaffProps> = ({ isOpen, onClose, onSu
           setMessage(response.msg || `Successfully imported ${response.successCount} staff members`);
           onClose();
           setCsvFile(null);
-          setTemporaryPassword('');
-          setUseRandomPassword(false);
           setCsvPreview([]);
           onSuccess(); // Refresh the staff list
         } catch (err: any) {
@@ -146,8 +142,6 @@ const BulkImportStaff: React.FC<BulkImportStaffProps> = ({ isOpen, onClose, onSu
             onClick={() => {
               onClose();
               setCsvFile(null);
-              setTemporaryPassword('');
-              setUseRandomPassword(false);
               setCsvPreview([]);
               setError('');
               setMessage('');
@@ -341,8 +335,6 @@ const BulkImportStaff: React.FC<BulkImportStaffProps> = ({ isOpen, onClose, onSu
             onClick={() => {
               onClose();
               setCsvFile(null);
-              setTemporaryPassword('');
-              setUseRandomPassword(false);
               setCsvPreview([]);
               setError('');
               setMessage('');
