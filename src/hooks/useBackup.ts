@@ -46,15 +46,15 @@ export const useBackup = () => {
   }, [user, isPlatformOwner]);
 
   // Create backup silently in the background
-  const createBackup = useCallback(async (orgId: string, collectionPrefix: string): Promise<void> => {
+  const createBackup = useCallback(async (orgId: string): Promise<void> => {
     try {
       // Fetch backup from API
       const response = await api.get(`/api/backup/${orgId}/export`, {
         responseType: 'blob', // Important: Get response as blob
       });
 
-      // Save to IndexedDB using collectionPrefix as key
-      await saveBackup(orgId, collectionPrefix, response.data);
+      // Save to IndexedDB
+      await saveBackup(orgId, response.data);
       
       console.log(`✅ Backup created successfully for organization ${orgId}`);
     } catch (error: any) {
@@ -82,14 +82,14 @@ export const useBackup = () => {
           return; // Can't backup without collection prefix
         }
 
-        // Check if backup is needed
-        const needsBackup = await isBackupNeeded(collectionPrefix);
-        if (needsBackup) {
-          // Get organization ID for API call
-          const orgId = await getOrganizationId();
-          if (orgId) {
+        // Get organization ID for API call
+        const orgId = await getOrganizationId();
+        if (orgId) {
+          // Check if backup is needed
+          const needsBackup = await isBackupNeeded(orgId);
+          if (needsBackup) {
             // Create backup silently in background
-            await createBackup(orgId, collectionPrefix);
+            await createBackup(orgId);
           }
         }
       } catch (error) {

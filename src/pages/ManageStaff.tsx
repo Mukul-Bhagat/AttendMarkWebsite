@@ -622,7 +622,7 @@ const ManageStaff: React.FC = () => {
                           // Platform Owner can reset ANYONE, including Company Admin
                           // Company Admin can reset themselves OR subordinates (Manager, SessionAdmin)
                           // Company Admin cannot reset another Company Admin
-                          const currentUserId = user?.id || user?._id;
+                          const currentUserId = user?.id;
                           const isCurrentUser = staffId === currentUserId;
                           const isSubordinate = ['Manager', 'SessionAdmin'].includes(staff.role);
                           const canResetDevice = isPlatformOwner || isSuperAdmin || (isCompanyAdmin && (isCurrentUser || isSubordinate));
@@ -709,7 +709,11 @@ const ManageStaff: React.FC = () => {
                                               <button
                                                 onClick={() => {
                                                   setOpenMenuId(null);
-                                                  handleResetDevice(staffId);
+                                                  if (isPlatformOwner) {
+                                                    handleResetDeviceOnly(staffId);
+                                                  } else {
+                                                    handleResetDevice(staffId);
+                                                  }
                                                 }}
                                                 disabled={isResetting}
                                                 className="w-full text-left px-4 py-2 text-sm text-amber-600 dark:text-amber-400 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"

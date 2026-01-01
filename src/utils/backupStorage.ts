@@ -142,3 +142,34 @@ export const deleteBackup = async (id: string): Promise<void> => {
     throw error;
   }
 };
+
+/**
+ * Check if a backup is needed for today
+ * @param orgId - Organization ID
+ * @returns true if backup is needed (no backup exists for today), false otherwise
+ */
+export const isBackupNeeded = async (orgId: string): Promise<boolean> => {
+  try {
+    const db = await openDB();
+    const transaction = db.transaction([STORE_NAME], 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+
+    const dateKey = getTodayDateKey();
+    const id = `${orgId}_${dateKey}`;
+
+    return new Promise<boolean>((resolve, reject) => {
+      const request = store.get(id);
+      request.onsuccess = () => {
+        // If backup exists for today, it's not needed
+        resolve(!request.result);
+      };
+      request.onerror = () => {
+        reject(new Error('Failed to check backup status'));
+      };
+    });
+  } catch (error) {
+    console.error('Error checking if backup is needed:', error);
+    // On error, assume backup is needed
+    return true;
+  }
+};

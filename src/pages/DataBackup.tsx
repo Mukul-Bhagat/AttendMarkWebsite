@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api';
-import { downloadBackup, restoreBackup, restoreData, downloadStreamBackup } from '../api/backupApi';
+import { downloadBackup, restoreData, downloadStreamBackup } from '../api/backupApi';
 import { getBackups, deleteBackup as deleteBackupFromStorage } from '../utils/backupStorage';
 import LoadingSpinner from '../components/LoadingSpinner';
 
