@@ -3,6 +3,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { getOrCreateDeviceId } from '../utils/deviceId';
+import { extractSessionIdFromQR } from '../utils/qrParser';
 import { RefreshCw, ArrowLeft } from 'lucide-react';
 import { ISession } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -269,8 +270,8 @@ const ScanQR: React.FC = () => {
     }
   };
 
-  const handleScan = async (scannedSessionId: string) => {
-    if (isProcessing || !scannedSessionId || isScannerPaused) return;
+  const handleScan = async (scannedQRContent: string) => {
+    if (isProcessing || !scannedQRContent || isScannerPaused) return;
 
     // PAUSE SCANNER IMMEDIATELY to prevent multiple scans
     setIsScannerPaused(true);
@@ -278,16 +279,36 @@ const ScanQR: React.FC = () => {
     // Stop scanning immediately
     await stopScanning();
 
-    // Validate that scanned QR matches selected session
-    if (selectedSessionId && scannedSessionId !== selectedSessionId) {
+    // Parse sessionId from QR content (handles both URL and raw sessionId)
+    const extractedSessionId = extractSessionIdFromQR(scannedQRContent);
+    
+    if (!extractedSessionId) {
       setMessageType('error');
-      setMessage('QR code does not match the selected session. Please scan the correct QR code.');
+      setMessage('Invalid QR code. Please scan a valid session QR code.');
       setIsProcessing(false);
+      setIsScannerPaused(false);
       return;
     }
 
-    // Use selectedSessionId (should always be set if we're scanning)
-    const sessionId = selectedSessionId || scannedSessionId;
+    // Validate that scanned QR matches selected session (if one is selected)
+    if (selectedSessionId && extractedSessionId !== selectedSessionId) {
+      setMessageType('error');
+      setMessage('QR code does not match the selected session. Please scan the correct QR code.');
+      setIsProcessing(false);
+      setIsScannerPaused(false);
+      return;
+    }
+
+    // Use extracted sessionId (from QR) or selectedSessionId as fallback
+    const sessionId = extractedSessionId || selectedSessionId;
+    
+    if (!sessionId) {
+      setMessageType('error');
+      setMessage('Could not determine session ID. Please try again.');
+      setIsProcessing(false);
+      setIsScannerPaused(false);
+      return;
+    }
 
     setIsProcessing(true);
     setMessageType('info');
@@ -322,8 +343,34 @@ const ScanQR: React.FC = () => {
   };
 
   // This function sends all data to our backend
-  const markAttendance = async (sessionId: string, userLocation: any, deviceId: string, userAgent: string) => {
+  const markAttendance = async (sessionId: string, userLocation: { latitude: number; longitude: number }, deviceId: string, userAgent: string) => {
+    // Validate location before sending
+    if (!userLocation || typeof userLocation.latitude !== 'number' || typeof userLocation.longitude !== 'number') {
+      setMessageType('error');
+      setMessage('Location data is invalid. Please enable GPS and try again.');
+      setIsProcessing(false);
+      setIsScannerPaused(false);
+      return;
+    }
+
+    // Validate location is not (0,0) - common default/error value
+    if (userLocation.latitude === 0 && userLocation.longitude === 0) {
+      setMessageType('error');
+      setMessage('Invalid location detected. Please ensure GPS is enabled and try again.');
+      setIsProcessing(false);
+      setIsScannerPaused(false);
+      return;
+    }
+
     try {
+      console.log('[ATTENDANCE_SCAN] Sending request:', {
+        sessionId,
+        userLocation,
+        deviceId: deviceId.substring(0, 8) + '...', // Log partial deviceId for privacy
+        userAgent: userAgent.substring(0, 50) + '...', // Log partial userAgent
+        scanSource: 'web_scanner'
+      });
+
       const { data } = await api.post('/api/attendance/scan', {
         sessionId,
         userLocation,

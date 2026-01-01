@@ -46,6 +46,21 @@ const QuickScanHandler: React.FC = () => {
               // Optional: Check for token in query params (if QR codes use dynamic tokens)
               const token = searchParams.get('token');
 
+              // Validate location before sending
+              if (latitude === 0 && longitude === 0) {
+                setStatus('error');
+                setError('Invalid location detected. Please ensure GPS is enabled and try again.');
+                return;
+              }
+
+              console.log('[ATTENDANCE_SCAN] Sending request from QuickScanHandler:', {
+                sessionId,
+                userLocation: { latitude, longitude },
+                deviceId: deviceId.substring(0, 8) + '...',
+                userAgent: userAgent.substring(0, 50) + '...',
+                scanSource: 'google_lens_or_deep_link'
+              });
+
               // Make API call to mark attendance
               const { data } = await api.post('/api/attendance/scan', {
                 sessionId,
