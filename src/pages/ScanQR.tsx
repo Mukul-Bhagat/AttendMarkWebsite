@@ -325,12 +325,16 @@ const ScanQR: React.FC = () => {
           longitude: position.coords.longitude,
         };
 
-        // 3. Get the unique device ID and user agent
+        // 3. Get GPS accuracy and timestamp
+        const accuracy = position.coords.accuracy || 0; // Accuracy in meters
+        const timestamp = new Date().toISOString();
+
+        // 4. Get the unique device ID and user agent
         const deviceId = getOrCreateDeviceId();
         const userAgent = navigator.userAgent;
 
-        // 4. Call the backend API
-        markAttendance(sessionId, userLocation, deviceId, userAgent);
+        // 5. Call the backend API with MapmyIndia verification data
+        markAttendance(sessionId, userLocation, deviceId, userAgent, accuracy, timestamp);
       },
       (error) => {
         // 2. Location failed
@@ -338,12 +342,23 @@ const ScanQR: React.FC = () => {
         setMessage(`Error: Could not get location. Please enable GPS. (${error.message})`);
         setIsProcessing(false);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { 
+        enableHighAccuracy: true, 
+        timeout: 10000,
+        maximumAge: 0 // Always fetch fresh GPS, no caching
+      }
     );
   };
 
   // This function sends all data to our backend
-  const markAttendance = async (sessionId: string, userLocation: { latitude: number; longitude: number }, deviceId: string, userAgent: string) => {
+  const markAttendance = async (
+    sessionId: string, 
+    userLocation: { latitude: number; longitude: number }, 
+    deviceId: string, 
+    userAgent: string,
+    accuracy: number,
+    timestamp: string
+  ) => {
     // Validate location before sending
     if (!userLocation || typeof userLocation.latitude !== 'number' || typeof userLocation.longitude !== 'number') {
       setMessageType('error');
@@ -376,6 +391,8 @@ const ScanQR: React.FC = () => {
         userLocation,
         deviceId, // Send the device "fingerprint"
         userAgent, // Send the browser/OS signature
+        accuracy, // GPS accuracy in meters (required for MapmyIndia)
+        timestamp, // Timestamp of GPS reading
       });
 
       setMessageType('success');

@@ -40,6 +40,8 @@ const QuickScanHandler: React.FC = () => {
               setMessage('Marking your attendance...');
 
               const { latitude, longitude } = position.coords;
+              const accuracy = position.coords.accuracy || 0; // GPS accuracy in meters
+              const timestamp = new Date().toISOString();
               const deviceId = getOrCreateDeviceId();
               const userAgent = navigator.userAgent;
               
@@ -56,12 +58,13 @@ const QuickScanHandler: React.FC = () => {
               console.log('[ATTENDANCE_SCAN] Sending request from QuickScanHandler:', {
                 sessionId,
                 userLocation: { latitude, longitude },
+                accuracy,
                 deviceId: deviceId.substring(0, 8) + '...',
                 userAgent: userAgent.substring(0, 50) + '...',
                 scanSource: 'google_lens_or_deep_link'
               });
 
-              // Make API call to mark attendance
+              // Make API call to mark attendance with MapmyIndia verification data
               const { data } = await api.post('/api/attendance/scan', {
                 sessionId,
                 userLocation: {
@@ -70,6 +73,8 @@ const QuickScanHandler: React.FC = () => {
                 },
                 deviceId,
                 userAgent,
+                accuracy, // GPS accuracy in meters (required for MapmyIndia)
+                timestamp, // Timestamp of GPS reading
                 ...(token && { token }), // Include token if provided
               });
 
