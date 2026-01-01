@@ -325,9 +325,16 @@ const ScanQR: React.FC = () => {
           longitude: position.coords.longitude,
         };
 
-        // 3. Get GPS accuracy and timestamp
-        const accuracy = position.coords.accuracy || 0; // Accuracy in meters
-        const timestamp = new Date().toISOString();
+        // 3. Get GPS accuracy and timestamp (REQUIRED)
+        const accuracy = position.coords.accuracy; // Accuracy in meters (required)
+        if (!accuracy || accuracy <= 0) {
+          setMessageType('error');
+          setMessage('GPS accuracy data is missing. Please enable high-accuracy GPS and try again.');
+          setIsProcessing(false);
+          setIsScannerPaused(false);
+          return;
+        }
+        const timestamp = Date.now(); // Timestamp in milliseconds
 
         // 4. Get the unique device ID and user agent
         const deviceId = getOrCreateDeviceId();

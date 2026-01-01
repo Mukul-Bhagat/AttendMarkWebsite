@@ -40,8 +40,16 @@ const QuickScanHandler: React.FC = () => {
               setMessage('Marking your attendance...');
 
               const { latitude, longitude } = position.coords;
-              const accuracy = position.coords.accuracy || 0; // GPS accuracy in meters
-              const timestamp = new Date().toISOString();
+              const accuracy = position.coords.accuracy; // GPS accuracy in meters (required)
+              
+              // Validate accuracy is present
+              if (!accuracy || accuracy <= 0) {
+                setStatus('error');
+                setError('GPS accuracy data is missing. Please enable high-accuracy GPS and try again.');
+                return;
+              }
+              
+              const timestamp = Date.now(); // Timestamp in milliseconds
               const deviceId = getOrCreateDeviceId();
               const userAgent = navigator.userAgent;
               
@@ -115,7 +123,7 @@ const QuickScanHandler: React.FC = () => {
           {
             enableHighAccuracy: true,
             timeout: 10000,
-            maximumAge: 0, // Don't use cached location
+            maximumAge: 0, // Always fetch fresh GPS, no caching
           }
         );
       } catch (err: any) {
