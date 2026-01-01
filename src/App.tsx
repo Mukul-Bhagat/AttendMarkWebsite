@@ -22,6 +22,7 @@ import Leaves from './pages/Leaves';
 import QuickScanHandler from './pages/QuickScanHandler';
 import PlatformDashboard from './pages/PlatformDashboard';
 import PlatformAuditLogs from './pages/PlatformAuditLogs';
+import DataBackup from './pages/DataBackup';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
 import Layout from './components/Layout';
@@ -196,6 +197,16 @@ function App() {
         >
           <Route element={<Layout />}>
             <Route path="/manage-users" element={<ManageUsers />} />
+          </Route>
+        </Route>
+        
+        {/* Data Backup - Only for CompanyAdmin and Platform Owner */}
+        <Route 
+          element={<ProtectedRoute allowedRoles={['CompanyAdmin', 'PLATFORM_OWNER']} />}
+        >
+          <Route element={<Layout />}>
+            <Route path="/backup" element={<DataBackup />} />
+            <Route path="/data-backup" element={<DataBackup />} /> {/* Keep for backward compatibility */}
           </Route>
         </Route>
       </Routes>

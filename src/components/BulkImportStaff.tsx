@@ -70,7 +70,7 @@ const BulkImportStaff: React.FC<BulkImportStaffProps> = ({ isOpen, onClose, onSu
         const hasRole = headers.some(h => h.toLowerCase() === 'role');
 
         if (!hasFirstName || !hasLastName || !hasEmail || !hasRole) {
-          setError('CSV must contain "FirstName", "LastName", "Email", and "Role" columns. Role must be "Manager" or "SessionAdmin".');
+          setError('CSV must contain "firstName", "lastName", "email", and "role" columns. Role must be "Manager" or "SessionAdmin" (case-insensitive).');
           setIsBulkImporting(false);
           return;
         }
@@ -83,14 +83,33 @@ const BulkImportStaff: React.FC<BulkImportStaffProps> = ({ isOpen, onClose, onSu
           const roleKey = headers.find(h => h.toLowerCase() === 'role') || 'Role';
           const phoneKey = headers.find(h => h.toLowerCase() === 'phone') || 'Phone';
 
+          const rawRole = row[roleKey]?.trim() || '';
+          // Normalize role (case-insensitive): Manager, SessionAdmin, or Session Admin
+          let normalizedRole = '';
+          if (rawRole.toLowerCase() === 'manager') {
+            normalizedRole = 'Manager';
+          } else if (rawRole.toLowerCase() === 'sessionadmin' || rawRole.toLowerCase() === 'session admin') {
+            normalizedRole = 'SessionAdmin';
+          } else {
+            normalizedRole = rawRole; // Keep original if valid, will be validated later
+          }
+
           return {
             firstName: row[firstNameKey]?.trim() || '',
             lastName: row[lastNameKey]?.trim() || '',
             email: row[emailKey]?.trim() || '',
-            role: row[roleKey]?.trim() || '', // Required for staff
+            role: normalizedRole,
             phone: row[phoneKey]?.trim() || '',
           };
-        }).filter(user => user.firstName && user.lastName && user.email && user.role); // Filter out empty rows, role is required
+        }).filter(user => {
+          // Filter out empty rows and validate role
+          if (!user.firstName || !user.lastName || !user.email || !user.role) {
+            return false;
+          }
+          // Validate role matches 'Manager' or 'SessionAdmin' (case-insensitive)
+          const roleLower = user.role.toLowerCase();
+          return roleLower === 'manager' || roleLower === 'sessionadmin' || roleLower === 'session admin';
+        });
 
         if (users.length === 0) {
           setError('No valid users found in CSV file');
@@ -136,7 +155,7 @@ const BulkImportStaff: React.FC<BulkImportStaffProps> = ({ isOpen, onClose, onSu
         <div className="sticky top-0 bg-white dark:bg-slate-800 border-b border-[#e6e2db] dark:border-slate-700 px-6 py-4 flex items-center justify-between">
           <h3 className="text-xl font-bold text-[#181511] dark:text-white flex items-center">
             <span className="material-symbols-outlined text-[#f04129] mr-2">upload_file</span>
-            Bulk Import Users
+            Import Staff via CSV
           </h3>
           <button
             onClick={() => {
@@ -171,16 +190,16 @@ const BulkImportStaff: React.FC<BulkImportStaffProps> = ({ isOpen, onClose, onSu
 
         {/* CSV Format Instructions - Above Grid */}
         <div className="px-6 pt-4">
-          <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 p-3 rounded-md text-sm">
-            <p><strong>Required Columns:</strong> FirstName, LastName, Email, Role, Phone (optional).</p>
-            <p className="mt-1">Note: <strong>Role</strong> must be 'Manager' or 'SessionAdmin'.</p>
+            <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 p-3 rounded-md text-sm">
+            <p><strong>Required Columns:</strong> firstName, lastName, email, role, phone (optional).</p>
+            <p className="mt-1">Note: <strong>Role</strong> must be 'Manager' or 'SessionAdmin' (case-insensitive).</p>
             <button
               type="button"
               onClick={() => {
                 const sampleData = [
-                  ['FirstName', 'LastName', 'Email', 'Phone', 'Role'],
-                  ['Suresh', 'Patil', 'suresh.manager@test.com', '9876543210', 'Manager'],
-                  ['Anita', 'Desai', 'anita.admin@test.com', '9123456789', 'SessionAdmin'],
+                  ['firstName', 'lastName', 'email', 'phone', 'role'],
+                  ['John', 'Doe', 'john.doe@example.com', '9876543210', 'Manager'],
+                  ['Jane', 'Smith', 'jane.smith@example.com', '9123456789', 'SessionAdmin'],
                 ];
                 const csvContent = sampleData.map(row => row.join(',')).join('\n');
                 const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -196,7 +215,7 @@ const BulkImportStaff: React.FC<BulkImportStaffProps> = ({ isOpen, onClose, onSu
               className="mt-2 flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 border border-blue-300 dark:border-blue-700 rounded hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-colors"
             >
               <span className="material-symbols-outlined text-sm">download</span>
-              Download Staff Sample CSV
+              Download Sample CSV
             </button>
           </div>
         </div>
@@ -362,7 +381,7 @@ const BulkImportStaff: React.FC<BulkImportStaffProps> = ({ isOpen, onClose, onSu
             ) : (
               <>
                 <span className="material-symbols-outlined">upload_file</span>
-                <span>Import Users</span>
+                <span>Import Staff</span>
               </>
             )}
           </button>

@@ -22,7 +22,7 @@ type StaffUser = {
 };
 
 const ManageStaff: React.FC = () => {
-  const { isSuperAdmin, isCompanyAdmin, isPlatformOwner } = useAuth();
+  const { user, isSuperAdmin, isCompanyAdmin, isPlatformOwner } = useAuth();
   const canManageQuota = isSuperAdmin || isCompanyAdmin || isPlatformOwner;
   
   // Form state
@@ -66,19 +66,16 @@ const ManageStaff: React.FC = () => {
       setIsLoading(true);
       setError(''); // Clear any previous errors
       const { data } = await api.get('/api/users/my-organization');
+      
+      // Define allowed roles for staff list
+      const allowedRoles = ['SessionAdmin', 'Manager'];
+      // Platform Owner can also see Company Admins
+      if (isPlatformOwner) {
+        allowedRoles.push('CompanyAdmin');
+      }
+      
       // Filter for staff roles (Manager, SessionAdmin, and CompanyAdmin for Platform Owner)
-      const staff = data.filter(
-        (user: StaffUser) => {
-          if (user.role === 'SessionAdmin' || user.role === 'Manager') {
-            return true;
-          }
-          // Platform Owner can also see Company Admins
-          if (isPlatformOwner && user.role === 'CompanyAdmin') {
-            return true;
-          }
-          return false;
-        }
-      );
+      const staff = data.filter((user: StaffUser) => allowedRoles.includes(user.role));
       setStaffList(staff);
     } catch (err: any) {
       if (err.response?.status === 401) {
@@ -408,20 +405,20 @@ const ManageStaff: React.FC = () => {
                     <span className="material-symbols-outlined mr-3 text-[#f04129]" style={{ fontSize: '28px' }}>manage_accounts</span>
                     Add Staff Member
                   </h2>
-                  {isSuperAdmin && (
+                  {(isSuperAdmin || isCompanyAdmin || isPlatformOwner) && (
                     <button
                       type="button"
                       onClick={() => setIsImportModalOpen(true)}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#f04129] border border-[#f04129] rounded-lg hover:bg-[#f04129]/10 dark:hover:bg-[#f04129]/20 transition-colors"
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-[#f04129] rounded-lg hover:from-orange-600 hover:to-[#d63a25] transition-all duration-200 shadow-sm"
                     >
                       <span className="material-symbols-outlined text-lg">upload_file</span>
                       Import CSV
                     </button>
                   )}
                 </div>
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <label className="flex flex-col min-w-40 flex-1">
+                    <label className="flex flex-col min-w-40 flex-1 mb-4">
                       <p className="text-[#181511] dark:text-gray-200 text-base font-medium leading-normal pb-2">First Name</p>
                       <input
                         className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 focus:border-primary/50 dark:focus:border-primary/50 h-14 placeholder:text-[#8a7b60] dark:placeholder-gray-400 p-[15px] text-base font-normal leading-normal"
@@ -436,7 +433,7 @@ const ManageStaff: React.FC = () => {
                         disabled={isSubmitting}
                       />
                     </label>
-                    <label className="flex flex-col min-w-40 flex-1">
+                    <label className="flex flex-col min-w-40 flex-1 mb-4">
                       <p className="text-[#181511] dark:text-gray-200 text-base font-medium leading-normal pb-2">Last Name</p>
                       <input
                         className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 focus:border-primary/50 dark:focus:border-primary/50 h-14 placeholder:text-[#8a7b60] dark:placeholder-gray-400 p-[15px] text-base font-normal leading-normal"
@@ -453,7 +450,7 @@ const ManageStaff: React.FC = () => {
                     </label>
                   </div>
 
-                  <label className="flex flex-col w-full">
+                  <label className="flex flex-col w-full mb-4">
                     <p className="text-[#181511] dark:text-gray-200 text-base font-medium leading-normal pb-2">Email</p>
                     <input
                       className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 focus:border-primary/50 dark:focus:border-primary/50 h-14 placeholder:text-[#8a7b60] dark:placeholder-gray-400 p-[15px] text-base font-normal leading-normal"
@@ -469,7 +466,7 @@ const ManageStaff: React.FC = () => {
                     />
                   </label>
 
-                  <label className="flex flex-col w-full">
+                  <label className="flex flex-col w-full mb-4">
                     <p className="text-[#181511] dark:text-gray-200 text-base font-medium leading-normal pb-2">Password</p>
                     <div className="relative">
                       <input
@@ -498,7 +495,7 @@ const ManageStaff: React.FC = () => {
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Min 6 chars</p>
                   </label>
 
-                  <label className="flex flex-col w-full">
+                  <label className="flex flex-col w-full mb-4">
                     <p className="text-[#181511] dark:text-gray-200 text-base font-medium leading-normal pb-2">Phone (Optional)</p>
                     <input
                       className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 focus:border-primary/50 dark:focus:border-primary/50 h-14 placeholder:text-[#8a7b60] dark:placeholder-gray-400 p-[15px] text-base font-normal leading-normal"
@@ -510,7 +507,7 @@ const ManageStaff: React.FC = () => {
                     />
                   </label>
 
-                  <div className="flex flex-col w-full">
+                  <div className="flex flex-col w-full mb-4">
                     <p className="text-[#181511] dark:text-gray-200 text-base font-medium leading-normal pb-2">Role</p>
                     <div className="relative">
                       <select
@@ -603,9 +600,6 @@ const ManageStaff: React.FC = () => {
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" scope="col">Email</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" scope="col">Role</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" scope="col">Phone</th>
-                          {isPlatformOwner && (
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" scope="col">Device Reset</th>
-                          )}
                           {(isSuperAdmin || canManageQuota) && (
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-16" scope="col">Actions</th>
                           )}
@@ -623,6 +617,19 @@ const ManageStaff: React.FC = () => {
                           const isResetting = resettingDevice === staffId;
                           const isDeleting = deletingStaff === staffId;
                           const staffName = `${staff.profile.firstName} ${staff.profile.lastName}`;
+                          
+                          // Determine if current user can reset this staff member's device
+                          // Platform Owner can reset ANYONE, including Company Admin
+                          // Company Admin can reset themselves OR subordinates (Manager, SessionAdmin)
+                          // Company Admin cannot reset another Company Admin
+                          const currentUserId = user?.id || user?._id;
+                          const isCurrentUser = staffId === currentUserId;
+                          const isSubordinate = ['Manager', 'SessionAdmin'].includes(staff.role);
+                          const canResetDevice = isPlatformOwner || isSuperAdmin || (isCompanyAdmin && (isCurrentUser || isSubordinate));
+                          
+                          // Determine if current user can delete this staff member
+                          // SuperAdmin can delete, but not themselves
+                          const canDeleteStaff = isSuperAdmin && !isCurrentUser;
                           
                           return (
                             <tr key={staffId} className="hover:bg-red-50 dark:hover:bg-[#f04129]/10 transition-colors duration-150">
@@ -663,31 +670,6 @@ const ManageStaff: React.FC = () => {
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                 {staff.profile.phone || 'N/A'}
                               </td>
-                              {isPlatformOwner && (
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                  <button
-                                    onClick={() => handleResetDeviceOnly(staffId)}
-                                    disabled={isResetting}
-                                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                                    title="Reset Device ID (Platform Owner only)"
-                                  >
-                                    {isResetting ? (
-                                      <>
-                                        <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
-                                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                          <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
-                                        </svg>
-                                        Resetting...
-                                      </>
-                                    ) : (
-                                      <>
-                                        <span className="material-symbols-outlined text-sm">restart_alt</span>
-                                        Reset Device ID
-                                      </>
-                                    )}
-                                  </button>
-                                </td>
-                              )}
                               {(isSuperAdmin || canManageQuota) && (
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium w-16">
                                   <div className="relative" ref={(el) => { menuRefs.current[staffId] = el; }}>
@@ -702,33 +684,7 @@ const ManageStaff: React.FC = () => {
                                     {openMenuId === staffId && (
                                       <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 z-50">
                                         <ul className="py-1">
-                                          {isSuperAdmin && isDeviceLocked && (
-                                            <li>
-                                              <button
-                                                onClick={() => {
-                                                  setOpenMenuId(null);
-                                                  handleResetDevice(staffId);
-                                                }}
-                                                disabled={isResetting}
-                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                              >
-                                                {isResetting ? (
-                                                  <>
-                                                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                      <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
-                                                    </svg>
-                                                    <span>Resetting...</span>
-                                                  </>
-                                                ) : (
-                                                  <>
-                                                    <span className="material-symbols-outlined text-lg">restart_alt</span>
-                                                    <span>Reset Device</span>
-                                                  </>
-                                                )}
-                                              </button>
-                                            </li>
-                                          )}
+                                          {/* 1. Manage Leave Quota */}
                                           {canManageQuota && (
                                             <li>
                                               <button
@@ -743,7 +699,41 @@ const ManageStaff: React.FC = () => {
                                               </button>
                                             </li>
                                           )}
-                                          {isSuperAdmin && (
+                                          
+                                          {/* 2. Reset Device ID: Show for:
+                                              - SuperAdmin (when device is locked)
+                                              - Platform Owner (can reset anyone)
+                                              - Company Admin (can reset themselves or subordinates) */}
+                                          {((isSuperAdmin && isDeviceLocked) || (isPlatformOwner && canResetDevice) || (isCompanyAdmin && canResetDevice)) && (
+                                            <li>
+                                              <button
+                                                onClick={() => {
+                                                  setOpenMenuId(null);
+                                                  handleResetDevice(staffId);
+                                                }}
+                                                disabled={isResetting}
+                                                className="w-full text-left px-4 py-2 text-sm text-amber-600 dark:text-amber-400 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                              >
+                                                {isResetting ? (
+                                                  <>
+                                                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                      <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
+                                                    </svg>
+                                                    <span>Resetting...</span>
+                                                  </>
+                                                ) : (
+                                                  <>
+                                                    <span className="material-symbols-outlined text-lg">restart_alt</span>
+                                                    <span>Reset Device ID</span>
+                                                  </>
+                                                )}
+                                              </button>
+                                            </li>
+                                          )}
+                                          
+                                          {/* 3. Delete Staff: Only show for SuperAdmin, and hide if trying to delete themselves */}
+                                          {canDeleteStaff && (
                                             <li>
                                               <button
                                                 onClick={() => {

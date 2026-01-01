@@ -15,6 +15,7 @@
     "date-fns": "^4.1.0",
     "geolib": "^3.3.4",
     "html5-qrcode": "^2.3.8",
+    "idb": "^8.0.3",
     "jspdf": "^3.0.3",
     "jspdf-autotable": "^5.0.2",
     "lucide-react": "^0.554.0",

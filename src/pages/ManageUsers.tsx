@@ -684,10 +684,7 @@ const ManageUsers: React.FC = () => {
                               <th className="px-6 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-300 uppercase tracking-wider" scope="col">Name</th>
                               <th className="px-6 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-300 uppercase tracking-wider" scope="col">Email</th>
                               <th className="px-6 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-300 uppercase tracking-wider" scope="col">Phone</th>
-                              {isPlatformOwner && (
-                                <th className="px-6 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-300 uppercase tracking-wider" scope="col">Device Reset</th>
-                              )}
-                              {(isSuperAdmin || canManageQuota) && (
+                              {(isSuperAdmin || canManageQuota || isPlatformOwner) && (
                                 <th className="px-6 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-300 uppercase tracking-wider w-16" scope="col">Actions</th>
                               )}
                             </tr>
@@ -700,6 +697,9 @@ const ManageUsers: React.FC = () => {
                               const isDeleting = deletingUser === userId;
                               const userName = `${user.profile.firstName} ${user.profile.lastName}`;
                               
+                              // Determine if current user can reset this user's device
+                              // SuperAdmin, CompanyAdmin, and Platform Owner can reset EndUsers
+                              const canResetDevice = isSuperAdmin || isCompanyAdmin || isPlatformOwner;
 
                               return (
                                 <tr key={userId} className="hover:bg-red-50 dark:hover:bg-[#f04129]/10 transition-colors duration-150">
@@ -722,32 +722,7 @@ const ManageUsers: React.FC = () => {
                                   <td className="px-6 py-2 whitespace-nowrap text-sm text-[#8a7b60] dark:text-gray-400">
                                     {user.profile.phone || 'N/A'}
                                   </td>
-                                  {isPlatformOwner && (
-                                    <td className="px-6 py-2 whitespace-nowrap text-sm font-medium">
-                                      <button
-                                        onClick={() => handleResetDeviceOnly(userId)}
-                                        disabled={isResetting}
-                                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                                        title="Reset Device ID (Platform Owner only)"
-                                      >
-                                        {isResetting ? (
-                                          <>
-                                            <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
-                                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                              <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
-                                            </svg>
-                                            Resetting...
-                                          </>
-                                        ) : (
-                                          <>
-                                            <span className="material-symbols-outlined text-sm">restart_alt</span>
-                                            Reset Device ID
-                                          </>
-                                        )}
-                                      </button>
-                                    </td>
-                                  )}
-                                  {(isSuperAdmin || canManageQuota) && (
+                                  {(isSuperAdmin || canManageQuota || isPlatformOwner) && (
                                     <td className="px-6 py-2 whitespace-nowrap text-sm font-medium w-16">
                                       <div className="relative" ref={(el) => { menuRefs.current[userId] = el; }}>
                                         <button
@@ -761,33 +736,7 @@ const ManageUsers: React.FC = () => {
                                         {openMenuId === userId && (
                                           <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 z-50">
                                             <ul className="py-1">
-                                              {isDeviceLocked && (
-                                                <li>
-                                                  <button
-                                                    onClick={() => {
-                                                      setOpenMenuId(null);
-                                                      handleResetDevice(userId);
-                                                    }}
-                                                    disabled={isResetting}
-                                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                  >
-                                                    {isResetting ? (
-                                                      <>
-                                                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                                                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                          <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
-                                                        </svg>
-                                                        <span>Resetting...</span>
-                                                      </>
-                                                    ) : (
-                                                      <>
-                                                        <span className="material-symbols-outlined text-lg">restart_alt</span>
-                                                        <span>Reset Device</span>
-                                                      </>
-                                                    )}
-                                                  </button>
-                                                </li>
-                                              )}
+                                              {/* 1. Manage Leave Quota */}
                                               {canManageQuota && (
                                                 <li>
                                                   <button
@@ -802,6 +751,42 @@ const ManageUsers: React.FC = () => {
                                                   </button>
                                                 </li>
                                               )}
+                                              
+                                              {/* 2. Reset Device ID: Show for SuperAdmin, CompanyAdmin, or Platform Owner */}
+                                              {canResetDevice && (
+                                                <li>
+                                                  <button
+                                                    onClick={() => {
+                                                      setOpenMenuId(null);
+                                                      // Platform Owner uses reset-device-only, others use reset-device
+                                                      if (isPlatformOwner) {
+                                                        handleResetDeviceOnly(userId);
+                                                      } else {
+                                                        handleResetDevice(userId);
+                                                      }
+                                                    }}
+                                                    disabled={isResetting}
+                                                    className="w-full text-left px-4 py-2 text-sm text-amber-600 dark:text-amber-400 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                  >
+                                                    {isResetting ? (
+                                                      <>
+                                                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                          <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
+                                                        </svg>
+                                                        <span>Resetting...</span>
+                                                      </>
+                                                    ) : (
+                                                      <>
+                                                        <span className="material-symbols-outlined text-lg">restart_alt</span>
+                                                        <span>Reset Device ID</span>
+                                                      </>
+                                                    )}
+                                                  </button>
+                                                </li>
+                                              )}
+                                              
+                                              {/* 3. Delete User: Only show for SuperAdmin */}
                                               {isSuperAdmin && (
                                                 <li>
                                                   <button

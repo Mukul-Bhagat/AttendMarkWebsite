@@ -3,11 +3,16 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingSpinner from './LoadingSpinner';
 import ProfileMenu from './ProfileMenu';
+import Toast from './Toast';
+import { useAutoBackup } from '../hooks/useAutoBackup';
 
 const Layout: React.FC = () => {
   const { user, isSuperAdmin, isCompanyAdmin, isManager, isSessionAdmin, isPlatformOwner, isLoading } = useAuth();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // Initialize auto-backup hook (runs silently in background for COMPANY_ADMIN only)
+  const { toast, closeToast } = useAutoBackup();
 
   // Safety check: If user data is still loading or not available, show loading
   if (isLoading || !user || !user.profile) {
@@ -28,6 +33,7 @@ const Layout: React.FC = () => {
     if (path === '/reports') return 'Attendance Report';
     if (path === '/manage-staff') return 'Manage Staff';
     if (path.startsWith('/manage-users')) return 'Manage Users';
+    if (path === '/backup' || path === '/data-backup') return 'Data Backup';
     return 'Dashboard';
   };
 
@@ -193,6 +199,12 @@ const Layout: React.FC = () => {
                     {(isSuperAdmin || isCompanyAdmin || isPlatformOwner) && (
                       <li>
                         <NavLinkItem to="/manage-users" icon="manage_accounts">Manage Users</NavLinkItem>
+                      </li>
+                    )}
+                    {/* Data Backup - for CompanyAdmin and Platform Owner */}
+                    {(user?.role === 'CompanyAdmin' || user?.role === 'PLATFORM_OWNER') && (
+                      <li>
+                        <NavLinkItem to="/backup" icon="cloud_download">Data Backup</NavLinkItem>
                       </li>
                     )}
 
@@ -386,6 +398,12 @@ const Layout: React.FC = () => {
                         <NavLinkItem to="/manage-users" icon="manage_accounts">Manage Users</NavLinkItem>
                       </li>
                     )}
+                    {/* Data Backup - for CompanyAdmin and Platform Owner */}
+                    {(user?.role === 'CompanyAdmin' || user?.role === 'PLATFORM_OWNER') && (
+                      <li>
+                        <NavLinkItem to="/backup" icon="cloud_download">Data Backup</NavLinkItem>
+                      </li>
+                    )}
 
                     {/* Platform Owner Routes - Show when not on Platform pages */}
                     {isPlatformOwner && (
@@ -512,6 +530,15 @@ const Layout: React.FC = () => {
           <Outlet />
         </main>
       </div>
+
+      {/* Toast Notification for Auto-Backup */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={closeToast}
+        />
+      )}
     </div>
   );
 };
