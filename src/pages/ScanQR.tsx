@@ -334,7 +334,7 @@ const ScanQR: React.FC = () => {
           setIsScannerPaused(false);
           return;
         }
-        const timestamp = Date.now(); // Timestamp in milliseconds
+        const timestamp = String(Date.now()); // Timestamp in milliseconds
 
         // 4. Get the unique device ID and user agent
         const deviceId = getOrCreateDeviceId();
