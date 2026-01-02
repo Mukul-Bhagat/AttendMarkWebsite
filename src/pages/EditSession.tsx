@@ -5,7 +5,6 @@ import { useAuth, IUser as IAuthUser } from '../contexts/AuthContext';
 import { ISession } from '../types';
 import AddUsersModal from '../components/AddUsersModal';
 import { ArrowLeft, X } from 'lucide-react';
-import { extractCoordinatesFromGoogleMapsLink } from '../utils/mapsParser';
 
 interface IUser {
   _id: string;
@@ -316,11 +315,10 @@ const EditSession: React.FC = () => {
       let locationObj = undefined;
       if (formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID') {
         if (locationInputType === 'LINK') {
-          // SECURITY: Extract coordinates from Google Maps link
-          const extractedCoords = extractCoordinatesFromGoogleMapsLink(locationLink.trim());
-          
-          if (!extractedCoords) {
-            setError('Could not extract coordinates from the Google Maps link. Please either:\n1. Use a link that contains coordinates (e.g., https://maps.google.com/?q=lat,lng)\n2. Switch to "Coordinates" mode and enter latitude/longitude manually\n3. Use the map picker to select a location');
+          // Frontend sends link only - backend will resolve it to coordinates
+          // This allows support for Google Maps share links (maps.app.goo.gl, etc.)
+          if (!locationLink.trim()) {
+            setError('Please enter a Google Maps link.');
             setIsSubmitting(false);
             return;
           }
@@ -328,10 +326,7 @@ const EditSession: React.FC = () => {
           locationObj = {
             type: 'LINK',
             link: locationLink.trim(),
-            geolocation: {
-              latitude: extractedCoords.latitude,
-              longitude: extractedCoords.longitude,
-            },
+            // No coordinates - backend will resolve the link
           };
         } else {
           const lat = parseFloat(latitude);
@@ -680,51 +675,22 @@ const EditSession: React.FC = () => {
                         </button>
                       </div>
                       {locationInputType === 'LINK' ? (
-                        <div className="flex flex-col w-full">
-                          <label className="flex flex-col w-full">
-                            <p className="text-sm font-medium leading-normal pb-2 dark:text-gray-300">
-                              Google Maps Link <span className="text-red-500">*</span>
-                            </p>
-                            <input
-                              className={`form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border bg-white dark:bg-gray-900 focus:border-primary h-12 placeholder:text-gray-400 dark:placeholder:text-gray-500 p-3 text-base font-normal leading-normal ${
-                                locationLinkError 
-                                  ? 'border-red-500 focus:border-red-500 focus:ring-red-500/50' 
-                                  : 'border-gray-300 dark:border-gray-700'
-                              }`}
-                              type="url"
-                              value={locationLink}
-                              onChange={(e) => {
-                                setLocationLink(e.target.value);
-                                setLocationLinkError('');
-                                // Try to extract coordinates as user types
-                                if (e.target.value.trim()) {
-                                  const coords = extractCoordinatesFromGoogleMapsLink(e.target.value.trim());
-                                  if (coords) {
-                                    setLocationLinkError('');
-                                  }
-                                }
-                              }}
-                              onBlur={(e) => {
-                                if (e.target.value.trim()) {
-                                  const coords = extractCoordinatesFromGoogleMapsLink(e.target.value.trim());
-                                  if (!coords) {
-                                    setLocationLinkError('Could not extract coordinates from this link. Please use a link with coordinates or switch to Coordinates mode.');
-                                  } else {
-                                    setLocationLinkError('');
-                                  }
-                                }
-                              }}
-                              placeholder="https://maps.google.com/?q=40.7128,-74.0060"
-                              required
-                            />
-                          </label>
-                          {locationLinkError && (
-                            <p className="mt-1 text-sm text-red-600 dark:text-red-400">{locationLinkError}</p>
-                          )}
-                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            The link must contain coordinates. If your link doesn't have coordinates, switch to "Coordinates" mode.
+                        <label className="flex flex-col w-full">
+                          <p className="text-sm font-medium leading-normal pb-2 dark:text-gray-300">
+                            Google Maps Link <span className="text-red-500">*</span>
                           </p>
-                        </div>
+                          <input
+                            className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary h-12 placeholder:text-gray-400 dark:placeholder:text-gray-500 p-3 text-base font-normal leading-normal"
+                            type="url"
+                            value={locationLink}
+                            onChange={(e) => setLocationLink(e.target.value)}
+                            placeholder="https://maps.app.goo.gl/example or https://maps.google.com/?q=40.7128,-74.0060"
+                            required
+                          />
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            Paste any Google Maps share link. The system will automatically extract the location coordinates.
+                          </p>
+                        </label>
                       ) : (
                         <div className="grid grid-cols-2 gap-4">
                           <label className="flex flex-col w-full">
