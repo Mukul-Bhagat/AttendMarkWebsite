@@ -47,7 +47,6 @@ const EditSession: React.FC = () => {
   const [locationLink, setLocationLink] = useState('');
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
-  const [locationLinkError, setLocationLinkError] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
