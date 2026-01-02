@@ -6,6 +6,7 @@ import AddUsersModal from '../components/AddUsersModal';
 import { X } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
+import { extractCoordinatesFromGoogleMapsLink } from '../utils/mapsParser';
 
 interface IUser {
   _id: string;
@@ -251,16 +252,38 @@ const CreateSession: React.FC = () => {
       let locationObj = undefined;
       if (formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID') {
         if (locationInputType === 'LINK') {
+          // SECURITY: Extract coordinates from Google Maps link
+          const extractedCoords = extractCoordinatesFromGoogleMapsLink(locationLink.trim());
+          
+          if (!extractedCoords) {
+            setError('Could not extract coordinates from the Google Maps link. Please either:\n1. Use a link that contains coordinates (e.g., https://maps.google.com/?q=lat,lng)\n2. Switch to "Coordinates" mode and enter latitude/longitude manually\n3. Use the map picker to select a location');
+            setIsSubmitting(false);
+            return;
+          }
+          
           locationObj = {
             type: 'LINK',
             link: locationLink.trim(),
+            geolocation: {
+              latitude: extractedCoords.latitude,
+              longitude: extractedCoords.longitude,
+            },
           };
         } else {
+          const lat = parseFloat(latitude);
+          const lng = parseFloat(longitude);
+          
+          if (isNaN(lat) || isNaN(lng)) {
+            setError('Please enter valid latitude and longitude coordinates.');
+            setIsSubmitting(false);
+            return;
+          }
+          
           locationObj = {
             type: 'COORDS',
             geolocation: {
-              latitude: parseFloat(latitude) || 0,
-              longitude: parseFloat(longitude) || 0,
+              latitude: lat,
+              longitude: lng,
             },
           };
         }
@@ -864,17 +887,53 @@ const CreateSession: React.FC = () => {
                   </div>
                 </div>
                 {locationInputType === 'LINK' ? (
-                  <label className="flex flex-col">
-                    <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Google Maps Link</p>
-                    <input
-                      className="form-input flex w-full resize-none overflow-hidden rounded-lg border border-[#e6e2db] bg-white p-3 text-base font-normal leading-normal text-[#181511] placeholder:text-[#8a7b60] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-400 dark:focus:border-primary/80"
-                      type="url"
-                      value={locationLink}
-                      onChange={(e) => setLocationLink(e.target.value)}
-                      placeholder="https://maps.app.goo.gl/example"
-                      required
-                    />
-                  </label>
+                  <div className="flex flex-col">
+                    <label className="flex flex-col">
+                      <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">
+                        Google Maps Link <span className="text-red-500">*</span>
+                      </p>
+                      <input
+                        className={`form-input flex w-full resize-none overflow-hidden rounded-lg border p-3 text-base font-normal leading-normal text-[#181511] placeholder:text-[#8a7b60] focus:outline-none focus:ring-2 focus:ring-primary/50 dark:text-slate-200 dark:placeholder:text-slate-400 ${
+                          locationLinkError 
+                            ? 'border-red-500 focus:border-red-500 focus:ring-red-500/50' 
+                            : 'border-[#e6e2db] focus:border-primary dark:border-slate-700 dark:bg-slate-900 dark:focus:border-primary/80 bg-white'
+                        }`}
+                        type="url"
+                        value={locationLink}
+                        onChange={(e) => {
+                          setLocationLink(e.target.value);
+                          setLocationLinkError('');
+                          // Try to extract coordinates as user types
+                          if (e.target.value.trim()) {
+                            const coords = extractCoordinatesFromGoogleMapsLink(e.target.value.trim());
+                            if (coords) {
+                              setLocationLinkError('');
+                            } else {
+                              // Don't show error while typing, only on blur or submit
+                            }
+                          }
+                        }}
+                        onBlur={(e) => {
+                          if (e.target.value.trim()) {
+                            const coords = extractCoordinatesFromGoogleMapsLink(e.target.value.trim());
+                            if (!coords) {
+                              setLocationLinkError('Could not extract coordinates from this link. Please use a link with coordinates or switch to Coordinates mode.');
+                            } else {
+                              setLocationLinkError('');
+                            }
+                          }
+                        }}
+                        placeholder="https://maps.google.com/?q=40.7128,-74.0060"
+                        required
+                      />
+                    </label>
+                    {locationLinkError && (
+                      <p className="mt-1 text-sm text-red-600 dark:text-red-400">{locationLinkError}</p>
+                    )}
+                    <p className="mt-1 text-xs text-[#8a7b60] dark:text-slate-400">
+                      The link must contain coordinates. If your link doesn't have coordinates, switch to "Coordinates" mode.
+                    </p>
+                  </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-4">
                     <label className="flex flex-col">
