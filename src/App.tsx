@@ -125,7 +125,7 @@ function App() {
             <Route path="/leaves" element={<Leaves />} />
           </Route>
           {/* Deep Link Attendance - No Layout wrapper (full page) */}
-          <Route path="/quick-scan/:sessionId" element={<QuickScanHandler />} />
+          <Route path="/scan/:sessionId" element={<QuickScanHandler />} />
         </Route>
         
         {/* Classes routes - Accessible to all authenticated users (including EndUsers) */}

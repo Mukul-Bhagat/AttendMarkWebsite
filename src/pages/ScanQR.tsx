@@ -334,7 +334,7 @@ const ScanQR: React.FC = () => {
           setIsScannerPaused(false);
           return;
         }
-        const timestamp = String(Date.now()); // Timestamp in milliseconds
+        const timestamp = Date.now(); // Timestamp in milliseconds (number)
 
         // 4. Get the unique device ID and user agent
         const deviceId = getOrCreateDeviceId();
@@ -364,7 +364,7 @@ const ScanQR: React.FC = () => {
     deviceId: string, 
     userAgent: string,
     accuracy: number,
-    timestamp: string
+    timestamp: number
   ) => {
     // Validate location before sending
     if (!userLocation || typeof userLocation.latitude !== 'number' || typeof userLocation.longitude !== 'number') {

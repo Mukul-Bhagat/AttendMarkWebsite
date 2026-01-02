@@ -3,8 +3,9 @@
  * 
  * Normalizes QR content to extract sessionId from:
  * - Raw sessionId: "507f1f77bcf86cd799439011"
- * - URL with sessionId: "https://example.com/quick-scan/507f1f77bcf86cd799439011"
- * - URL with query params: "https://example.com/quick-scan/507f1f77bcf86cd799439011?token=xyz"
+ * - URL with sessionId: "https://example.com/scan/507f1f77bcf86cd799439011"
+ * - URL with query params: "https://example.com/scan/507f1f77bcf86cd799439011?token=xyz"
+ * - Legacy: "https://example.com/quick-scan/507f1f77bcf86cd799439011"
  * 
  * Returns the extracted sessionId or null if invalid
  */
@@ -21,11 +22,18 @@ export const extractSessionIdFromQR = (qrContent: string): string | null => {
     return trimmed;
   }
 
-  // Try to extract from URL pattern: /quick-scan/:sessionId
-  const urlPattern = /\/quick-scan\/([0-9a-fA-F]{24})/;
-  const match = trimmed.match(urlPattern);
-  if (match && match[1]) {
-    return match[1];
+  // Try to extract from URL pattern: /scan/:sessionId (new format)
+  const scanPattern = /\/scan\/([0-9a-fA-F]{24})/;
+  const scanMatch = trimmed.match(scanPattern);
+  if (scanMatch && scanMatch[1]) {
+    return scanMatch[1];
+  }
+
+  // Try to extract from URL pattern: /quick-scan/:sessionId (legacy format, backward compatibility)
+  const quickScanPattern = /\/quick-scan\/([0-9a-fA-F]{24})/;
+  const quickScanMatch = trimmed.match(quickScanPattern);
+  if (quickScanMatch && quickScanMatch[1]) {
+    return quickScanMatch[1];
   }
 
   // Try to extract from any URL with sessionId as last path segment

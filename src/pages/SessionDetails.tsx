@@ -179,9 +179,9 @@ const SessionDetails: React.FC = () => {
     );
   }
 
-  // The value of the QR code will be a deep link URL to the quick-scan page
+  // The value of the QR code will be a deep link URL to the scan page
   // This allows students to scan with their system camera or Google Lens
-  const qrValue = session._id ? `${window.location.origin}/quick-scan/${session._id}` : '';
+  const qrValue = session._id ? `${window.location.origin}/scan/${session._id}` : '';
 
   const formatDate = (dateString: string) => {
     try {
