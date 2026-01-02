@@ -66,6 +66,7 @@ const CreateSession: React.FC = () => {
   const [locationLink, setLocationLink] = useState('');
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
+  const [locationLinkError, setLocationLinkError] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
