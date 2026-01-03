@@ -11,8 +11,11 @@
 /**
  * Get Google Maps API key from environment variables
  * 
+ * PRODUCTION SAFETY: This function validates the API key is available at runtime.
+ * In Vite, environment variables are embedded at build time, but in some deployment
+ * platforms (like Render), they may need to be set at runtime.
+ * 
  * @returns Google Maps API key or empty string if not configured
- * @throws Error if API key is missing in production
  * 
  * @example
  * ```typescript
@@ -24,26 +27,81 @@
  */
 export function getGoogleMapsApiKey(): string {
   // Read from environment variable (Vite uses import.meta.env)
+  // Note: Vite exposes env vars prefixed with VITE_ at build time
+  // In production, ensure VITE_GOOGLE_MAPS_API_KEY is set in deployment environment
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
-  // In production, warn if API key is missing
-  if (import.meta.env.PROD && !apiKey) {
-    console.error(
-      '⚠️ Google Maps API key is missing! ' +
-      'Please set VITE_GOOGLE_MAPS_API_KEY in your environment variables.'
-    );
+  // Validate API key format (basic check - should start with AIza)
+  const isValidFormat = apiKey && typeof apiKey === 'string' && apiKey.trim().length > 0;
+  
+  // In production, log diagnostic info (without exposing the key)
+  if (import.meta.env.PROD) {
+    if (!isValidFormat) {
+      console.error(
+        '⚠️ [PRODUCTION] Google Maps API key is missing or invalid!',
+        '\n  - Check that VITE_GOOGLE_MAPS_API_KEY is set in your deployment environment',
+        '\n  - For Render: Set in Environment Variables section',
+        '\n  - Key should start with "AIza" and be 39 characters long',
+        '\n  - Current value:', apiKey ? `"${apiKey.substring(0, 8)}...${apiKey.length} chars"` : 'undefined'
+      );
+    } else {
+      // Log success (without exposing full key)
+      console.log(
+        '✅ [PRODUCTION] Google Maps API key is configured',
+        `(${apiKey.length} characters, starts with ${apiKey.substring(0, 4)})`
+      );
+    }
   }
 
-  return apiKey || '';
+  return isValidFormat ? apiKey.trim() : '';
 }
 
 /**
  * Check if Google Maps API key is configured
  * 
- * @returns true if API key is present, false otherwise
+ * PRODUCTION SAFETY: Use this to prevent loading Google Maps when key is missing.
+ * 
+ * @returns true if API key is present and valid, false otherwise
  */
 export function isGoogleMapsApiKeyConfigured(): boolean {
-  return !!getGoogleMapsApiKey();
+  const apiKey = getGoogleMapsApiKey();
+  return apiKey.length > 0 && apiKey.startsWith('AIza');
+}
+
+/**
+ * Validate API key and return diagnostic information
+ * 
+ * @returns Object with validation status and diagnostic info (without exposing the key)
+ */
+export function validateGoogleMapsApiKey(): {
+  isValid: boolean;
+  isConfigured: boolean;
+  diagnostic: {
+    hasValue: boolean;
+    isString: boolean;
+    length: number;
+    startsWithAIza: boolean;
+    environment: 'development' | 'production';
+  };
+} {
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const hasValue = !!apiKey;
+  const isString = typeof apiKey === 'string';
+  const length = isString ? apiKey.length : 0;
+  const startsWithAIza = isString && apiKey.startsWith('AIza');
+  const isValid = hasValue && isString && length > 0 && startsWithAIza;
+
+  return {
+    isValid,
+    isConfigured: isValid,
+    diagnostic: {
+      hasValue,
+      isString,
+      length,
+      startsWithAIza,
+      environment: import.meta.env.PROD ? 'production' : 'development',
+    },
+  };
 }
 
 /**

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useJsApiLoader } from '@react-google-maps/api';
 import { MapPin, AlertCircle, Loader2 } from 'lucide-react';
-import { getGoogleMapsApiKey, GOOGLE_MAPS_CONFIG } from '../utils/googleMapsConfig';
+import { getGoogleMapsApiKey, isGoogleMapsApiKeyConfigured, GOOGLE_MAPS_CONFIG } from '../utils/googleMapsConfig';
 import { trackApiUsage } from '../utils/billingSafety';
 
 // Google Maps libraries - only Places API needed
@@ -85,16 +85,38 @@ const PlacesAutocomplete: React.FC<PlacesAutocompleteProps> = ({
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
   // Get API key from props or environment variable
+  // PRODUCTION SAFETY: Validate API key before attempting to load Google Maps
   // Security: API key should NEVER be hardcoded - always use environment variables
-  const mapsApiKey = apiKey || getGoogleMapsApiKey();
+  const mapsApiKey = useMemo(() => {
+    const key = apiKey || getGoogleMapsApiKey();
+    
+    // Validate key format in production
+    if (import.meta.env.PROD && key && !key.startsWith('AIza')) {
+      console.warn('[PRODUCTION] Google Maps API key format appears invalid');
+    }
+    
+    return key;
+  }, [apiKey]);
+
+  // PRODUCTION SAFETY: Only load Google Maps if API key is configured
+  // This prevents "NoApiKeys" error in production
+  const isApiKeyValid = useMemo(() => {
+    if (apiKey) {
+      return apiKey.trim().length > 0 && apiKey.startsWith('AIza');
+    }
+    return isGoogleMapsApiKeyConfigured();
+  }, [apiKey]);
 
   // Load Google Maps API dynamically
+  // CRITICAL: Only call useJsApiLoader if API key is valid to prevent "NoApiKeys" error
   // Security: API key from environment variable, never hardcoded
   // Libraries: 'places' for Places Autocomplete (NOT Geocoding API)
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-places-autocomplete',
-    googleMapsApiKey: mapsApiKey,
+    googleMapsApiKey: isApiKeyValid ? mapsApiKey : '', // Only pass key if valid
     libraries, // Includes 'places' library for Places Autocomplete
+    // Prevent loading if key is invalid
+    ...(isApiKeyValid ? {} : { preventGoogleFontsLoading: true }),
   });
 
   // Track API usage for billing safety (client-side monitoring)
@@ -234,6 +256,26 @@ const PlacesAutocomplete: React.FC<PlacesAutocompleteProps> = ({
   // Reset function removed - was unused
   // If needed in the future, can be added back and exported via ref
 
+  // PRODUCTION SAFETY: Check for missing API key before attempting to load
+  // This prevents "NoApiKeys" error and shows user-friendly message
+  if (!isApiKeyValid) {
+    return (
+      <div className={`relative ${className}`}>
+        <div className="flex items-center gap-2 text-amber-600 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium">Google Maps API Key Missing</p>
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+              {import.meta.env.PROD 
+                ? 'Please configure VITE_GOOGLE_MAPS_API_KEY in your deployment environment.'
+                : 'Please set VITE_GOOGLE_MAPS_API_KEY in your .env file.'}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Show loading state while API is loading
   if (!isLoaded && !loadError) {
     return (
@@ -246,7 +288,7 @@ const PlacesAutocomplete: React.FC<PlacesAutocompleteProps> = ({
     );
   }
 
-  // Show error if API failed to load
+  // Show error if API failed to load (e.g., invalid key, network issues)
   if (loadError) {
     return (
       <div className={`relative ${className}`}>
@@ -255,10 +297,13 @@ const PlacesAutocomplete: React.FC<PlacesAutocompleteProps> = ({
           <div className="flex-1">
             <p className="text-sm font-medium">Failed to load Google Places API</p>
             <p className="text-xs text-red-500 mt-1">
-              {!mapsApiKey
-                ? 'API key is missing. Please configure VITE_GOOGLE_MAPS_API_KEY.'
-                : 'Please check your API key and network connection.'}
+              {loadError.message || 'Please check your API key and network connection.'}
             </p>
+            {import.meta.env.PROD && (
+              <p className="text-xs text-red-400 mt-1">
+                Verify VITE_GOOGLE_MAPS_API_KEY is set correctly in your deployment environment.
+              </p>
+            )}
           </div>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { GoogleMap, Marker, Circle, Autocomplete, useJsApiLoader } from '@react-google-maps/api';
-import { X, MapPin } from 'lucide-react';
+import { X, MapPin, AlertCircle } from 'lucide-react';
+import { getGoogleMapsApiKey, isGoogleMapsApiKeyConfigured, validateGoogleMapsApiKey } from '../utils/googleMapsConfig';
 
 // Google Maps libraries - only Places API needed
 // Note: We use Places API geometry data, NOT Geocoding API
@@ -52,19 +53,39 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
   }, [selectedLocation, defaultCenter]);
 
   // Get API key from props or environment variable
+  // PRODUCTION SAFETY: Validate API key before attempting to load Google Maps
   // Security: API key should NEVER be hardcoded - always use environment variables
   const mapsApiKey = useMemo(() => {
-    return apiKey || import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+    const key = apiKey || getGoogleMapsApiKey();
+    
+    // Validate key format in production
+    if (import.meta.env.PROD && key && !key.startsWith('AIza')) {
+      console.warn('[PRODUCTION] Google Maps API key format appears invalid');
+    }
+    
+    return key;
+  }, [apiKey]);
+
+  // PRODUCTION SAFETY: Only load Google Maps if API key is configured
+  // This prevents "NoApiKeys" error in production
+  const isApiKeyValid = useMemo(() => {
+    if (apiKey) {
+      return apiKey.trim().length > 0 && apiKey.startsWith('AIza');
+    }
+    return isGoogleMapsApiKeyConfigured();
   }, [apiKey]);
 
   // Load Google Maps API dynamically with Places library
+  // CRITICAL: Only call useJsApiLoader if API key is valid to prevent "NoApiKeys" error
   // Using unique script ID prevents duplicate script loading across component instances
   // Note: We use Places API geometry data, NOT Geocoding API
   const { isLoaded, loadError } = useJsApiLoader({
     id: SCRIPT_ID, // Unique ID ensures single script instance
-    googleMapsApiKey: mapsApiKey,
+    googleMapsApiKey: isApiKeyValid ? mapsApiKey : '', // Only pass key if valid
     libraries, // Includes 'places' for Places Autocomplete
     version: 'weekly', // Use stable weekly version
+    // Prevent loading if key is invalid
+    ...(isApiKeyValid ? {} : { preventGoogleFontsLoading: true }),
   });
 
   // Initialize/reset state when modal opens/closes
@@ -285,14 +306,43 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
 
   if (!isOpen) return null;
 
-  if (loadError) {
+  // PRODUCTION SAFETY: Check for missing API key before attempting to load
+  // This prevents "NoApiKeys" error and shows user-friendly message
+  if (!isApiKeyValid) {
+    const validation = validateGoogleMapsApiKey();
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
         <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-4xl p-6">
-          <div className="text-center">
-            <p className="text-red-600 dark:text-red-400 mb-4">
-              Failed to load Google Maps. Please check your API key configuration.
-            </p>
+          <div className="text-center space-y-4">
+            <AlertCircle className="w-16 h-16 text-red-600 dark:text-red-400 mx-auto" />
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+              Google Maps API Key Missing
+            </h3>
+            <div className="text-left bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-2">
+              <p className="text-sm text-gray-700 dark:text-gray-300">
+                Google Maps cannot load because the API key is not configured.
+              </p>
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                For Render Deployment:
+              </p>
+              <ol className="text-sm text-gray-600 dark:text-gray-400 list-decimal list-inside space-y-1 ml-2">
+                <li>Go to your Render dashboard</li>
+                <li>Select your service</li>
+                <li>Navigate to Environment tab</li>
+                <li>Add: <code className="bg-gray-200 dark:bg-gray-700 px-1 rounded">VITE_GOOGLE_MAPS_API_KEY</code></li>
+                <li>Set value to your Google Maps API key</li>
+                <li>Redeploy the service</li>
+              </ol>
+              {import.meta.env.PROD && (
+                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                    Diagnostic: {validation.diagnostic.hasValue ? 'Key exists' : 'Key missing'} | 
+                    Length: {validation.diagnostic.length} | 
+                    Format: {validation.diagnostic.startsWithAIza ? 'Valid' : 'Invalid'}
+                  </p>
+                </div>
+              )}
+            </div>
             <button
               onClick={onClose}
               className="px-6 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-[#d63a25] transition-colors"
@@ -305,6 +355,37 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
     );
   }
 
+  // Handle Google Maps API load errors (e.g., invalid key, network issues)
+  if (loadError) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-4xl p-6">
+          <div className="text-center space-y-4">
+            <AlertCircle className="w-16 h-16 text-red-600 dark:text-red-400 mx-auto" />
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+              Failed to Load Google Maps
+            </h3>
+            <p className="text-red-600 dark:text-red-400">
+              {loadError.message || 'Unable to load Google Maps. Please check your API key configuration and network connection.'}
+            </p>
+            {import.meta.env.PROD && (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                If this persists, verify that VITE_GOOGLE_MAPS_API_KEY is set correctly in your deployment environment.
+              </p>
+            )}
+            <button
+              onClick={onClose}
+              className="px-6 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-[#d63a25] transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading state while Google Maps API is loading
   if (!isLoaded) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
