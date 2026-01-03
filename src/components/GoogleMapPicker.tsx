@@ -108,16 +108,38 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
       
       // Reset radius to initial value
       setRadius(initialRadius);
+
+      // PRODUCTION FIX: Trigger map resize after modal opens to ensure proper rendering
+      // This is critical for maps rendered in modals/drawers
+      if (isLoaded && mapInstanceRef.current) {
+        // Small delay to ensure modal animation completes
+        const resizeTimeout = setTimeout(() => {
+          if (mapInstanceRef.current) {
+            google.maps.event.trigger(mapInstanceRef.current, 'resize');
+            // Re-center map if location was set
+            if (initialCoordinates) {
+              mapInstanceRef.current.setCenter({
+                lat: initialCoordinates.latitude,
+                lng: initialCoordinates.longitude,
+              });
+              mapInstanceRef.current.setZoom(16);
+            }
+          }
+        }, 100); // Small delay for modal animation
+
+        return () => clearTimeout(resizeTimeout);
+      }
     } else {
       // Cleanup when modal closes
       setIsMapReady(false);
       setSearchError('');
       // Keep selectedLocation and radius for next open (user might want to confirm later)
     }
-  }, [isOpen, initialCoordinates, initialRadius]);
+  }, [isOpen, initialCoordinates, initialRadius, isLoaded]);
 
   // Handle map load - called once when GoogleMap component mounts
-  // This ensures map is properly initialized and ready for interaction
+  // PRODUCTION FIX: This callback may not always fire reliably, so we also use onIdle as fallback
+  // The map should render as soon as isLoaded is true, not waiting for this callback
   const onMapLoad = useCallback((mapInstance: google.maps.Map) => {
     // Store map instance in ref for reliable access across renders
     mapInstanceRef.current = mapInstance;
@@ -132,9 +154,36 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
     resizeTimeoutRef.current = setTimeout(() => {
       if (mapInstanceRef.current) {
         google.maps.event.trigger(mapInstanceRef.current, 'resize');
+        // Re-center map after resize if location was set
+        if (selectedLocation) {
+          mapInstanceRef.current.setCenter(selectedLocation);
+        }
       }
     }, 300);
-  }, []);
+  }, [selectedLocation]);
+
+  // PRODUCTION FIX: onIdle fallback - fires when map finishes rendering
+  // This ensures isMapReady is set even if onLoad doesn't fire
+  const onMapIdle = useCallback(() => {
+    if (mapInstanceRef.current && !isMapReady) {
+      setIsMapReady(true);
+    }
+  }, [isMapReady]);
+
+  // PRODUCTION FIX: Fallback timeout to ensure map is marked as ready
+  // If neither onLoad nor onIdle fire within 2 seconds, mark as ready anyway
+  useEffect(() => {
+    if (isLoaded && !isMapReady) {
+      const fallbackTimeout = setTimeout(() => {
+        if (!isMapReady) {
+          console.warn('[GoogleMapPicker] Map ready timeout - marking as ready anyway');
+          setIsMapReady(true);
+        }
+      }, 2000); // 2 second fallback
+
+      return () => clearTimeout(fallbackTimeout);
+    }
+  }, [isLoaded, isMapReady]);
 
   // Handle map click - allows user to select location by clicking on map
   // Validates coordinates before setting to prevent invalid states
@@ -220,9 +269,10 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
   }, [onPlaceChanged]);
 
   // Handle window resize for responsive map rendering
+  // PRODUCTION FIX: Don't wait for isMapReady - resize should work as soon as map is loaded
   // Ensures map displays correctly when viewport changes (e.g., mobile rotation)
   useEffect(() => {
-    if (!isOpen || !isMapReady) {
+    if (!isOpen || !isLoaded) {
       return;
     }
 
@@ -237,6 +287,10 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
         resizeTimeoutRef.current = setTimeout(() => {
           if (mapInstanceRef.current) {
             google.maps.event.trigger(mapInstanceRef.current, 'resize');
+            // Re-center map after resize if location was set
+            if (selectedLocation) {
+              mapInstanceRef.current.setCenter(selectedLocation);
+            }
           }
         }, 250);
       }
@@ -249,7 +303,7 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('orientationchange', handleResize);
     };
-  }, [isOpen, isMapReady]);
+  }, [isOpen, isLoaded, selectedLocation]);
 
   // Cleanup: Remove event listeners when component unmounts or autocomplete changes
   // This prevents memory leaks and duplicate listeners
@@ -415,24 +469,36 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
         </div>
 
         {/* Search Bar with Places Autocomplete */}
+        {/* PRODUCTION FIX: Places Autocomplete is optional and non-blocking */}
+        {/* Map renders independently - autocomplete failure won't block map */}
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <div className="relative">
-            <Autocomplete
-              onLoad={onAutocompleteLoad}
-              onPlaceChanged={onPlaceChanged}
-              options={{
-                componentRestrictions: { country: 'in' }, // Restrict to India
-                // Request geometry field to get coordinates from Places API (not Geocoding API)
-                fields: ['geometry', 'name', 'formatted_address'],
-              }}
-            >
+            {isLoaded ? (
+              <Autocomplete
+                onLoad={onAutocompleteLoad}
+                onPlaceChanged={onPlaceChanged}
+                options={{
+                  componentRestrictions: { country: 'in' }, // Restrict to India
+                  // Request geometry field to get coordinates from Places API (not Geocoding API)
+                  fields: ['geometry', 'name', 'formatted_address'],
+                }}
+              >
+                <input
+                  ref={autocompleteRef}
+                  type="text"
+                  placeholder="Search for a location (e.g., 'Nashik', 'College Road Nashik', 'AI Ally Nashik')"
+                  className="w-full pl-4 pr-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </Autocomplete>
+            ) : (
               <input
                 ref={autocompleteRef}
                 type="text"
-                placeholder="Search for a location (e.g., 'Nashik', 'College Road Nashik', 'AI Ally Nashik')"
-                className="w-full pl-4 pr-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="Search for a location (loading...)"
+                disabled
+                className="w-full pl-4 pr-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed"
               />
-            </Autocomplete>
+            )}
           </div>
           {searchError && (
             <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
@@ -446,15 +512,18 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
         </div>
 
         {/* Map Container */}
+        {/* PRODUCTION FIX: Render map as soon as isLoaded is true, don't wait for isMapReady */}
+        {/* isMapReady is used for optimization but doesn't block rendering */}
         {/* Responsive height: 450px on desktop, 300px on mobile */}
         <div className="flex-1 relative" style={{ height: '450px', minHeight: '300px' }}>
-          {isLoaded && isMapReady ? (
+          {isLoaded ? (
             <GoogleMap
               mapContainerStyle={{ width: '100%', height: '100%' }}
               center={mapCenter}
               zoom={selectedLocation ? 16 : 12}
               onClick={handleMapClick}
               onLoad={onMapLoad}
+              onIdle={onMapIdle}
               options={{
                 disableDefaultUI: false,
                 zoomControl: true,
