@@ -36,8 +36,9 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
   const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [radius, setRadius] = useState<number>(initialRadius);
   const [searchError, setSearchError] = useState('');
-  const [isMapReady, setIsMapReady] = useState<boolean>(false);
-  // PRODUCTION FIX: Track when modal is fully visible to ensure map container has valid dimensions
+  // CRITICAL FIX: Track when modal is fully visible (animation complete)
+  // Google Maps cannot render inside transforming/animating elements
+  // Map only mounts when isModalVisible = true (after 400ms delay)
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
 
   // Refs for stable references across renders
@@ -96,8 +97,7 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
     if (isOpen) {
       // Reset error state
       setSearchError('');
-      setIsMapReady(false);
-      setIsModalVisible(false); // Reset visibility flag
+      setIsModalVisible(false); // Reset visibility flag - map will remount after delay
       
       // Initialize location from props or reset
       if (initialCoordinates) {
@@ -112,113 +112,72 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
       // Reset radius to initial value
       setRadius(initialRadius);
 
-      // PRODUCTION FIX: Delay marking modal as visible until animation completes
-      // This ensures map container has valid dimensions before map initializes
+      // CRITICAL FIX: Google Maps cannot render inside transforming/animating elements
+      // Must delay map rendering until modal animation FULLY completes
+      // Modal animations typically use CSS transitions (transform/opacity) with 300-500ms duration
+      // We use 500ms to ensure animation is completely finished before map mounts
+      // This prevents map from initializing with incorrect dimensions due to transform/opacity animations
       const visibilityTimeout = setTimeout(() => {
         setIsModalVisible(true);
-      }, 100); // Small delay for modal animation
+      }, 500); // Delay matches/exceeds typical modal animation duration (300-500ms)
 
       return () => clearTimeout(visibilityTimeout);
     } else {
       // Cleanup when modal closes
-      setIsMapReady(false);
       setIsModalVisible(false);
       setSearchError('');
       // Keep selectedLocation and radius for next open (user might want to confirm later)
     }
   }, [isOpen, initialCoordinates, initialRadius]);
 
-  // PRODUCTION FIX: Trigger resize when modal becomes visible and map is loaded
-  // This is critical for maps in modals - container dimensions change when modal opens
-  useEffect(() => {
-    if (isOpen && isModalVisible && isLoaded && mapInstanceRef.current) {
-      // Trigger resize when modal is fully visible
-      // Google Maps needs this to recalculate container dimensions
-      const resizeTimeout = setTimeout(() => {
-        if (mapInstanceRef.current) {
-          google.maps.event.trigger(mapInstanceRef.current, 'resize');
-          // Re-center map if location was set
-          if (selectedLocation) {
-            mapInstanceRef.current.setCenter(selectedLocation);
-            mapInstanceRef.current.setZoom(16);
-          } else if (initialCoordinates) {
-            mapInstanceRef.current.setCenter({
-              lat: initialCoordinates.latitude,
-              lng: initialCoordinates.longitude,
-            });
-            mapInstanceRef.current.setZoom(16);
-          }
-        }
-      }, 50); // Small delay to ensure DOM is updated
-
-      return () => clearTimeout(resizeTimeout);
-    }
-  }, [isOpen, isModalVisible, isLoaded, selectedLocation, initialCoordinates]);
+  // Note: Resize is handled in onMapLoad callback
+  // No separate effect needed since map only mounts after animation completes
 
   // Handle map load - called once when GoogleMap component mounts
-  // PRODUCTION FIX: Critical for maps in modals - must trigger resize after load
-  // Google Maps needs resize trigger when container becomes visible or changes size
+  // CRITICAL: Map only mounts AFTER modal animation completes (isModalVisible = true)
+  // This ensures map is NOT inside a transforming element at mount time
+  // Container is fully visible and has valid dimensions when this fires
   const onMapLoad = useCallback((mapInstance: google.maps.Map) => {
     // Store map instance in ref for reliable access across renders
     mapInstanceRef.current = mapInstance;
-    setIsMapReady(true);
     
-    // CRITICAL: Trigger resize immediately after map loads
-    // This is required when map initializes in a hidden/modal container
-    // Google Maps calculates dimensions on initialization - if container is hidden,
-    // it gets 0x0 dimensions and never renders
+    // SIMPLIFIED RESIZE LOGIC:
+    // 1. Immediate resize on mount (container is visible and not animating)
+    google.maps.event.trigger(mapInstance, 'resize');
+    
+    // 2. Delayed resize + re-center after a brief moment
+    // This ensures dimensions are fully calculated and map is centered correctly
     if (resizeTimeoutRef.current) {
       clearTimeout(resizeTimeoutRef.current);
     }
     
-    // Immediate resize (container should be visible by now)
-    // Then delayed resize to handle any animation completion
-    google.maps.event.trigger(mapInstance, 'resize');
-    
     resizeTimeoutRef.current = setTimeout(() => {
       if (mapInstanceRef.current) {
-        // Trigger resize again after modal animation completes
+        // Second resize to ensure dimensions are correct
         google.maps.event.trigger(mapInstanceRef.current, 'resize');
-        // Re-center map after resize if location was set
+        
+        // Re-center map based on location
         if (selectedLocation) {
           mapInstanceRef.current.setCenter(selectedLocation);
           mapInstanceRef.current.setZoom(16);
+        } else if (initialCoordinates) {
+          mapInstanceRef.current.setCenter({
+            lat: initialCoordinates.latitude,
+            lng: initialCoordinates.longitude,
+          });
+          mapInstanceRef.current.setZoom(16);
         } else {
-          // Ensure map is centered on default location
           mapInstanceRef.current.setCenter(mapCenter);
         }
       }
-    }, 300); // Delay for modal animation
-  }, [selectedLocation, mapCenter]);
+    }, 150); // Small delay to ensure resize completes and dimensions are stable
+  }, [selectedLocation, initialCoordinates, mapCenter]);
 
-  // PRODUCTION FIX: onIdle fallback - fires when map finishes rendering
-  // This ensures isMapReady is set even if onLoad doesn't fire
-  // Also triggers resize as fallback if map didn't render correctly
+  // Handle map idle - fires when map finishes rendering tiles
+  // No action needed - map is already ready from onLoad
   const onMapIdle = useCallback(() => {
-    if (mapInstanceRef.current) {
-      if (!isMapReady) {
-        setIsMapReady(true);
-      }
-      // Trigger resize on idle as additional safety measure
-      // This helps if map didn't render correctly on initial load
-      google.maps.event.trigger(mapInstanceRef.current, 'resize');
-    }
-  }, [isMapReady]);
-
-  // PRODUCTION FIX: Fallback timeout to ensure map is marked as ready
-  // If neither onLoad nor onIdle fire within 2 seconds, mark as ready anyway
-  useEffect(() => {
-    if (isLoaded && !isMapReady) {
-      const fallbackTimeout = setTimeout(() => {
-        if (!isMapReady) {
-          console.warn('[GoogleMapPicker] Map ready timeout - marking as ready anyway');
-          setIsMapReady(true);
-        }
-      }, 2000); // 2 second fallback
-
-      return () => clearTimeout(fallbackTimeout);
-    }
-  }, [isLoaded, isMapReady]);
+    // Map has finished rendering tiles - no action needed
+  }, []);
 
   // Handle map click - allows user to select location by clicking on map
   // Validates coordinates before setting to prevent invalid states
@@ -564,6 +523,10 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
         >
           {isLoaded && isModalVisible ? (
             <GoogleMap
+              // CRITICAL: Key forces remount when modal reopens
+              // This ensures map initializes fresh after animation completes
+              // Without this, map might try to reuse instance from previous render
+              key={`map-${isOpen ? 'open' : 'closed'}-${isModalVisible ? 'visible' : 'hidden'}`}
               mapContainerStyle={{ 
                 width: '100%', 
                 height: '100%',
