@@ -1,0 +1,18 @@
+/**
+ * Google Maps API Configuration
+ * 
+ * Instructions:
+ * 1. Copy this file to config.js
+ * 2. Replace 'YOUR_API_KEY_HERE' with your actual Google Maps API key
+ * 3. Make sure config.js is in your .gitignore to keep your API key secure
+ * 
+ * To get a Google Maps API key:
+ * 1. Go to https://console.cloud.google.com/
+ * 2. Create a new project or select an existing one
+ * 3. Enable the Maps JavaScript API
+ * 4. Create credentials (API Key)
+ * 5. Restrict the API key to your domain (recommended for production)
+ */
+
+window.GOOGLE_MAPS_API_KEY = 'YOUR_API_KEY_HERE';
+

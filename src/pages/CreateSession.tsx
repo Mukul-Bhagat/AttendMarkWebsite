@@ -3,6 +3,7 @@ import api from '../api';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth, IUser as IAuthUser } from '../contexts/AuthContext';
 import AddUsersModal from '../components/AddUsersModal';
+import GoogleMapPicker from '../components/GoogleMapPicker';
 import { X } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
@@ -61,10 +62,8 @@ const CreateSession: React.FC = () => {
   const [sessionAdmins, setSessionAdmins] = useState<IAuthUser[]>([]);
   const [showUserModal, setShowUserModal] = useState(false);
   const [userModalContext, setUserModalContext] = useState<'PHYSICAL' | 'REMOTE' | 'ALL'>('ALL');
-  const [locationInputType, setLocationInputType] = useState<'LINK' | 'COORDS'>('LINK'); // Default to Link
-  const [locationLink, setLocationLink] = useState('');
-  const [latitude, setLatitude] = useState('');
-  const [longitude, setLongitude] = useState('');
+  const [selectedCoordinates, setSelectedCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [showMapPicker, setShowMapPicker] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -193,13 +192,8 @@ const CreateSession: React.FC = () => {
     
     // Validate location for PHYSICAL or HYBRID sessions
     if (formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID') {
-      if (locationInputType === 'LINK' && !locationLink.trim()) {
-        setError('Google Maps Link is required for Physical or Hybrid classes/batches.');
-        setIsSubmitting(false);
-        return;
-      }
-      if (locationInputType === 'COORDS' && (!latitude.trim() || !longitude.trim())) {
-        setError('Latitude and Longitude are required for Physical or Hybrid classes/batches.');
+      if (!selectedCoordinates || !selectedCoordinates.latitude || !selectedCoordinates.longitude) {
+        setError('Please select a location on the map for Physical or Hybrid classes/batches.');
         setIsSubmitting(false);
         return;
       }
@@ -248,40 +242,19 @@ const CreateSession: React.FC = () => {
       }
 
       // Build location object for PHYSICAL or HYBRID sessions
+      // Send coordinates directly - no link parsing needed
       let locationObj = undefined;
       if (formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID') {
-        if (locationInputType === 'LINK') {
-          // Frontend sends link only - backend will resolve it to coordinates
-          // This allows support for Google Maps share links (maps.app.goo.gl, etc.)
-          if (!locationLink.trim()) {
-            setError('Please enter a Google Maps link.');
-            setIsSubmitting(false);
-            return;
-          }
-          
-          locationObj = {
-            type: 'LINK',
-            link: locationLink.trim(),
-            // No coordinates - backend will resolve the link
-          };
-        } else {
-          const lat = parseFloat(latitude);
-          const lng = parseFloat(longitude);
-          
-          if (isNaN(lat) || isNaN(lng)) {
-            setError('Please enter valid latitude and longitude coordinates.');
-            setIsSubmitting(false);
-            return;
-          }
-          
-          locationObj = {
-            type: 'COORDS',
-            geolocation: {
-              latitude: lat,
-              longitude: lng,
-            },
-          };
+        if (!selectedCoordinates) {
+          setError('Please select a location on the map.');
+          setIsSubmitting(false);
+          return;
         }
+        
+        locationObj = {
+          latitude: selectedCoordinates.latitude,
+          longitude: selectedCoordinates.longitude,
+        };
       }
 
       // If creating a new class, use ClassBatch API
@@ -290,7 +263,6 @@ const CreateSession: React.FC = () => {
           name: formData.name,
           description: formData.description || undefined,
           defaultTime: formData.startTime || undefined,
-          defaultLocation: locationInputType === 'LINK' ? locationLink : undefined,
           generateSessions: true,
           frequency: formData.frequency,
           startDate: formData.frequency === 'Random' ? undefined : formData.startDate,
@@ -299,13 +271,8 @@ const CreateSession: React.FC = () => {
           endTime: formData.endTime,
           locationType: formData.locationType,
           sessionType: formData.sessionType,
-          physicalLocation: formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID' ? locationLink : undefined,
           virtualLocation: formData.sessionType === 'REMOTE' || formData.sessionType === 'HYBRID' ? formData.virtualLocation : undefined,
           location: locationObj,
-          geolocation: locationInputType === 'COORDS' ? {
-            latitude: parseFloat(latitude) || 0,
-            longitude: parseFloat(longitude) || 0,
-          } : undefined,
           radius: (formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID') && formData.radius
             ? formData.radius
             : undefined,
@@ -838,94 +805,46 @@ const CreateSession: React.FC = () => {
           {/* Section 3: Location (Conditional) */}
           {(formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID') && (
             <div className="flex flex-col gap-6 rounded-xl border border-[#e6e2db] bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-2xl text-[#f04129]">pin_drop</span>
-                  <h2 className="text-xl font-bold leading-tight tracking-[-0.015em] text-[#181511] dark:text-white">Location Details</h2>
-                </div>
-                <a
-                  href="https://maps.google.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-[#f04129] bg-red-100 dark:bg-[#f04129]/20 rounded-lg hover:bg-red-200 dark:hover:bg-[#f04129]/30 transition-colors"
-                >
-                  <span className="material-symbols-outlined text-base">map</span>
-                  Open Maps
-                </a>
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-2xl text-[#f04129]">pin_drop</span>
+                <h2 className="text-xl font-bold leading-tight tracking-[-0.015em] text-[#181511] dark:text-white">Location Details</h2>
               </div>
               <div className="flex flex-col gap-4">
                 <div>
-                  <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Input Method</p>
-                  <div className="flex space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => setLocationInputType('LINK')}
-                      className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors duration-200 ${
-                        locationInputType === 'LINK'
-                          ? 'bg-gradient-to-r from-orange-500 to-[#f04129] text-white'
-                          : 'border-[#e6e2db] bg-white text-[#181511] hover:bg-[#f5f3f0] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-700'
-                      }`}
-                    >
-                      Google Maps Link
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLocationInputType('COORDS')}
-                      className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors duration-200 ${
-                        locationInputType === 'COORDS'
-                          ? 'bg-gradient-to-r from-orange-500 to-[#f04129] text-white'
-                          : 'border-[#e6e2db] bg-white text-[#181511] hover:bg-[#f5f3f0] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-700'
-                      }`}
-                    >
-                      Coordinates
-                    </button>
-                  </div>
+                  <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">
+                    Session Location <span className="text-red-500">*</span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowMapPicker(true)}
+                    className="w-full flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-[#181511] dark:text-slate-200 hover:border-[#f04129] hover:bg-red-50 dark:hover:bg-[#f04129]/10 transition-colors duration-200"
+                  >
+                    <span className="material-symbols-outlined text-2xl text-[#f04129]">map</span>
+                    <span className="font-semibold">
+                      {selectedCoordinates ? 'Change Location on Map' : 'Select Location on Map'}
+                    </span>
+                  </button>
+                  {selectedCoordinates && (
+                    <div className="mt-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                      <div className="flex items-start gap-3">
+                        <span className="material-symbols-outlined text-green-600 dark:text-green-400 mt-0.5">check_circle</span>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-green-900 dark:text-green-200 mb-1">
+                            Location Selected
+                          </p>
+                          <p className="text-sm text-green-800 dark:text-green-300 font-mono">
+                            Latitude: {selectedCoordinates.latitude.toFixed(6)}, Longitude: {selectedCoordinates.longitude.toFixed(6)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {!selectedCoordinates && (
+                    <p className="mt-2 text-xs text-[#8a7b60] dark:text-slate-400">
+                      Click the button above to open an interactive map and select the session location. You can click on the map or search for a location.
+                    </p>
+                  )}
                 </div>
-                {locationInputType === 'LINK' ? (
-                  <label className="flex flex-col">
-                    <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">
-                      Google Maps Link <span className="text-red-500">*</span>
-                    </p>
-                    <input
-                      className="form-input flex w-full resize-none overflow-hidden rounded-lg border border-[#e6e2db] bg-white p-3 text-base font-normal leading-normal text-[#181511] placeholder:text-[#8a7b60] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-400 dark:focus:border-primary/80"
-                      type="url"
-                      value={locationLink}
-                      onChange={(e) => setLocationLink(e.target.value)}
-                      placeholder="https://maps.app.goo.gl/example or https://maps.google.com/?q=40.7128,-74.0060"
-                      required
-                    />
-                    <p className="mt-1 text-xs text-[#8a7b60] dark:text-slate-400">
-                      Paste any Google Maps share link. The system will automatically extract the location coordinates.
-                    </p>
-                  </label>
-                ) : (
-                  <div className="grid grid-cols-2 gap-4">
-                    <label className="flex flex-col">
-                      <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Latitude</p>
-                      <input
-                        className="form-input flex w-full resize-none overflow-hidden rounded-lg border border-[#e6e2db] bg-white p-3 text-base font-normal leading-normal text-[#181511] placeholder:text-[#8a7b60] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-400 dark:focus:border-primary/80"
-                        type="number"
-                        step="any"
-                        value={latitude}
-                        onChange={(e) => setLatitude(e.target.value)}
-                        placeholder="e.g., 40.7128"
-                        required
-                      />
-                    </label>
-                    <label className="flex flex-col">
-                      <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Longitude</p>
-                      <input
-                        className="form-input flex w-full resize-none overflow-hidden rounded-lg border border-[#e6e2db] bg-white p-3 text-base font-normal leading-normal text-[#181511] placeholder:text-[#8a7b60] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-400 dark:focus:border-primary/80"
-                        type="number"
-                        step="any"
-                        value={longitude}
-                        onChange={(e) => setLongitude(e.target.value)}
-                        placeholder="e.g., -74.0060"
-                        required
-                      />
-                    </label>
-                  </div>
-                )}
                 <label className="flex flex-col">
                   <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Radius (meters)</p>
                   <input
@@ -934,9 +853,13 @@ const CreateSession: React.FC = () => {
                     name="radius"
                     value={formData.radius}
                     onChange={handleChange}
-                    placeholder="e.g., 50"
+                    placeholder="e.g., 100"
+                    min="1"
                     required
                   />
+                  <p className="mt-1 text-xs text-[#8a7b60] dark:text-slate-400">
+                    Maximum distance (in meters) from the selected location where attendance can be marked. Default: 100 meters.
+                  </p>
                 </label>
               </div>
             </div>
@@ -1128,6 +1051,20 @@ const CreateSession: React.FC = () => {
               }
             />
           )}
+
+          {/* Google Maps Picker Modal */}
+          <GoogleMapPicker
+            isOpen={showMapPicker}
+            onClose={() => setShowMapPicker(false)}
+            onConfirm={(data) => {
+              setSelectedCoordinates({ latitude: data.latitude, longitude: data.longitude });
+              setFormData(prev => ({ ...prev, radius: data.radius }));
+              setShowMapPicker(false);
+            }}
+            initialCoordinates={selectedCoordinates}
+            initialRadius={formData.radius}
+            apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}
+          />
         </div>
       </div>
   );

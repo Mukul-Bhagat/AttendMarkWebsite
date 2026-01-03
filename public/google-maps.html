@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AttendMark - Google Maps</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background-color: #fff;
+            padding: 1rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            color: #333;
+            text-align: center;
+        }
+
+        .map-container {
+            flex: 1;
+            position: relative;
+            width: 100%;
+            min-height: 0;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 100;
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #f04129;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 100;
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 90%;
+        }
+
+        .error h2 {
+            color: #d32f2f;
+            margin-bottom: 1rem;
+        }
+
+        .error p {
+            color: #666;
+            margin-bottom: 1rem;
+            line-height: 1.5;
+        }
+
+        .error-code {
+            background: #f5f5f5;
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+        }
+
+        .info-panel {
+            position: absolute;
+            bottom: 1rem;
+            left: 1rem;
+            right: 1rem;
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            z-index: 10;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .info-panel h3 {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            color: #333;
+        }
+
+        .info-panel p {
+            font-size: 0.875rem;
+            color: #666;
+            margin: 0.25rem 0;
+        }
+
+        .coordinates {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #f04129;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.25rem;
+            }
+
+            .info-panel {
+                left: 0.5rem;
+                right: 0.5rem;
+                bottom: 0.5rem;
+                padding: 0.75rem;
+            }
+
+            .info-panel h3 {
+                font-size: 0.9rem;
+            }
+
+            .info-panel p {
+                font-size: 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>AttendMark Location</h1>
+        </div>
+        <div class="map-container">
+            <div id="map"></div>
+            <div id="loading" class="loading">
+                <div class="spinner"></div>
+                <p>Loading map...</p>
+            </div>
+            <div id="error" class="error" style="display: none;"></div>
+            <div id="info-panel" class="info-panel" style="display: none;">
+                <h3>📍 AttendMark Location</h3>
+                <p>Latitude: <span id="latitude" class="coordinates">-</span></p>
+                <p>Longitude: <span id="longitude" class="coordinates">-</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Google Maps API -->
+    <script>
+        // Configuration
+        // Option 1: Set API key directly here (not recommended for production)
+        // const GOOGLE_MAPS_API_KEY = 'YOUR_API_KEY_HERE';
+        
+        // Option 2: Load from environment variable via config.js (recommended)
+        // Create a config.js file with: window.GOOGLE_MAPS_API_KEY = 'YOUR_API_KEY';
+        const GOOGLE_MAPS_API_KEY = window.GOOGLE_MAPS_API_KEY || '';
+
+        // State
+        let map = null;
+        let marker = null;
+        let userLocation = null;
+
+        // DOM Elements
+        const mapElement = document.getElementById('map');
+        const loadingElement = document.getElementById('loading');
+        const errorElement = document.getElementById('error');
+        const infoPanel = document.getElementById('info-panel');
+        const latitudeElement = document.getElementById('latitude');
+        const longitudeElement = document.getElementById('longitude');
+
+        /**
+         * Display error message
+         */
+        function showError(title, message, details = '') {
+            loadingElement.style.display = 'none';
+            errorElement.style.display = 'block';
+            errorElement.innerHTML = `
+                <h2>${title}</h2>
+                <p>${message}</p>
+                ${details ? `<div class="error-code">${details}</div>` : ''}
+            `;
+        }
+
+        /**
+         * Hide loading indicator
+         */
+        function hideLoading() {
+            loadingElement.style.display = 'none';
+        }
+
+        /**
+         * Get user's current location using Geolocation API
+         */
+        function getUserLocation() {
+            return new Promise((resolve, reject) => {
+                if (!navigator.geolocation) {
+                    reject(new Error('Geolocation is not supported by your browser'));
+                    return;
+                }
+
+                const options = {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                };
+
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        resolve({
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        });
+                    },
+                    (error) => {
+                        let errorMessage = 'Unable to retrieve your location.';
+                        switch (error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMessage = 'Location permission denied. Please enable location access.';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMessage = 'Location information is unavailable.';
+                                break;
+                            case error.TIMEOUT:
+                                errorMessage = 'Location request timed out.';
+                                break;
+                        }
+                        reject(new Error(errorMessage));
+                    },
+                    options
+                );
+            });
+        }
+
+        /**
+         * Initialize Google Maps
+         */
+        function initMap() {
+            // Check if API key is provided
+            if (!GOOGLE_MAPS_API_KEY) {
+                showError(
+                    'API Key Missing',
+                    'Google Maps API key is not configured. Please set it in config.js or update the GOOGLE_MAPS_API_KEY variable.',
+                    'Set window.GOOGLE_MAPS_API_KEY in config.js or update the constant in the script.'
+                );
+                return;
+            }
+
+            // Load Google Maps script
+            const script = document.createElement('script');
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&callback=initGoogleMap`;
+            script.async = true;
+            script.defer = true;
+            
+            script.onerror = () => {
+                showError(
+                    'Failed to Load Google Maps',
+                    'Unable to load Google Maps JavaScript API. Please check your API key and network connection.',
+                    'Verify that your API key is valid and has the Maps JavaScript API enabled.'
+                );
+            };
+
+            // Set global callback
+            window.initGoogleMap = () => {
+                try {
+                    // Get user location first
+                    getUserLocation()
+                        .then((location) => {
+                            userLocation = location;
+                            createMap(location);
+                        })
+                        .catch((error) => {
+                            // If geolocation fails, use default location (Nashik, India)
+                            console.warn('Using default location:', error.message);
+                            userLocation = { lat: 19.9975, lng: 73.7898 };
+                            createMap(userLocation);
+                        });
+                } catch (error) {
+                    showError(
+                        'Map Initialization Error',
+                        error.message || 'An error occurred while initializing the map.',
+                        error.stack
+                    );
+                }
+            };
+
+            document.head.appendChild(script);
+        }
+
+        /**
+         * Create and display the map
+         */
+        function createMap(center) {
+            try {
+                // Create map instance
+                map = new google.maps.Map(mapElement, {
+                    center: center,
+                    zoom: 15,
+                    mapTypeControl: false,
+                    streetViewControl: false,
+                    fullscreenControl: true,
+                    zoomControl: true,
+                    styles: [
+                        {
+                            featureType: 'poi',
+                            elementType: 'labels',
+                            stylers: [{ visibility: 'on' }]
+                        }
+                    ]
+                });
+
+                // Create marker with label
+                marker = new google.maps.Marker({
+                    position: center,
+                    map: map,
+                    title: 'AttendMark Location',
+                    label: {
+                        text: 'AttendMark Location',
+                        color: '#fff',
+                        fontSize: '12px',
+                        fontWeight: 'bold'
+                    },
+                    animation: google.maps.Animation.DROP
+                });
+
+                // Update info panel
+                updateInfoPanel(center.lat, center.lng);
+                infoPanel.style.display = 'block';
+                hideLoading();
+
+                // Handle map errors
+                google.maps.event.addListener(map, 'error', (error) => {
+                    showError(
+                        'Map Error',
+                        'An error occurred while displaying the map.',
+                        error.message || 'Unknown error'
+                    );
+                });
+
+            } catch (error) {
+                showError(
+                    'Map Creation Error',
+                    error.message || 'Failed to create the map.',
+                    error.stack
+                );
+            }
+        }
+
+        /**
+         * Update info panel with coordinates
+         */
+        function updateInfoPanel(lat, lng) {
+            latitudeElement.textContent = lat.toFixed(6);
+            longitudeElement.textContent = lng.toFixed(6);
+        }
+
+        // Initialize when page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            initMap();
+        });
+
+        // Handle window resize for responsive map
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                if (map) {
+                    google.maps.event.trigger(map, 'resize');
+                }
+            }, 250);
+        });
+    </script>
+
+    <!-- Optional: Load API key from config.js -->
+    <!-- Uncomment the line below and create config.js with: window.GOOGLE_MAPS_API_KEY = 'YOUR_API_KEY'; -->
+    <!-- <script src="config.js"></script> -->
+</body>
+</html>
+

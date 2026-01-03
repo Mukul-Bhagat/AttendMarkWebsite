@@ -11,7 +11,7 @@ const QuickScanHandler: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const [status, setStatus] = useState<Status>('loading');
-  const [message, setMessage] = useState('Verifying Location & Session...');
+  const [message, setMessage] = useState('Requesting location permission...');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -42,10 +42,17 @@ const QuickScanHandler: React.FC = () => {
               const { latitude, longitude } = position.coords;
               const accuracy = position.coords.accuracy; // GPS accuracy in meters (required)
               
-              // Validate accuracy is present
-              if (!accuracy || accuracy <= 0) {
+              // Validate accuracy is present and valid
+              if (!accuracy || accuracy <= 0 || isNaN(accuracy)) {
                 setStatus('error');
                 setError('GPS accuracy data is missing. Please enable high-accuracy GPS and try again.');
+                return;
+              }
+
+              // SECURITY: Reject if accuracy > 40 meters (frontend validation)
+              if (accuracy > 40) {
+                setStatus('error');
+                setError(`GPS accuracy is too low (${Math.round(accuracy)}m). Please enable high-accuracy GPS and ensure you have a clear view of the sky. Maximum allowed accuracy: 40m.`);
                 return;
               }
               
@@ -101,19 +108,19 @@ const QuickScanHandler: React.FC = () => {
           },
           (locationError) => {
             // Handle geolocation errors
-            let errorMessage = 'Unable to get your location. ';
+            let errorMessage = '';
             switch (locationError.code) {
               case locationError.PERMISSION_DENIED:
-                errorMessage += 'Please enable location permissions and try again.';
+                errorMessage = 'Location permission denied. Please enable location access in your browser settings and try again.';
                 break;
               case locationError.POSITION_UNAVAILABLE:
-                errorMessage += 'Location information is unavailable.';
+                errorMessage = 'Location information is unavailable. Please ensure GPS is enabled and try again.';
                 break;
               case locationError.TIMEOUT:
-                errorMessage += 'Location request timed out. Please try again.';
+                errorMessage = 'Location request timed out. Please try again.';
                 break;
               default:
-                errorMessage += locationError.message || 'Unknown error occurred.';
+                errorMessage = `Unable to get your location: ${locationError.message || 'Unknown error occurred'}. Please enable GPS and try again.`;
                 break;
             }
             

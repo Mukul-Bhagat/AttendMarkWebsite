@@ -38,6 +38,38 @@ const ScanQR: React.FC = () => {
   } | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const qrCodeRegionId = 'qr-reader';
+  const [locationPermissionGranted, setLocationPermissionGranted] = useState<boolean | null>(null);
+
+  // Request location permission on page load
+  useEffect(() => {
+    const requestLocationPermission = () => {
+      if (!navigator.geolocation) {
+        setLocationPermissionGranted(false);
+        setSessionError('Geolocation is not supported by your browser.');
+        return;
+      }
+
+      // Request permission by attempting to get position
+      navigator.geolocation.getCurrentPosition(
+        () => {
+          setLocationPermissionGranted(true);
+        },
+        (error) => {
+          setLocationPermissionGranted(false);
+          if (error.code === error.PERMISSION_DENIED) {
+            setSessionError('Location permission denied. Please enable location access to mark attendance.');
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0,
+        }
+      );
+    };
+
+    requestLocationPermission();
+  }, []);
 
   // Fetch all sessions on mount
   useEffect(() => {
@@ -327,13 +359,23 @@ const ScanQR: React.FC = () => {
 
         // 3. Get GPS accuracy and timestamp (REQUIRED)
         const accuracy = position.coords.accuracy; // Accuracy in meters (required)
-        if (!accuracy || accuracy <= 0) {
+        if (!accuracy || accuracy <= 0 || isNaN(accuracy)) {
           setMessageType('error');
           setMessage('GPS accuracy data is missing. Please enable high-accuracy GPS and try again.');
           setIsProcessing(false);
           setIsScannerPaused(false);
           return;
         }
+
+        // SECURITY: Reject if accuracy > 40 meters (frontend validation)
+        if (accuracy > 40) {
+          setMessageType('error');
+          setMessage(`GPS accuracy is too low (${Math.round(accuracy)}m). Please enable high-accuracy GPS and ensure you have a clear view of the sky. Maximum allowed accuracy: 40m.`);
+          setIsProcessing(false);
+          setIsScannerPaused(false);
+          return;
+        }
+
         const timestamp = Date.now(); // Timestamp in milliseconds (number)
 
         // 4. Get the unique device ID and user agent
@@ -344,10 +386,26 @@ const ScanQR: React.FC = () => {
         markAttendance(sessionId, userLocation, deviceId, userAgent, accuracy, timestamp);
       },
       (error) => {
-        // 2. Location failed
+        // Handle geolocation errors
+        let errorMessage = 'Unable to get your location. ';
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = 'Location permission denied. Please enable location access in your browser settings and try again.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = 'Location information is unavailable. Please ensure GPS is enabled and try again.';
+            break;
+          case error.TIMEOUT:
+            errorMessage = 'Location request timed out. Please try again.';
+            break;
+          default:
+            errorMessage = `Could not get location: ${error.message || 'Unknown error'}. Please enable GPS and try again.`;
+            break;
+        }
         setMessageType('error');
-        setMessage(`Error: Could not get location. Please enable GPS. (${error.message})`);
+        setMessage(errorMessage);
         setIsProcessing(false);
+        setIsScannerPaused(false);
       },
       { 
         enableHighAccuracy: true, 
