@@ -231,18 +231,8 @@ const PlacesAutocomplete: React.FC<PlacesAutocompleteProps> = ({
     }
   };
 
-  // Reset function (can be called externally if needed)
-  // Note: Exported for potential external use, but currently unused internally
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _reset = useCallback(() => {
-    setInputValue(initialValue);
-    setSelectedPlace(null);
-    setCoordinates(null);
-    setError('');
-    if (inputRef.current) {
-      inputRef.current.value = initialValue;
-    }
-  }, [initialValue]);
+  // Reset function removed - was unused
+  // If needed in the future, can be added back and exported via ref
 
   // Show loading state while API is loading
   if (!isLoaded && !loadError) {

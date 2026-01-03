@@ -38,7 +38,9 @@ const ScanQR: React.FC = () => {
   } | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const qrCodeRegionId = 'qr-reader';
-  const [locationPermissionGranted, setLocationPermissionGranted] = useState<boolean | null>(null);
+  // Location permission state (set but not currently used in UI)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_locationPermissionGranted, setLocationPermissionGranted] = useState<boolean | null>(null);
 
   // Request location permission on page load
   useEffect(() => {

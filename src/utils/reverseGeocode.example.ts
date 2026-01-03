@@ -10,9 +10,7 @@
 import { reverseGeocode, batchReverseGeocode } from './reverseGeocode';
 
 // Example functions - these are for documentation only
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
-// Example 1: Basic usage
+// @ts-expect-error - Example function for documentation, intentionally unused
 async function example1() {
   try {
     const result = await reverseGeocode(19.9975, 73.7898); // Nashik, India
@@ -37,7 +35,7 @@ async function example1() {
   }
 }
 
-// Example 2: With custom options
+// @ts-expect-error - Example function for documentation, intentionally unused
 async function example2() {
   try {
     const result = await reverseGeocode(19.9975, 73.7898, {
@@ -53,7 +51,7 @@ async function example2() {
   }
 }
 
-// Example 3: Batch geocoding (with automatic rate limiting)
+// @ts-expect-error - Example function for documentation, intentionally unused
 async function example3() {
   try {
     const coordinates = [
@@ -76,7 +74,7 @@ async function example3() {
   }
 }
 
-// Example 4: Error handling
+// @ts-expect-error - Example function for documentation, intentionally unused
 async function example4() {
   try {
     // Invalid coordinates
