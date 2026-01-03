@@ -451,7 +451,7 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
           <h2 className="text-2xl font-bold dark:text-white">Select Location on Map</h2>
           <button
             onClick={onClose}
@@ -462,65 +462,64 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
           </button>
         </div>
 
-        {/* Search Bar with Places Autocomplete */}
-        {/* PRODUCTION FIX: Places Autocomplete is optional and non-blocking */}
-        {/* Map renders independently - autocomplete failure won't block map */}
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="relative">
-            {isLoaded ? (
-              <Autocomplete
-                onLoad={onAutocompleteLoad}
-                onPlaceChanged={onPlaceChanged}
-                options={{
-                  componentRestrictions: { country: 'in' }, // Restrict to India
-                  // Request geometry field to get coordinates from Places API (not Geocoding API)
-                  fields: ['geometry', 'name', 'formatted_address'],
-                }}
-              >
+        {/* Scrollable Content Area */}
+        <div 
+          className="flex-1 overflow-y-auto overflow-x-hidden"
+          style={{
+            WebkitOverflowScrolling: 'touch', // Smooth scrolling on iOS
+          }}
+        >
+          {/* Search Bar with Places Autocomplete */}
+          {/* PRODUCTION FIX: Places Autocomplete is optional and non-blocking */}
+          {/* Map renders independently - autocomplete failure won't block map */}
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="relative">
+              {isLoaded ? (
+                <Autocomplete
+                  onLoad={onAutocompleteLoad}
+                  onPlaceChanged={onPlaceChanged}
+                  options={{
+                    componentRestrictions: { country: 'in' }, // Restrict to India
+                    // Request geometry field to get coordinates from Places API (not Geocoding API)
+                    fields: ['geometry', 'name', 'formatted_address'],
+                  }}
+                >
+                  <input
+                    ref={autocompleteRef}
+                    type="text"
+                    placeholder="Search for a location (e.g., 'Nashik', 'College Road Nashik', 'AI Ally Nashik')"
+                    className="w-full pl-4 pr-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </Autocomplete>
+              ) : (
                 <input
                   ref={autocompleteRef}
                   type="text"
-                  placeholder="Search for a location (e.g., 'Nashik', 'College Road Nashik', 'AI Ally Nashik')"
-                  className="w-full pl-4 pr-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="Search for a location (loading...)"
+                  disabled
+                  className="w-full pl-4 pr-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed"
                 />
-              </Autocomplete>
-            ) : (
-              <input
-                ref={autocompleteRef}
-                type="text"
-                placeholder="Search for a location (loading...)"
-                disabled
-                className="w-full pl-4 pr-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed"
-              />
+              )}
+            </div>
+            {searchError && (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                <span className="material-symbols-outlined text-base">error</span>
+                {searchError}
+              </p>
             )}
-          </div>
-          {searchError && (
-            <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
-              <span className="material-symbols-outlined text-base">error</span>
-              {searchError}
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              💡 Tip: Search for a place or click on the map to select a location. You can drag the marker to adjust.
             </p>
-          )}
-          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            💡 Tip: Search for a place or click on the map to select a location. You can drag the marker to adjust.
-          </p>
-        </div>
+          </div>
 
-        {/* Map Container */}
-        {/* PRODUCTION FIX: Container must have explicit, non-zero height for Google Maps to render */}
-        {/* Using fixed height (450px desktop, 400px mobile) instead of flex-1 to ensure valid dimensions */}
-        {/* Google Maps requires a container with explicit dimensions before initialization */}
-        {/* Container always has dimensions, but we delay map rendering until modal is visible */}
-        <div 
-          className="relative w-full"
-          style={{ 
-            height: '450px',
-            minHeight: '400px',
-            // Ensure container has valid dimensions even in flex layouts
-            flexShrink: 0,
-            // Always maintain dimensions (don't use display: none or visibility: hidden)
-            // This ensures Google Maps can calculate container size
-          }}
-        >
+          {/* Map Container */}
+          {/* PRODUCTION FIX: Container must have explicit, non-zero height for Google Maps to render */}
+          {/* Using responsive height (450px desktop, 280px mobile) to prevent map from consuming entire modal */}
+          {/* Google Maps requires a container with explicit dimensions before initialization */}
+          {/* Container always has dimensions, but we delay map rendering until modal is visible */}
+          <div 
+            className="relative w-full h-[280px] sm:h-[450px] min-h-[250px] sm:min-h-[400px] flex-shrink-0"
+          >
           {isLoaded && isModalVisible ? (
             <GoogleMap
               // CRITICAL: Key forces remount when modal reopens
@@ -545,7 +544,7 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
                 mapTypeControl: false,
                 fullscreenControl: true,
                 // Mobile-friendly options
-                gestureHandling: 'greedy', // Better touch handling
+                gestureHandling: 'cooperative', // Allows scrolling when user scrolls with two fingers or Ctrl+scroll
                 clickableIcons: false, // Prevent accidental clicks on POIs
                 // Performance optimizations
                 maxZoom: 20,
@@ -585,54 +584,55 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
               </div>
             </div>
           )}
-        </div>
+          </div>
 
-        {/* Coordinates Preview and Radius Input */}
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-          {selectedLocation ? (
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <MapPin className="w-5 h-5 text-primary flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Selected Location
-                  </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 font-mono break-all">
-                    Lat: <span className="font-semibold">{selectedLocation.lat.toFixed(6)}</span>
-                    {' | '}
-                    Lng: <span className="font-semibold">{selectedLocation.lng.toFixed(6)}</span>
+          {/* Coordinates Preview and Radius Input */}
+          <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+            {selectedLocation ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <MapPin className="w-5 h-5 text-primary flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Selected Location
+                    </p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 font-mono break-all">
+                      Lat: <span className="font-semibold">{selectedLocation.lat.toFixed(6)}</span>
+                      {' | '}
+                      Lng: <span className="font-semibold">{selectedLocation.lng.toFixed(6)}</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 flex-1">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                      Radius (meters):
+                    </span>
+                    <input
+                      type="number"
+                      value={radius}
+                      onChange={handleRadiusChange}
+                      min="1"
+                      max="10000"
+                      className="flex-1 px-3 py-1.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Attendance allowed within this distance
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2 flex-1">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                    Radius (meters):
-                  </span>
-                  <input
-                    type="number"
-                    value={radius}
-                    onChange={handleRadiusChange}
-                    min="1"
-                    max="10000"
-                    className="flex-1 px-3 py-1.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </label>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Attendance allowed within this distance
-                </p>
+            ) : (
+              <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                <MapPin className="w-5 h-5 flex-shrink-0" />
+                <p className="text-sm">Click on the map or search for a location to select coordinates</p>
               </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-              <MapPin className="w-5 h-5 flex-shrink-0" />
-              <p className="text-sm">Click on the map or search for a location to select coordinates</p>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="flex justify-end gap-4 p-6 border-t border-gray-200 dark:border-gray-700">
+        {/* Footer Actions - Sticky at bottom */}
+        <div className="flex justify-end gap-4 p-6 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-gray-900">
           <button
             onClick={onClose}
             className="px-6 py-2 border border-gray-300 dark:border-gray-700 rounded-lg font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"

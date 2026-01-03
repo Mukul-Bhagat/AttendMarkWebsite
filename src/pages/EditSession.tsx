@@ -302,7 +302,7 @@ const EditSession: React.FC = () => {
       }
 
       // Build location object for PHYSICAL or HYBRID sessions
-      // Send coordinates directly - no link parsing needed
+      // Backend expects: { type: 'COORDS', geolocation: { latitude, longitude } }
       let locationObj = undefined;
       if (formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID') {
         if (!selectedCoordinates) {
@@ -312,8 +312,11 @@ const EditSession: React.FC = () => {
         }
         
         locationObj = {
-          latitude: selectedCoordinates.latitude,
-          longitude: selectedCoordinates.longitude,
+          type: 'COORDS',
+          geolocation: {
+            latitude: selectedCoordinates.latitude,
+            longitude: selectedCoordinates.longitude,
+          },
         };
       }
 
