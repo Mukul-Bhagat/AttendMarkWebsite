@@ -56,6 +56,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // On initial load, try to load user from token
   useEffect(() => {
     const initAuth = async () => {
+      // CRITICAL: Skip auth initialization on public routes
+      // This prevents automatic auth checks after registration, forgot password, etc.
+      const currentPath = window.location.pathname;
+      const isPublicRoute = 
+        currentPath === '/register' ||
+        currentPath === '/login' ||
+        currentPath.startsWith('/forgot-password') ||
+        currentPath.startsWith('/reset-password') ||
+        currentPath === '/landing';
+      
+      // If on a public route, skip auth initialization
+      if (isPublicRoute) {
+        setIsLoading(false);
+        return;
+      }
+      
       const storedToken = localStorage.getItem('token');
       
       if (storedToken) {

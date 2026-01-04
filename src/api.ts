@@ -23,9 +23,38 @@ api.interceptors.request.use(
 
 // Response interceptor - handle errors globally
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // CRITICAL: Skip any auth-related side effects for public routes
+    // This prevents automatic auth checks after registration, forgot password, etc.
+    const url = response.config.url || '';
+    const isPublicRoute = 
+      url.includes('/api/auth/register') ||
+      url.includes('/api/auth/forgot-password') ||
+      url.includes('/api/auth/reset-password');
+    
+    // For public routes, return response immediately without any side effects
+    if (isPublicRoute) {
+      return response;
+    }
+    
+    // For all other routes, return response normally
+    return response;
+  },
   (error) => {
-    // Handle 401 errors (unauthorized)
+    // CRITICAL: Skip auth error handling for public routes
+    // This prevents redirects and token clearing after registration failures
+    const url = error.config?.url || '';
+    const isPublicRoute = 
+      url.includes('/api/auth/register') ||
+      url.includes('/api/auth/forgot-password') ||
+      url.includes('/api/auth/reset-password');
+    
+    // For public routes, let the error propagate without any auth side effects
+    if (isPublicRoute) {
+      return Promise.reject(error);
+    }
+    
+    // Handle 401 errors (unauthorized) - only for protected routes
     if (error.response?.status === 401) {
       // Clear token if it exists
       localStorage.removeItem('token');
