@@ -41,9 +41,23 @@ const AuthContext = createContext<IAuthContext | undefined>(undefined);
 
 // Define the provider component
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  // CRITICAL: Check if we're on a public route immediately to avoid blocking
+  const getIsPublicRoute = () => {
+    if (typeof window === 'undefined') return false;
+    const currentPath = window.location.pathname;
+    return (
+      currentPath === '/register' ||
+      currentPath === '/login' ||
+      currentPath.startsWith('/forgot-password') ||
+      currentPath.startsWith('/reset-password') ||
+      currentPath === '/landing'
+    );
+  };
+
   const [user, setUser] = useState<IUser | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
-  const [isLoading, setIsLoading] = useState(true); // Start as true to check token on mount
+  // Start with isLoading: false on public routes to prevent blocking
+  const [isLoading, setIsLoading] = useState(!getIsPublicRoute());
 
   // Derived role states - helper booleans for easy role checking
   const isSuperAdmin = user?.role === 'SuperAdmin';
@@ -66,9 +80,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         currentPath.startsWith('/reset-password') ||
         currentPath === '/landing';
       
-      // If on a public route, skip auth initialization
+      // If on a public route, skip auth initialization completely
+      // Set loading to false immediately to prevent blocking
       if (isPublicRoute) {
         setIsLoading(false);
+        // Clear any stale tokens on public routes to ensure clean state
+        if (localStorage.getItem('token')) {
+          localStorage.removeItem('token');
+          setToken(null);
+          setUser(null);
+        }
         return;
       }
       
@@ -193,9 +214,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     isPlatformOwner,
   };
 
+  // CRITICAL: Don't block rendering on public routes
+  // On public routes, always render children immediately to prevent deadlock
+  const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+  const isPublicRoute = 
+    currentPath === '/register' ||
+    currentPath === '/login' ||
+    currentPath.startsWith('/forgot-password') ||
+    currentPath.startsWith('/reset-password') ||
+    currentPath === '/landing';
+
   return (
     <AuthContext.Provider value={value}>
-      {!isLoading && children}
+      {/* On public routes, always render immediately. On protected routes, wait for auth check. */}
+      {(isPublicRoute || !isLoading) ? children : null}
     </AuthContext.Provider>
   );
 };
