@@ -52,8 +52,13 @@ const RegisterSuperAdmin: React.FC = () => {
       // Send registration request
       await api.post('/api/auth/register-super-admin', requestData);
 
-      // Show success message
-      setMessage('Registration successful. Please check your email for login credentials.');
+      // Show success message and toast
+      const successMessage = 'Registration successful. Please check your email for login credentials.';
+      setMessage(successMessage);
+      setToast({
+        message: successMessage,
+        type: 'success',
+      });
       
       // Clear the form
       setFormData({

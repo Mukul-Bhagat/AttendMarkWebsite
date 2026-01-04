@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import api from '../api';
 import { Link } from 'react-router-dom';
 import OrgSelector from '../components/OrgSelector';
+import Toast from '../components/Toast';
 
 const ForgotPassword: React.FC = () => {
   const [organizationName, setOrganizationName] = useState('');
@@ -9,6 +10,7 @@ const ForgotPassword: React.FC = () => {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const orgNameInputRef = useRef<HTMLInputElement>(null) as React.RefObject<HTMLInputElement>;
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -19,15 +21,36 @@ const ForgotPassword: React.FC = () => {
 
     try {
       const { data } = await api.post('/api/auth/forgot-password', { organizationName, email });
-      setMessage(data.msg || 'If that email exists in our system, you will receive a password reset link.');
+      
+      // Show success message and toast
+      const successMessage = data.msg || 'If that email exists in our system, you will receive a password reset link.';
+      setMessage(successMessage);
+      setToast({
+        message: successMessage,
+        type: 'success',
+      });
     } catch (err: any) {
+      // Extract error message
+      let errorMessage = 'An error occurred. Please try again.';
+      
       if (err.response?.data?.errors) {
-        const errorMessages = err.response.data.errors.map((e: any) => e.msg).join(', ');
-        setError(errorMessages);
-      } else {
-        setError(err.response?.data?.msg || 'An error occurred. Please try again.');
+        errorMessage = err.response.data.errors.map((e: any) => e.msg).join(', ');
+      } else if (err.response?.data?.msg) {
+        errorMessage = err.response.data.msg;
+      } else if (err.request) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else if (err.message) {
+        errorMessage = err.message;
       }
+      
+      setError(errorMessage);
+      setToast({
+        message: errorMessage,
+        type: 'error',
+      });
     } finally {
+      // CRITICAL: Always reset loading state using finally block
+      // This ensures the UI never gets stuck, even if error handling fails
       setIsSubmitting(false);
     }
   };
@@ -175,6 +198,15 @@ const ForgotPassword: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 };
