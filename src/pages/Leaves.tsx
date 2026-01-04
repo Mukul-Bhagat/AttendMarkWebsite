@@ -452,16 +452,24 @@ const Leaves: React.FC = () => {
   // Get user name from leave request
   const getUserName = (leave: ILeaveRequest): string => {
     if (typeof leave.userId === 'object' && leave.userId.profile) {
-      return `${leave.userId.profile.firstName} ${leave.userId.profile.lastName}`;
+      if (leave.userId.profile.firstName && leave.userId.profile.lastName) {
+        return `${leave.userId.profile.firstName} ${leave.userId.profile.lastName}`;
+      }
+      if (leave.userId.profile.firstName) {
+        return leave.userId.profile.firstName;
+      }
+      if (leave.userId.email) {
+        return leave.userId.email;
+      }
     }
-    return 'Unknown User';
+    return '';
   };
 
 
   // Handle reject leave (open modal)
   const handleRejectClick = (leaveId: string) => {
     const leave = pendingRequests.find(l => l._id === leaveId);
-    const userName = leave ? getUserName(leave) : 'User';
+    const userName = leave ? getUserName(leave) : '';
     setRejectionModal({
       isOpen: true,
       leaveId,

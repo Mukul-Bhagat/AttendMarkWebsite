@@ -76,7 +76,11 @@ const Layout: React.FC = () => {
     if (user?.profile?.firstName && user?.profile?.lastName) {
       return `${user.profile.firstName} ${user.profile.lastName}`;
     }
-    return user?.profile?.firstName || 'User';
+    if (user?.profile?.firstName) {
+      return user.profile.firstName;
+    }
+    // Fallback to email if no name is available
+    return user?.email || '';
   };
 
   // Navigation link component with active state styling
