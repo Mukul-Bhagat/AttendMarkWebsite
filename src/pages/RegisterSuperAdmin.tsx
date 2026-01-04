@@ -56,9 +56,14 @@ const RegisterSuperAdmin: React.FC = () => {
         phone: '',
       });
       
+      // Ensure no auth tokens exist (clean state)
+      // This prevents any automatic auth checks from triggering
+      localStorage.removeItem('token');
+      
       // Redirect to login after 2-3 seconds
+      // Use window.location to ensure a clean page load without triggering React Router auth checks
       setTimeout(() => {
-        navigate('/login');
+        window.location.href = '/login';
       }, 2500);
     } catch (err: any) {
       // Stop loading state on error
