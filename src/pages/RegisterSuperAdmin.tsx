@@ -65,21 +65,70 @@ const RegisterSuperAdmin: React.FC = () => {
         window.location.href = '/login';
       }, 2500);
     } catch (err: any) {
-      // Stop loading state on error
+      // CRITICAL: Always stop loading state FIRST, before any error handling
+      // This ensures the UI never gets stuck, even if error handling fails
       setIsSubmitting(false);
 
-      // Handle errors
-      if (err.response && err.response.data) {
-        // Handle express-validator errors (array format)
-        if (err.response.data.errors && Array.isArray(err.response.data.errors)) {
-          const errorMessages = err.response.data.errors.map((e: any) => e.msg).join(', ');
-          setError(errorMessages);
+      try {
+        // Clear any previous success messages
+        setMessage('');
+
+        // Enhanced error handling with better coverage
+        let errorMessage = 'Registration failed. Please try again.';
+
+        if (err.response) {
+          // Server responded with an error status
+          const { status, data } = err.response;
+
+          if (data) {
+            // Handle express-validator errors (array format) - 400 Bad Request
+            if (data.errors && Array.isArray(data.errors) && data.errors.length > 0) {
+              errorMessage = data.errors.map((e: any) => e.msg || e.message || 'Validation error').join(', ');
+            } 
+            // Handle custom error messages (string format)
+            else if (data.msg) {
+              errorMessage = data.msg;
+            } 
+            // Handle error object with message property
+            else if (data.message) {
+              errorMessage = data.message;
+            }
+            // Handle error object with error property
+            else if (data.error) {
+              errorMessage = typeof data.error === 'string' ? data.error : data.error.message || 'Registration error';
+            }
+          } else {
+            // No data in response, use status-based message
+            if (status === 400) {
+              errorMessage = 'Invalid registration data. Please check your information and try again.';
+            } else if (status === 409) {
+              errorMessage = 'This organization or email already exists. Please use different information.';
+            } else if (status >= 500) {
+              errorMessage = 'Server error. Please try again later.';
+            } else {
+              errorMessage = `Registration failed (${status}). Please try again.`;
+            }
+          }
+        } else if (err.request) {
+          // Request was made but no response received (network error)
+          errorMessage = 'Network error. Please check your connection and try again.';
         } else {
-          // Handle custom error messages (string format)
-          setError(err.response.data.msg || 'Registration failed');
+          // Error setting up the request
+          errorMessage = err.message || 'An unexpected error occurred. Please try again.';
         }
-      } else {
-        setError('Registration failed. Please check your connection and try again.');
+
+        // Set the error message
+        setError(errorMessage);
+
+        // Log error for debugging (only in development)
+        if (import.meta.env.DEV) {
+          console.error('Registration error:', err);
+        }
+      } catch (errorHandlingErr: any) {
+        // If error handling itself fails, at least show a generic error
+        // The loading state is already stopped above
+        setError('An error occurred during registration. Please try again.');
+        console.error('Error handling failed:', errorHandlingErr);
       }
     }
   };
