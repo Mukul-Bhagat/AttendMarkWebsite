@@ -163,7 +163,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userInitials, userName, userR
           {profilePicture && profilePicture.trim() !== '' ? (
             <img
               key={profilePicture} // Force re-render when profile picture changes
-              src={`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${profilePicture}?t=${Date.now()}`}
+              src={`${import.meta.env.VITE_API_URL || ''}${profilePicture}?t=${Date.now()}`}
               alt="Profile"
               className="size-9 rounded-full object-cover border-2 border-[#f04129]/20"
             />

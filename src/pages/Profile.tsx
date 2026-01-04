@@ -348,7 +348,7 @@ const Profile: React.FC = () => {
                 {user.profilePicture && user.profilePicture.trim() !== '' ? (
                   <img
                     key={user.profilePicture} // Force re-render when profile picture changes
-                    src={`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${user.profilePicture}?t=${Date.now()}`}
+                    src={`${import.meta.env.VITE_API_URL || ''}${user.profilePicture}?t=${Date.now()}`}
                     alt="Profile"
                     className="w-32 h-32 rounded-full object-cover border-4 border-[#f04129]/20"
                     onError={(e) => {

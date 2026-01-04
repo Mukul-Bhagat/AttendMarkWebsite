@@ -52,7 +52,8 @@ const Layout: React.FC = () => {
   const getProfilePictureUrl = () => {
     if (user?.profilePicture) {
       // Add cache-busting parameter to ensure fresh image loads
-      return `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${user.profilePicture}?t=${Date.now()}`;
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      return `${apiUrl}${user.profilePicture}?t=${Date.now()}`;
     }
     return null;
   };

@@ -7,6 +7,7 @@ const ResetPassword: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
@@ -18,26 +19,33 @@ const ResetPassword: React.FC = () => {
     e.preventDefault();
     setError('');
     setMessage('');
+    setIsSubmitting(true);
 
     if (newPassword !== confirmPassword) {
       setError('Passwords do not match');
+      setIsSubmitting(false);
       return;
     }
 
     if (!collectionPrefix || !token) {
       setError('Invalid reset link. Please request a new one.');
+      setIsSubmitting(false);
       return;
     }
 
     try {
       const { data } = await api.put(`/api/auth/reset-password/${collectionPrefix}/${token}`, { newPassword });
       
+      setIsSubmitting(false);
       setMessage(data.msg + ' Redirecting to login...');
       setTimeout(() => {
         navigate('/login');
       }, 3000);
 
     } catch (err: any) {
+      // CRITICAL: Always stop loading state FIRST, before any error handling
+      setIsSubmitting(false);
+      
       if (err.response?.data?.errors) {
         const errorMessages = err.response.data.errors.map((e: any) => e.msg).join(', ');
         setError(errorMessages);
@@ -78,7 +86,7 @@ const ResetPassword: React.FC = () => {
               }}
               minLength={6}
               required
-              disabled={!!message}
+              disabled={isSubmitting || !!message}
               autoComplete="new-password"
               placeholder="Minimum 6 characters"
               style={{ paddingRight: '48px' }}
@@ -118,7 +126,7 @@ const ResetPassword: React.FC = () => {
                 if (error) setError('');
               }}
               required
-              disabled={!!message}
+              disabled={isSubmitting || !!message}
               autoComplete="new-password"
               style={{ paddingRight: '48px' }}
             />
@@ -146,8 +154,8 @@ const ResetPassword: React.FC = () => {
             </button>
           </div>
         </div>
-        <button type="submit" disabled={!!message} style={{ width: '100%' }}>
-          {message ? 'Password Reset!' : 'Set New Password'}
+        <button type="submit" disabled={isSubmitting || !!message} style={{ width: '100%' }}>
+          {isSubmitting ? 'Resetting Password...' : message ? 'Password Reset!' : 'Set New Password'}
         </button>
       </form>
       <div style={{ textAlign: 'center', marginTop: '20px' }}>

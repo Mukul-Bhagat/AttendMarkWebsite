@@ -1560,7 +1560,7 @@ const Leaves: React.FC = () => {
                     Attached Document
                   </h3>
                   <a
-                    href={`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${selectedLeave.attachment}`}
+                    href={`${import.meta.env.VITE_API_URL || ''}${selectedLeave.attachment}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 h-9 rounded-lg border-2 border-red-600 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-sm"
