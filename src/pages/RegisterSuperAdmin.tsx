@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import api from '../api';
 
 // This is the component for our /register route
@@ -15,7 +15,6 @@ const RegisterSuperAdmin: React.FC = () => {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const navigate = useNavigate();
   const orgNameInputRef = useRef<HTMLInputElement>(null);
 
   const { organizationName, firstName, lastName, email, phone } = formData;
