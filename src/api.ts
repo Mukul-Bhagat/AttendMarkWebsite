@@ -1,10 +1,35 @@
 import axios from 'axios';
 
+// Get API base URL from environment variable
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
+// Log resolved API URL at module load (once at app startup)
+if (import.meta.env.PROD) {
+  // Production: Log the configured API URL
+  if (API_BASE_URL) {
+    console.log('🌐 Frontend API Configuration:');
+    console.log(`   ✅ API Base URL: ${API_BASE_URL}`);
+    console.log(`   → All API calls will use: ${API_BASE_URL}/api/...`);
+  } else {
+    console.warn('⚠️  Frontend API Configuration:');
+    console.warn('   ❌ VITE_API_URL not set - API calls will use relative paths');
+    console.warn('   → Set VITE_API_URL=https://attend-mark.onrender.com in production');
+  }
+} else {
+  // Development: Log that we're using Vite proxy
+  console.log('🌐 Frontend API Configuration:');
+  if (API_BASE_URL) {
+    console.log(`   ✅ API Base URL: ${API_BASE_URL}`);
+  } else {
+    console.log('   ℹ️  Using Vite proxy (all /api/* requests proxied to backend)');
+  }
+}
+
 // Create a configured axios instance
 // For development: Uses Vite proxy (all /api/* requests are proxied to backend)
 // For production: VITE_API_URL should be set in environment variables
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '',
+  baseURL: API_BASE_URL,
 });
 
 // Request interceptor - add auth token if available
