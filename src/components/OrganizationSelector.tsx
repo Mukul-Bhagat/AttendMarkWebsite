@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface Organization {
   orgName: string;
-  prefix: string;
+  organizationId: string;
   role: string;
   userId: string;
   organizationName: string;
@@ -46,7 +46,7 @@ const OrganizationSelector: React.FC<OrganizationSelectorProps> = ({
         try {
           const response = await api.post('/api/auth/select-organization', {
             tempToken,
-            prefix: organizations[0].prefix,
+            organizationId: organizations[0].organizationId,
           });
 
           const { token, user } = response.data;
@@ -63,21 +63,21 @@ const OrganizationSelector: React.FC<OrganizationSelectorProps> = ({
   }, [organizations, tempToken, login, navigate, onError]);
 
   const handleSelectOrganization = async (org: Organization) => {
-    setIsLoading(org.prefix);
+    setIsLoading(org.organizationId);
     try {
       const response = await api.post('/api/auth/select-organization', {
         tempToken,
-        prefix: org.prefix,
+        organizationId: org.organizationId,
       });
 
       const { token, user } = response.data;
 
       // Store token and update AuthContext
       localStorage.setItem('token', token);
-      
+
       // Update AuthContext with the new token and user
       await login({ token, user });
-      
+
       // Navigate to the appropriate dashboard based on user role
       if (user.role === 'PLATFORM_OWNER') {
         navigate('/platform/dashboard', { replace: true });
@@ -138,7 +138,7 @@ const OrganizationSelector: React.FC<OrganizationSelectorProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-5xl mx-auto">
         {organizations.map((org) => (
           <div
-            key={org.prefix}
+            key={org.organizationId}
             className="relative flex flex-col justify-between rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-lg hover:border-primary/50 transition-all duration-200 hover:scale-105 p-6 cursor-pointer group min-h-[200px] w-full"
             onClick={() => !isLoading && handleSelectOrganization(org)}
           >
@@ -166,11 +166,10 @@ const OrganizationSelector: React.FC<OrganizationSelectorProps> = ({
                 e.stopPropagation();
                 handleSelectOrganization(org);
               }}
-              className={`mt-auto w-full whitespace-nowrap flex items-center justify-center gap-2 rounded-lg h-10 px-4 bg-gradient-to-r from-orange-500 to-[#f04129] text-white text-sm font-bold hover:from-orange-600 hover:to-[#d63a25] transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                isLoading === org.prefix ? 'opacity-70' : ''
-              }`}
+              className={`mt-auto w-full whitespace-nowrap flex items-center justify-center gap-2 rounded-lg h-10 px-4 bg-gradient-to-r from-orange-500 to-[#f04129] text-white text-sm font-bold hover:from-orange-600 hover:to-[#d63a25] transition-all disabled:opacity-50 disabled:cursor-not-allowed ${isLoading === org.organizationId ? 'opacity-70' : ''
+                }`}
             >
-              {isLoading === org.prefix ? (
+              {isLoading === org.organizationId ? (
                 <>
                   <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>

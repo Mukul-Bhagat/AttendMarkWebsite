@@ -12,7 +12,7 @@ interface ProfileMenuProps {
 
 interface Organization {
   orgName: string;
-  prefix: string;
+  organizationId: string;
   role: string;
   userId: string;
   organizationName: string;
@@ -39,7 +39,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userInitials, userName, userR
   const [passwordError, setPasswordError] = useState('');
   const [passwordMessage, setPasswordMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const menuRef = useRef<HTMLDivElement>(null);
   const { logout, refetchUser, switchOrganization, user } = useAuth();
   const navigate = useNavigate();
@@ -99,10 +99,10 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userInitials, userName, userR
     navigate('/login');
   };
 
-  const handleSwitchOrganization = async (targetPrefix: string) => {
+  const handleSwitchOrganization = async (organizationId: string) => {
     setIsSwitching(true);
     try {
-      await switchOrganization(targetPrefix);
+      await switchOrganization(organizationId);
       // switchOrganization will reload the page, so we don't need to do anything else
     } catch (err: any) {
       console.error('Failed to switch organization:', err);
@@ -134,13 +134,13 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userInitials, userName, userR
         oldPassword: passwordData.oldPassword,
         newPassword: passwordData.newPassword,
       });
-      
+
       setPasswordMessage(data.msg || 'Password changed successfully!');
       setPasswordData({ oldPassword: '', newPassword: '', confirmPassword: '' });
-      
+
       // Refresh user data after password change
       await refetchUser();
-      
+
       setTimeout(() => {
         setShowPasswordModal(false);
         setPasswordMessage('');
@@ -187,7 +187,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userInitials, userName, userR
               <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{userName}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400">{userRole}</p>
             </div>
-            
+
             <div className="py-2">
               <button
                 onClick={() => {
@@ -199,7 +199,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userInitials, userName, userR
                 <span className="material-symbols-outlined mr-3 text-lg">lock_reset</span>
                 Change Password
               </button>
-              
+
               <button
                 onClick={toggleTheme}
                 className="w-full flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -209,7 +209,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userInitials, userName, userR
                 </span>
                 {theme === 'light' ? 'Dark Mode' : 'Light Mode'}
               </button>
-              
+
               <button
                 onClick={() => {
                   setIsOpen(false);
@@ -220,7 +220,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userInitials, userName, userR
                 <span className="material-symbols-outlined mr-3 text-lg">person</span>
                 View Profile
               </button>
-              
+
               <button
                 onClick={() => {
                   setIsOpen(false);
@@ -232,7 +232,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userInitials, userName, userR
                 ⇄ Switch Organization
               </button>
             </div>
-            
+
             <div className="border-t border-gray-200 dark:border-gray-700 py-2">
               <button
                 onClick={handleLogout}
@@ -367,16 +367,16 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userInitials, userName, userR
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
-            ) : organizations.filter((org) => org.prefix !== user?.collectionPrefix).length === 0 ? (
+            ) : organizations.filter((org) => org.organizationId !== user?.organizationId).length === 0 ? (
               <p className="text-gray-600 dark:text-gray-400 text-center py-4">No other organizations available.</p>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {organizations
-                  .filter((org) => org.prefix !== user?.collectionPrefix)
+                  .filter((org) => org.organizationId !== user?.organizationId)
                   .map((org) => (
                     <button
-                      key={org.prefix}
-                      onClick={() => handleSwitchOrganization(org.prefix)}
+                      key={org.organizationId}
+                      onClick={() => handleSwitchOrganization(org.organizationId)}
                       disabled={isSwitching}
                       className="w-full flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >

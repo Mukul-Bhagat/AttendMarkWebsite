@@ -4,7 +4,7 @@ import api from '../api';
 
 interface Organization {
   orgName: string;
-  prefix: string;
+  organizationId: string;
   role: string;
   userId: string;
   organizationName: string;
@@ -68,10 +68,10 @@ const Profile: React.FC = () => {
     }
   }, [showOrgSwitchModal]);
 
-  const handleSwitchOrganization = async (targetPrefix: string) => {
+  const handleSwitchOrganization = async (organizationId: string) => {
     setIsSwitching(true);
     try {
-      await switchOrganization(targetPrefix);
+      await switchOrganization(organizationId);
       // switchOrganization will reload the page, so we don't need to do anything else
     } catch (err: any) {
       console.error('Failed to switch organization:', err);
@@ -327,11 +327,10 @@ const Profile: React.FC = () => {
       {/* Message Banner */}
       {message && (
         <div
-          className={`mb-6 p-4 rounded-xl border ${
-            message.type === 'success'
+          className={`mb-6 p-4 rounded-xl border ${message.type === 'success'
               ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800'
               : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800'
-          }`}
+            }`}
         >
           {message.text}
         </div>
@@ -437,32 +436,29 @@ const Profile: React.FC = () => {
             <div className="flex border-b border-border-light dark:border-border-dark">
               <button
                 onClick={() => setActiveTab('personal')}
-                className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${
-                  activeTab === 'personal'
+                className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${activeTab === 'personal'
                     ? 'text-[#f04129] border-b-2 border-[#f04129]'
                     : 'text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark'
-                }`}
+                  }`}
               >
                 Personal Details
               </button>
               <button
                 onClick={() => setActiveTab('preferences')}
-                className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${
-                  activeTab === 'preferences'
+                className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${activeTab === 'preferences'
                     ? 'text-[#f04129] border-b-2 border-[#f04129]'
                     : 'text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark'
-                }`}
+                  }`}
               >
                 Preferences
               </button>
               {isSuperAdmin && (
                 <button
                   onClick={() => setActiveTab('organization')}
-                  className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${
-                    activeTab === 'organization'
+                  className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${activeTab === 'organization'
                       ? 'text-[#f04129] border-b-2 border-[#f04129]'
                       : 'text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark'
-                  }`}
+                    }`}
                 >
                   Organization Settings
                 </button>
@@ -596,14 +592,12 @@ const Profile: React.FC = () => {
                     </div>
                     <button
                       onClick={() => handlePreferenceToggle('emailNotifications')}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        preferences.emailNotifications ? 'bg-[#f04129]' : 'bg-gray-300 dark:bg-gray-600'
-                      }`}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${preferences.emailNotifications ? 'bg-[#f04129]' : 'bg-gray-300 dark:bg-gray-600'
+                        }`}
                     >
                       <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          preferences.emailNotifications ? 'translate-x-6' : 'translate-x-1'
-                        }`}
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${preferences.emailNotifications ? 'translate-x-6' : 'translate-x-1'
+                          }`}
                       />
                     </button>
                   </div>
@@ -624,14 +618,12 @@ const Profile: React.FC = () => {
                     <button
                       onClick={() => handlePreferenceToggle('twoFactorAuth')}
                       disabled
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors opacity-50 cursor-not-allowed ${
-                        preferences.twoFactorAuth ? 'bg-[#f04129]' : 'bg-gray-300 dark:bg-gray-600'
-                      }`}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors opacity-50 cursor-not-allowed ${preferences.twoFactorAuth ? 'bg-[#f04129]' : 'bg-gray-300 dark:bg-gray-600'
+                        }`}
                     >
                       <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          preferences.twoFactorAuth ? 'translate-x-6' : 'translate-x-1'
-                        }`}
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${preferences.twoFactorAuth ? 'translate-x-6' : 'translate-x-1'
+                          }`}
                       />
                     </button>
                   </div>
@@ -651,14 +643,12 @@ const Profile: React.FC = () => {
                     </div>
                     <button
                       onClick={() => handlePreferenceToggle('darkMode')}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        preferences.darkMode ? 'bg-[#f04129]' : 'bg-gray-300 dark:bg-gray-600'
-                      }`}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${preferences.darkMode ? 'bg-[#f04129]' : 'bg-gray-300 dark:bg-gray-600'
+                        }`}
                     >
                       <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          preferences.darkMode ? 'translate-x-6' : 'translate-x-1'
-                        }`}
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${preferences.darkMode ? 'translate-x-6' : 'translate-x-1'
+                          }`}
                       />
                     </button>
                   </div>
@@ -717,14 +707,12 @@ const Profile: React.FC = () => {
                             ...organizationSettings,
                             isStrictAttendance: !organizationSettings.isStrictAttendance,
                           })}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                            organizationSettings.isStrictAttendance ? 'bg-[#f04129]' : 'bg-gray-300 dark:bg-gray-600'
-                          }`}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${organizationSettings.isStrictAttendance ? 'bg-[#f04129]' : 'bg-gray-300 dark:bg-gray-600'
+                            }`}
                         >
                           <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                              organizationSettings.isStrictAttendance ? 'translate-x-6' : 'translate-x-1'
-                            }`}
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${organizationSettings.isStrictAttendance ? 'translate-x-6' : 'translate-x-1'
+                              }`}
                           />
                         </button>
                       </div>
@@ -737,7 +725,7 @@ const Profile: React.FC = () => {
                         <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark mb-6">
                           Set the maximum number of leave days allowed per year for each leave type.
                         </p>
-                        
+
                         <div className="space-y-4">
                           {/* Personal Leave */}
                           <div>
@@ -847,16 +835,16 @@ const Profile: React.FC = () => {
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
-            ) : organizations.filter((org) => org.prefix !== user?.collectionPrefix).length === 0 ? (
+            ) : organizations.filter((org) => org.organizationId !== user?.organizationId).length === 0 ? (
               <p className="text-gray-600 dark:text-gray-400 text-center py-4">No other organizations available.</p>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {organizations
-                  .filter((org) => org.prefix !== user?.collectionPrefix)
+                  .filter((org) => org.organizationId !== user?.organizationId)
                   .map((org) => (
                     <button
-                      key={org.prefix}
-                      onClick={() => handleSwitchOrganization(org.prefix)}
+                      key={org.organizationId}
+                      onClick={() => handleSwitchOrganization(org.organizationId)}
                       disabled={isSwitching}
                       className="w-full flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >

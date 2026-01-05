@@ -64,7 +64,7 @@ const PlatformDashboard: React.FC = () => {
   const handleOrganizationClick = async (org: Organization) => {
     try {
       // Switch to the selected organization
-      await switchOrganization(org.collectionPrefix);
+      await switchOrganization(org.id);
       // Navigation will happen automatically via switchOrganization
     } catch (err: any) {
       console.error('Failed to switch organization:', err);
@@ -74,12 +74,12 @@ const PlatformDashboard: React.FC = () => {
 
   const handleStatusToggle = async (e: React.MouseEvent, org: Organization) => {
     e.stopPropagation(); // Prevent card click when toggling status
-    
+
     const newStatus = org.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
-    const confirmMessage = newStatus === 'SUSPENDED' 
+    const confirmMessage = newStatus === 'SUSPENDED'
       ? `Are you sure you want to SUSPEND "${org.name}"? All users will be blocked from accessing this organization.`
       : `Are you sure you want to ACTIVATE "${org.name}"? Users will be able to access this organization again.`;
-    
+
     if (!window.confirm(confirmMessage)) {
       return;
     }
@@ -89,9 +89,9 @@ const PlatformDashboard: React.FC = () => {
 
     try {
       await api.patch(`/api/platform/organizations/${org.id}/status`, { status: newStatus });
-      
+
       // Update the organization in the list
-      setOrganizations(organizations.map(o => 
+      setOrganizations(organizations.map(o =>
         o.id === org.id ? { ...o, status: newStatus } : o
       ));
     } catch (err: any) {
@@ -153,7 +153,7 @@ const PlatformDashboard: React.FC = () => {
                 </span>
               </div>
             </div>
-            
+
             {/* Search Bar */}
             <div className="relative w-full max-w-2xl">
               <span className="material-symbols-outlined absolute left-3 top-1/2 transform -translate-y-1/2 text-text-secondary-light dark:text-text-secondary-dark text-xl">
@@ -210,122 +210,116 @@ const PlatformDashboard: React.FC = () => {
               {filteredOrganizations.map((org) => {
                 const isSuspended = org.status === 'SUSPENDED';
                 const isUpdating = updatingStatus[org.id];
-                
+
                 return (
-                <div
-                  key={org.id}
-                  onClick={() => handleOrganizationClick(org)}
-                  className={`bg-surface-light dark:bg-surface-dark rounded-lg border p-6 cursor-pointer transition-all duration-200 group ${
-                    isSuspended 
-                      ? 'border-red-500 dark:border-red-600 opacity-75 hover:opacity-90' 
-                      : 'border-border-light dark:border-border-dark hover:shadow-lg hover:border-primary'
-                  }`}
-                >
-                  {/* Organization Name and Status Toggle */}
-                  <div className="flex items-start justify-between mb-6">
-                    <div className="flex-1">
-                      <h3 className={`text-2xl font-bold group-hover:text-primary transition-colors ${
-                        isSuspended 
-                          ? 'text-gray-500 dark:text-gray-400' 
-                          : 'text-text-primary-light dark:text-text-primary-dark'
-                      }`}>
-                        {org.name}
-                      </h3>
-                      {isSuspended && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 mt-1">
-                          SUSPENDED
+                  <div
+                    key={org.id}
+                    onClick={() => handleOrganizationClick(org)}
+                    className={`bg-surface-light dark:bg-surface-dark rounded-lg border p-6 cursor-pointer transition-all duration-200 group ${isSuspended
+                        ? 'border-red-500 dark:border-red-600 opacity-75 hover:opacity-90'
+                        : 'border-border-light dark:border-border-dark hover:shadow-lg hover:border-primary'
+                      }`}
+                  >
+                    {/* Organization Name and Status Toggle */}
+                    <div className="flex items-start justify-between mb-6">
+                      <div className="flex-1">
+                        <h3 className={`text-2xl font-bold group-hover:text-primary transition-colors ${isSuspended
+                            ? 'text-gray-500 dark:text-gray-400'
+                            : 'text-text-primary-light dark:text-text-primary-dark'
+                          }`}>
+                          {org.name}
+                        </h3>
+                        {isSuspended && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 mt-1">
+                            SUSPENDED
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {/* Status Toggle Switch */}
+                        <button
+                          onClick={(e) => handleStatusToggle(e, org)}
+                          disabled={isUpdating}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${isSuspended ? 'bg-red-600' : 'bg-green-600'
+                            }`}
+                          title={isSuspended ? 'Click to activate' : 'Click to suspend'}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isSuspended ? 'translate-x-6' : 'translate-x-1'
+                              }`}
+                          />
+                        </button>
+                        <span className="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark group-hover:text-primary transition-colors">
+                          arrow_forward
                         </span>
-                      )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {/* Status Toggle Switch */}
-                      <button
-                        onClick={(e) => handleStatusToggle(e, org)}
-                        disabled={isUpdating}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                          isSuspended ? 'bg-red-600' : 'bg-green-600'
-                        }`}
-                        title={isSuspended ? 'Click to activate' : 'Click to suspend'}
-                      >
+
+                    {/* Admin Name */}
+                    <div className="mb-3">
+                      <div className="flex items-center gap-2 text-sm text-text-secondary-light dark:text-text-secondary-dark mb-1">
+                        <span className="material-symbols-outlined text-base">admin_panel_settings</span>
+                        <span>Admin</span>
+                      </div>
+                      <p className="text-base font-medium text-text-primary-light dark:text-text-primary-dark ml-6">
+                        {org.adminName}
+                      </p>
+                    </div>
+
+                    {/* Total Users */}
+                    <div className="mb-3">
+                      <div className="flex items-center gap-2 text-sm text-text-secondary-light dark:text-text-secondary-dark mb-1">
+                        <span className="material-symbols-outlined text-base">people</span>
+                        <span>Total Users</span>
+                      </div>
+                      <p className="text-base font-medium text-text-primary-light dark:text-text-primary-dark ml-6">
+                        {org.totalUsers}
+                      </p>
+                    </div>
+
+                    {/* Organization Status */}
+                    <div className="mb-3">
+                      <div className="flex items-center gap-2 text-sm text-text-secondary-light dark:text-text-secondary-dark mb-1">
+                        <span className="material-symbols-outlined text-base">verified</span>
+                        <span>Organization Status</span>
+                      </div>
+                      <div className="ml-6">
                         <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            isSuspended ? 'translate-x-6' : 'translate-x-1'
-                          }`}
-                        />
-                      </button>
-                      <span className="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark group-hover:text-primary transition-colors">
-                        arrow_forward
-                      </span>
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${org.status === 'ACTIVE'
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                              : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                            }`}
+                        >
+                          {org.status}
+                        </span>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Admin Name */}
-                  <div className="mb-3">
-                    <div className="flex items-center gap-2 text-sm text-text-secondary-light dark:text-text-secondary-dark mb-1">
-                      <span className="material-symbols-outlined text-base">admin_panel_settings</span>
-                      <span>Admin</span>
+                    {/* Subscription Status */}
+                    <div className="mb-3">
+                      <div className="flex items-center gap-2 text-sm text-text-secondary-light dark:text-text-secondary-dark mb-1">
+                        <span className="material-symbols-outlined text-base">subscriptions</span>
+                        <span>Subscription</span>
+                      </div>
+                      <div className="ml-6">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${org.subscriptionStatus === 'Active'
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                              : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
+                            }`}
+                        >
+                          {org.subscriptionStatus}
+                        </span>
+                      </div>
                     </div>
-                    <p className="text-base font-medium text-text-primary-light dark:text-text-primary-dark ml-6">
-                      {org.adminName}
-                    </p>
-                  </div>
 
-                  {/* Total Users */}
-                  <div className="mb-3">
-                    <div className="flex items-center gap-2 text-sm text-text-secondary-light dark:text-text-secondary-dark mb-1">
-                      <span className="material-symbols-outlined text-base">people</span>
-                      <span>Total Users</span>
-                    </div>
-                    <p className="text-base font-medium text-text-primary-light dark:text-text-primary-dark ml-6">
-                      {org.totalUsers}
-                    </p>
-                  </div>
-
-                  {/* Organization Status */}
-                  <div className="mb-3">
-                    <div className="flex items-center gap-2 text-sm text-text-secondary-light dark:text-text-secondary-dark mb-1">
-                      <span className="material-symbols-outlined text-base">verified</span>
-                      <span>Organization Status</span>
-                    </div>
-                    <div className="ml-6">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          org.status === 'ACTIVE'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                        }`}
-                      >
-                        {org.status}
-                      </span>
+                    {/* Created Date */}
+                    <div className="pt-3 border-t border-border-light dark:border-border-dark">
+                      <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                        Created: {formatDate(org.createdAt)}
+                      </p>
                     </div>
                   </div>
-
-                  {/* Subscription Status */}
-                  <div className="mb-3">
-                    <div className="flex items-center gap-2 text-sm text-text-secondary-light dark:text-text-secondary-dark mb-1">
-                      <span className="material-symbols-outlined text-base">subscriptions</span>
-                      <span>Subscription</span>
-                    </div>
-                    <div className="ml-6">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          org.subscriptionStatus === 'Active'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                            : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
-                        }`}
-                      >
-                        {org.subscriptionStatus}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Created Date */}
-                  <div className="pt-3 border-t border-border-light dark:border-border-dark">
-                    <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
-                      Created: {formatDate(org.createdAt)}
-                    </p>
-                  </div>
-                </div>
                 );
               })}
             </div>

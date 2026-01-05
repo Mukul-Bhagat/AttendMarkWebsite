@@ -15,8 +15,10 @@ export interface IUser {
   profilePicture?: string;
   createdAt?: string;
   mustResetPassword: boolean;
-  organization?: string;
-  collectionPrefix?: string;
+  organization?: string; // This is actually organizationName from backend
+  organizationName?: string;
+  organizationId?: string;
+  collectionPrefix?: string; // Legacy
 }
 
 interface IAuthContext {
@@ -26,7 +28,7 @@ interface IAuthContext {
   login: (formData: any) => Promise<void>;
   logout: () => void;
   refetchUser: () => Promise<void>;
-  switchOrganization: (targetPrefix: string) => Promise<void>;
+  switchOrganization: (organizationId: string) => Promise<void>;
   // Role helper booleans
   isSuperAdmin: boolean;
   isCompanyAdmin: boolean;
@@ -73,13 +75,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // CRITICAL: Skip auth initialization on public routes
       // This prevents automatic auth checks after registration, forgot password, etc.
       const currentPath = window.location.pathname;
-      const isPublicRoute = 
+      const isPublicRoute =
         currentPath === '/register' ||
         currentPath === '/login' ||
         currentPath.startsWith('/forgot-password') ||
         currentPath.startsWith('/reset-password') ||
         currentPath === '/landing';
-      
+
       // If on a public route, skip auth initialization completely
       // Set loading to false immediately to prevent blocking
       if (isPublicRoute) {
@@ -92,15 +94,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
         return;
       }
-      
+
       const storedToken = localStorage.getItem('token');
-      
+
       if (storedToken) {
         try {
           // Verify the token and fetch user data from the backend
           const response = await api.get('/api/auth/me');
           const { user } = response.data;
-          
+
           // Update state with fetched user data
           setUser(user);
           setToken(storedToken);
@@ -112,7 +114,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setUser(null);
         }
       }
-      
+
       setIsLoading(false);
     };
 
@@ -131,17 +133,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setIsLoading(false);
         return;
       }
-      
+
       // Otherwise, it's the old flow (shouldn't happen with new login, but kept for compatibility)
       const response = await api.post('/api/auth/login', formDataOrAuth);
-      
+
       // Get token and user from response
       const { token, user } = response.data;
       // Save to state and localStorage
       setToken(token);
       setUser(user);
       localStorage.setItem('token', token);
-      
+
       setIsLoading(false);
     } catch (error: any) {
       setIsLoading(false);
@@ -177,10 +179,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Switch to a different organization
-  const switchOrganization = async (targetPrefix: string) => {
+  const switchOrganization = async (organizationId: string) => {
     try {
       const response = await api.post('/api/auth/switch-organization', {
-        targetPrefix,
+        organizationId,
       });
 
       const { token, user } = response.data;
@@ -217,7 +219,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // CRITICAL: Don't block rendering on public routes
   // On public routes, always render children immediately to prevent deadlock
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
-  const isPublicRoute = 
+  const isPublicRoute =
     currentPath === '/register' ||
     currentPath === '/login' ||
     currentPath.startsWith('/forgot-password') ||
@@ -240,4 +242,3 @@ export const useAuth = () => {
   }
   return context;
 };
-
