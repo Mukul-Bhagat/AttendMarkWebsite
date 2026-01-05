@@ -1,4 +1,3 @@
-```javascript
 import React, { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -104,7 +103,7 @@ const ScanQR: React.FC = () => {
     const fetchSessionInfo = async () => {
       if (selectedSessionId) {
         try {
-          const { data } = await api.get(`/ api / sessions / ${ selectedSessionId } `);
+          const { data } = await api.get(`/api/sessions/${selectedSessionId}`);
           setSessionInfo(data);
         } catch (err) {
           console.error('Failed to fetch session info:', err);
@@ -221,7 +220,7 @@ const ScanQR: React.FC = () => {
       const hour = parseInt(hours, 10);
       const ampm = hour >= 12 ? 'PM' : 'AM';
       const displayHour = hour % 12 || 12;
-      return `${ displayHour }:${ minutes } ${ ampm } `;
+      return `${displayHour}:${minutes} ${ampm}`;
     } catch {
       return timeString;
     }
@@ -281,7 +280,7 @@ const ScanQR: React.FC = () => {
       setCameraError(true);
       setMessageType('error');
       const errorMsg = err.message || 'Please allow camera access';
-      setMessage(`Failed to start camera: ${ errorMsg }. Please check your browser permissions.`);
+      setMessage(`Failed to start camera: ${errorMsg}. Please check your browser permissions.`);
       console.error('Error starting QR scanner:', err);
     }
   };
@@ -375,7 +374,7 @@ const ScanQR: React.FC = () => {
         // SECURITY: Reject if accuracy > 40 meters (frontend validation)
         if (accuracy > 40) {
           setMessageType('error');
-          setMessage(`GPS accuracy is too low(${ Math.round(accuracy) }m).Please enable high - accuracy GPS and ensure you have a clear view of the sky.Maximum allowed accuracy: 40m.`);
+          setMessage(`GPS accuracy is too low (${Math.round(accuracy)}m). Please enable high-accuracy GPS and ensure you have a clear view of the sky. Maximum allowed accuracy: 40m.`);
           setIsProcessing(false);
           setIsScannerPaused(false);
           return;
@@ -404,7 +403,7 @@ const ScanQR: React.FC = () => {
             errorMessage = 'Location request timed out. Please try again.';
             break;
           default:
-            errorMessage = `Could not get location: ${ error.message || 'Unknown error' }. Please enable GPS and try again.`;
+            errorMessage = `Could not get location: ${error.message || 'Unknown error'}. Please enable GPS and try again.`;
             break;
         }
         setMessageType('error');
@@ -491,8 +490,8 @@ const ScanQR: React.FC = () => {
 
     if (data.reason === 'OUT_OF_RANGE') {
       const dist = data.distanceMeters || 0;
-      const distanceText = dist >= 1000 ? `${ (dist / 1000).toFixed(1) } km` : `${ dist } meters`;
-      setMessage(`You are ${ distanceText } away from the session location.`);
+      const distanceText = dist >= 1000 ? `${(dist / 1000).toFixed(1)} km` : `${dist} meters`;
+      setMessage(`You are ${distanceText} away from the session location.`);
     } else if (data.reason === 'DEVICE_MISMATCH' || data.reason === 'BROWSER_MISMATCH') {
       setMessage('Device Mismatch: Attendance must be marked from the same device/browser used earlier.');
     } else if (data.reason === 'INVALID_QR') {
@@ -543,7 +542,7 @@ const ScanQR: React.FC = () => {
         <FullScreenAnimation
           src="/animations/success.lottie"
           title={isAlreadyMarked ? 'Attendance Already Marked' : 'Attendance Marked Successfully'}
-          description={`Class: ${ sessionInfo?.className || 'Class' } \nSession: ${ sessionInfo?.name || sessionInfo?.sessionName || 'Session' } \nDate: ${ sessionDate }${ subText } `}
+          description={`Class: ${sessionInfo?.className || 'Class'}\nSession: ${sessionInfo?.name || sessionInfo?.sessionName || 'Session'}\nDate: ${sessionDate}${subText}`}
           loop={false}
         />
       );
@@ -777,11 +776,10 @@ const ScanQR: React.FC = () => {
                   <div
                     key={session._id}
                     onClick={() => setSelectedSessionId(session._id)}
-                    className={`relative flex flex - col rounded - xl border - 2 p - 4 md: p - 6 shadow - sm hover: shadow - md transition - all cursor - pointer ${
-  isLive
-    ? 'border-green-500 bg-green-50 dark:bg-green-900/20 dark:border-green-600'
-    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50'
-} `}
+                    className={`relative flex flex-col rounded-xl border-2 p-4 md:p-6 shadow-sm hover:shadow-md transition-all cursor-pointer ${isLive
+                      ? 'border-green-500 bg-green-50 dark:bg-green-900/20 dark:border-green-600'
+                      : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50'
+                      }`}
                   >
                     {/* Live Indicator - Pulsing Badge */}
                     {isLive && (
