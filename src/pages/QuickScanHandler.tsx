@@ -110,7 +110,7 @@ const QuickScanHandler: React.FC = () => {
               }
             }
           },
-          (locationError) => {
+          () => {
             setStatus('error');
             setErrorDetails({
               title: 'Location Access Denied',
