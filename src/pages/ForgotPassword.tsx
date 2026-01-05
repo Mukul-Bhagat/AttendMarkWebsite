@@ -139,9 +139,9 @@ const ForgotPassword: React.FC = () => {
 
               <button
                 type="submit"
-                disabled={isSubmitting || !!message}
+                disabled={isSubmitting}
                 className={`flex items-center justify-center text-center font-bold text-base h-12 w-full rounded-lg bg-[#f04129] text-white hover:bg-[#d63a25] transition-colors duration-200 ${
-                  isSubmitting || !!message ? 'opacity-70 cursor-not-allowed' : ''
+                  isSubmitting ? 'opacity-70 cursor-not-allowed' : ''
                 }`}
               >
                 {isSubmitting ? (
