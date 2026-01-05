@@ -1,24 +1,27 @@
+```javascript
 import React, { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { getOrCreateDeviceId } from '../utils/deviceId';
 import { extractSessionIdFromQR } from '../utils/qrParser';
 import { RefreshCw, ArrowLeft } from 'lucide-react';
 import { ISession } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { FullScreenAnimation } from '../components/FullScreenAnimation';
 
 const ScanQR: React.FC = () => {
   const [searchParams] = useSearchParams();
   const sessionIdFromUrl = searchParams.get('sessionId');
   const { user } = useAuth();
-  
+  const navigate = useNavigate();
+
   // View State Management
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(sessionIdFromUrl || null);
   const [sessions, setSessions] = useState<ISession[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [sessionError, setSessionError] = useState('');
-  
+
   // Scanner State
   const [message, setMessage] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -101,7 +104,7 @@ const ScanQR: React.FC = () => {
     const fetchSessionInfo = async () => {
       if (selectedSessionId) {
         try {
-          const { data } = await api.get(`/api/sessions/${selectedSessionId}`);
+          const { data } = await api.get(`/ api / sessions / ${ selectedSessionId } `);
           setSessionInfo(data);
         } catch (err) {
           console.error('Failed to fetch session info:', err);
@@ -133,8 +136,8 @@ const ScanQR: React.FC = () => {
       const today = new Date();
       const check = new Date(dateString);
       return today.getDate() === check.getDate() &&
-             today.getMonth() === check.getMonth() &&
-             today.getFullYear() === check.getFullYear();
+        today.getMonth() === check.getMonth() &&
+        today.getFullYear() === check.getFullYear();
     };
 
     const now = new Date();
@@ -218,7 +221,7 @@ const ScanQR: React.FC = () => {
       const hour = parseInt(hours, 10);
       const ampm = hour >= 12 ? 'PM' : 'AM';
       const displayHour = hour % 12 || 12;
-      return `${displayHour}:${minutes} ${ampm}`;
+      return `${ displayHour }:${ minutes } ${ ampm } `;
     } catch {
       return timeString;
     }
@@ -250,7 +253,7 @@ const ScanQR: React.FC = () => {
       setCameraError(false);
       setMessageType('info');
       setMessage('Starting camera...');
-      
+
       const html5QrCode = new Html5Qrcode(qrCodeRegionId);
       scannerRef.current = html5QrCode;
 
@@ -278,7 +281,7 @@ const ScanQR: React.FC = () => {
       setCameraError(true);
       setMessageType('error');
       const errorMsg = err.message || 'Please allow camera access';
-      setMessage(`Failed to start camera: ${errorMsg}. Please check your browser permissions.`);
+      setMessage(`Failed to start camera: ${ errorMsg }. Please check your browser permissions.`);
       console.error('Error starting QR scanner:', err);
     }
   };
@@ -309,13 +312,13 @@ const ScanQR: React.FC = () => {
 
     // PAUSE SCANNER IMMEDIATELY to prevent multiple scans
     setIsScannerPaused(true);
-    
+
     // Stop scanning immediately
     await stopScanning();
 
     // Parse sessionId from QR content (handles both URL and raw sessionId)
     const extractedSessionId = extractSessionIdFromQR(scannedQRContent);
-    
+
     if (!extractedSessionId) {
       setMessageType('error');
       setMessage('Invalid QR code. Please scan a valid session QR code.');
@@ -335,7 +338,7 @@ const ScanQR: React.FC = () => {
 
     // Use extracted sessionId (from QR) or selectedSessionId as fallback
     const sessionId = extractedSessionId || selectedSessionId;
-    
+
     if (!sessionId) {
       setMessageType('error');
       setMessage('Could not determine session ID. Please try again.');
@@ -372,7 +375,7 @@ const ScanQR: React.FC = () => {
         // SECURITY: Reject if accuracy > 40 meters (frontend validation)
         if (accuracy > 40) {
           setMessageType('error');
-          setMessage(`GPS accuracy is too low (${Math.round(accuracy)}m). Please enable high-accuracy GPS and ensure you have a clear view of the sky. Maximum allowed accuracy: 40m.`);
+          setMessage(`GPS accuracy is too low(${ Math.round(accuracy) }m).Please enable high - accuracy GPS and ensure you have a clear view of the sky.Maximum allowed accuracy: 40m.`);
           setIsProcessing(false);
           setIsScannerPaused(false);
           return;
@@ -401,7 +404,7 @@ const ScanQR: React.FC = () => {
             errorMessage = 'Location request timed out. Please try again.';
             break;
           default:
-            errorMessage = `Could not get location: ${error.message || 'Unknown error'}. Please enable GPS and try again.`;
+            errorMessage = `Could not get location: ${ error.message || 'Unknown error' }. Please enable GPS and try again.`;
             break;
         }
         setMessageType('error');
@@ -409,8 +412,8 @@ const ScanQR: React.FC = () => {
         setIsProcessing(false);
         setIsScannerPaused(false);
       },
-      { 
-        enableHighAccuracy: true, 
+      {
+        enableHighAccuracy: true,
         timeout: 10000,
         maximumAge: 0 // Always fetch fresh GPS, no caching
       }
@@ -419,9 +422,9 @@ const ScanQR: React.FC = () => {
 
   // This function sends all data to our backend
   const markAttendance = async (
-    sessionId: string, 
-    userLocation: { latitude: number; longitude: number }, 
-    deviceId: string, 
+    sessionId: string,
+    userLocation: { latitude: number; longitude: number },
+    deviceId: string,
     userAgent: string,
     accuracy: number,
     timestamp: number
@@ -435,62 +438,67 @@ const ScanQR: React.FC = () => {
       return;
     }
 
-    // Validate location is not (0,0) - common default/error value
-    if (userLocation.latitude === 0 && userLocation.longitude === 0) {
-      setMessageType('error');
-      setMessage('Invalid location detected. Please ensure GPS is enabled and try again.');
-      setIsProcessing(false);
-      setIsScannerPaused(false);
-      return;
-    }
-
     try {
-      console.log('[ATTENDANCE_SCAN] Sending request:', {
-        sessionId,
-        userLocation,
-        deviceId: deviceId.substring(0, 8) + '...', // Log partial deviceId for privacy
-        userAgent: userAgent.substring(0, 50) + '...', // Log partial userAgent
-        scanSource: 'web_scanner'
-      });
+      console.log('[ATTENDANCE_SCAN] Sending request:', { sessionId, userLocation, accuracy });
 
       const { data } = await api.post('/api/attendance/scan', {
         sessionId,
         userLocation,
-        deviceId, // Send the device "fingerprint"
-        userAgent, // Send the browser/OS signature
-        accuracy, // GPS accuracy in meters (required for MapmyIndia)
-        timestamp, // Timestamp of GPS reading
+        deviceId,
+        userAgent,
+        accuracy,
+        timestamp,
       });
 
-      setMessageType('success');
-      setMessage(data.msg || 'Attendance marked successfully!');
-      setIsSuccess(true);
-      setIsProcessing(false);
+      // Handle Success (MARKED or ALREADY_MARKED)
+      if (data.status === 'MARKED' || data.status === 'ALREADY_MARKED') {
+        setMessageType('success');
+        setMessage(data.msg); // Store message for legacy use if needed
+        setIsSuccess(true);
+        setIsProcessing(false);
+
+        // Store full response for UI
+        setSessionInfo((prev: any) => ({ ...prev, ...data })); // Merge response data
+
+        // Auto-redirect after delay
+        setTimeout(() => {
+          // If we are in the main app flow, maybe go back to dashboard or session list?
+          // User asked: "Redirect to Dashboard".
+          // But if I am in "ScanQR" page, maybe I want to scan another?
+          // The prompt says "Redirect to Dashboard". OK.
+          navigate('/dashboard');
+        }, 2500);
+
+      } else {
+        // Logic Failure (FAILED status)
+        handleScanFailure(data);
+      }
+
     } catch (err: any) {
-      // Extract the exact error message from backend
-      const errorMsg = err.response?.data?.msg || err.response?.data?.errors?.[0]?.msg || 'Failed to mark attendance';
-      const errorType = err.response?.data?.type;
-      
-      // Check for 403/Device Mismatch error specifically
-      if (err.response?.status === 403 && (errorMsg.includes('Security Alert') || errorMsg.includes('Device Mismatch') || errorMsg.includes('Cloning detected') || errorMsg.includes('device registration'))) {
-        // Show Modal with user-friendly explanation
-        setShowDeviceMismatchModal(true);
-        setIsProcessing(false);
-      } else if (errorType === 'TOO_EARLY' || errorMsg.includes('Attendance not yet open')) {
-        // Show "Too Early" modal with countdown info
-        setTooEarlyInfo({
-          sessionStartTime: err.response?.data?.sessionStartTime || '',
-          scanWindowStartTime: err.response?.data?.scanWindowStartTime || '',
-          hoursRemaining: err.response?.data?.hoursRemaining || 0,
-          minutesRemaining: err.response?.data?.minutesRemaining || 0,
-        });
-        setShowTooEarlyModal(true);
-        setIsProcessing(false);
+      if (err.response?.data) {
+        handleScanFailure(err.response.data);
       } else {
         setMessageType('error');
-        setMessage(errorMsg); // Show the exact backend error message
+        setMessage('Failed to connect to server.');
         setIsProcessing(false);
       }
+    }
+  };
+
+  const handleScanFailure = (data: any) => {
+    setIsProcessing(false);
+    setMessageType('error');
+
+    if (data.reason === 'OUT_OF_RANGE') {
+      const dist = data.distanceMeters || 0;
+      const distanceText = dist >= 1000 ? `${ (dist / 1000).toFixed(1) } km` : `${ dist } meters`;
+      setMessage(`You are ${ distanceText } away from the session location.`);
+    } else if (data.reason === 'DEVICE_MISMATCH' || data.reason === 'BROWSER_MISMATCH') {
+      setMessage('Device Mismatch: Attendance must be marked from the same device/browser used earlier.');
+    } else if (data.reason === 'INVALID_QR') {
+      setMessage('Invalid QR Code. Please scan the correct code.');
+    } else {
+      setMessage(data.msg || 'Attendance Failed');
     }
   };
 
@@ -502,10 +510,10 @@ const ScanQR: React.FC = () => {
     setCameraError(false);
     setIsSuccess(false);
     setIsScannerPaused(false); // Unpause scanner
-    
+
     // Stop any existing scanner
     await stopScanning();
-    
+
     // Small delay to ensure cleanup, then restart
     setTimeout(() => {
       startScanning();
@@ -527,76 +535,29 @@ const ScanQR: React.FC = () => {
   if (selectedSessionId) {
     // Success State
     if (isSuccess) {
+      const isAlreadyMarked = sessionInfo?.status === 'ALREADY_MARKED';
+      const subText = isAlreadyMarked ? '\n(Attendance was already recorded earlier)' : '';
+      const sessionDate = sessionInfo?.sessionDate || '';
+
       return (
-        <div className="group/design-root relative flex min-h-screen w-full flex-col bg-background-light dark:bg-background-dark">
-          <div className="layout-container flex h-full grow flex-col">
-            <div className="flex flex-1 items-center justify-center bg-background-light p-4 dark:bg-background-dark">
-              <div className="flex w-full max-w-sm flex-col items-center gap-6 rounded-xl bg-white p-8 text-center shadow-lg dark:bg-gray-800">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/50">
-                  <span className="material-symbols-outlined text-green-600 dark:text-green-400" style={{ fontSize: '40px' }}>check</span>
-                </div>
-                <div className="flex flex-col items-center gap-2">
-                  <p className="text-lg font-bold leading-tight tracking-[-0.015em] text-[#181511] dark:text-white">Attendance Marked!</p>
-                  {message && (
-                    <p className="text-sm font-normal leading-normal text-[#8a7b60] dark:text-gray-400">{message}</p>
-                  )}
-                </div>
-                <div className="flex gap-3 w-full">
-                  <button
-                    onClick={handleBackToList}
-                    className="flex flex-1 h-10 min-w-[84px] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 text-sm font-bold leading-normal tracking-[0.015em] text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span className="truncate">Back to Sessions</span>
-                  </button>
-                  <button
-                    onClick={handleRetry}
-                    className="flex flex-1 h-10 min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-xl bg-primary px-4 text-sm font-bold leading-normal tracking-[0.015em] text-white hover:bg-[#d63a25] transition-colors"
-                  >
-                    <span className="truncate">Scan Again</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <FullScreenAnimation
+          src="/animations/success.lottie"
+          title={isAlreadyMarked ? 'Attendance Already Marked' : 'Attendance Marked Successfully'}
+          description={`Class: ${ sessionInfo?.className || 'Class' } \nSession: ${ sessionInfo?.name || sessionInfo?.sessionName || 'Session' } \nDate: ${ sessionDate }${ subText } `}
+          loop={false}
+        />
       );
     }
 
     // Error State (non-camera errors)
     if (messageType === 'error' && !cameraError) {
       return (
-        <div className="group/design-root relative flex min-h-screen w-full flex-col bg-background-light dark:bg-background-dark">
-          <div className="layout-container flex h-full grow flex-col">
-            <div className="flex flex-1 items-center justify-center bg-background-light p-4 dark:bg-background-dark">
-              <div className="flex w-full max-w-sm flex-col items-center gap-6 rounded-xl bg-white p-8 text-center shadow-lg dark:bg-gray-800">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/50">
-                  <span className="material-symbols-outlined text-red-600 dark:text-red-400" style={{ fontSize: '40px' }}>close</span>
-                </div>
-                <div className="flex max-w-[480px] flex-col items-center gap-2">
-                  <p className="text-lg font-bold leading-tight tracking-[-0.015em] text-[#181511] dark:text-white">Scan Failed</p>
-                  <p className="text-sm font-normal leading-normal text-[#181511] dark:text-gray-300">{message || 'Invalid QR code. Please try again.'}</p>
-                </div>
-                <div className="flex gap-3 w-full">
-                  <button
-                    onClick={handleBackToList}
-                    className="flex flex-1 h-10 min-w-[84px] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 text-sm font-bold leading-normal tracking-[0.015em] text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span className="truncate">Back to Sessions</span>
-                  </button>
-                  <button
-                    onClick={handleRetry}
-                    className="flex flex-1 h-10 min-w-[84px] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl bg-primary px-4 text-sm font-bold leading-normal tracking-[0.015em] text-white hover:bg-[#d63a25] transition-colors"
-                  >
-                    <RefreshCw className="w-5 h-5" />
-                    <span className="truncate">Retry Scan</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <FullScreenAnimation
+          src="/animations/warning.lottie"
+          title="Scan Failed"
+          description={message || 'Invalid QR code. Please try again.'}
+          loop={false}
+        />
       );
     }
 
@@ -728,14 +689,14 @@ const ScanQR: React.FC = () => {
 
   // Default View: Session List
   const filteredSessions = getFilteredSessions();
-  
+
   // Filter sessions to only show those where the current user is assigned
   const myScanSessions = filteredSessions.filter(session => {
     if (!user) return false;
     if (!session.assignedUsers || !Array.isArray(session.assignedUsers)) return false;
-    
+
     // Check if user is in assignedUsers by userId or email
-    return session.assignedUsers.some(u => 
+    return session.assignedUsers.some(u =>
       u.userId === user.id || u.email === user.email
     );
   });
@@ -798,7 +759,7 @@ const ScanQR: React.FC = () => {
                     No Active Sessions
                   </p>
                   <p className="text-[#181511] dark:text-slate-300 text-xs sm:text-sm font-normal leading-normal">
-                    {filteredSessions.length > 0 
+                    {filteredSessions.length > 0
                       ? 'No active sessions found for you to attend.'
                       : 'No active sessions found. Please wait for the next scheduled class.'}
                   </p>
@@ -816,11 +777,11 @@ const ScanQR: React.FC = () => {
                   <div
                     key={session._id}
                     onClick={() => setSelectedSessionId(session._id)}
-                    className={`relative flex flex-col rounded-xl border-2 p-4 md:p-6 shadow-sm hover:shadow-md transition-all cursor-pointer ${
-                      isLive
-                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20 dark:border-green-600'
-                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50'
-                    }`}
+                    className={`relative flex flex - col rounded - xl border - 2 p - 4 md: p - 6 shadow - sm hover: shadow - md transition - all cursor - pointer ${
+  isLive
+    ? 'border-green-500 bg-green-50 dark:bg-green-900/20 dark:border-green-600'
+    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50'
+} `}
                   >
                     {/* Live Indicator - Pulsing Badge */}
                     {isLive && (
@@ -963,7 +924,7 @@ const ScanQR: React.FC = () => {
                     <span className="text-2xl">⏳</span>
                     <p className="text-lg font-semibold">Attendance Not Yet Open</p>
                   </div>
-                  
+
                   <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
                     <div className="space-y-2 text-sm text-[#181511] dark:text-gray-300">
                       <div className="flex items-center justify-between">
