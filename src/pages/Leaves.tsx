@@ -63,10 +63,10 @@ const Leaves: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [quota, setQuota] = useState<IQuota>({ yearlyQuotaPL: 12, yearlyQuotaCL: 12, yearlyQuotaSL: 10 });
   const [staffUsers, setStaffUsers] = useState<IUser[]>([]);
-  
+
   // Toast notification state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-  
+
   // Rejection modal state
   const [rejectionModal, setRejectionModal] = useState<{ isOpen: boolean; leaveId: string | null; userName: string }>({
     isOpen: false,
@@ -75,11 +75,11 @@ const Leaves: React.FC = () => {
   });
   const [rejectionReason, setRejectionReason] = useState('');
   const [isProcessingRejection, setIsProcessingRejection] = useState(false);
-  
+
   // Leave Details Modal state
   const [selectedLeave, setSelectedLeave] = useState<ILeaveRequest | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-  
+
   // Check if user is Admin/Staff
   const isAdminOrStaff = isSuperAdmin || isCompanyAdmin || isManager || isSessionAdmin;
 
@@ -96,64 +96,69 @@ const Leaves: React.FC = () => {
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Fetch leave requests and quota
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setIsLoading(true);
-        
-        // Fetch user's leaves (now includes quota info)
-        const { data: leavesResponse } = await api.get('/api/leaves/my-leaves');
-        // Handle both old format (array) and new format (object with leaves and quota)
-        if (Array.isArray(leavesResponse)) {
-          setLeaveRequests(leavesResponse || []);
-        } else {
-          setLeaveRequests(leavesResponse?.leaves || []);
-          // Use quota from API response if available
-          if (leavesResponse?.quota) {
+  // Helper to normalize leave data
+  const normalizeLeaves = (data: any): ILeaveRequest[] => {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.leaves)) return data.leaves;
+    return [];
+  };
+
+  // Centralized data fetcher
+  const fetchLeaveData = async (showLoading = false) => {
+    if (showLoading) setIsLoading(true);
+    try {
+      // Fetch user's leaves
+      const { data: leavesResponse } = await api.get('/api/leaves/my-leaves');
+      const normalized = normalizeLeaves(leavesResponse);
+      setLeaveRequests(normalized);
+
+      // Handle quota from response or fallback
+      if (!Array.isArray(leavesResponse) && leavesResponse?.quota) {
+        setQuota({
+          yearlyQuotaPL: leavesResponse.quota.pl || 12,
+          yearlyQuotaCL: leavesResponse.quota.cl || 12,
+          yearlyQuotaSL: leavesResponse.quota.sl || 10,
+        });
+      } else {
+        // Fallback: Try to fetch organization settings for quota
+        try {
+          const { data: settings } = await api.get('/api/organization/settings');
+          if (settings) {
             setQuota({
-              yearlyQuotaPL: leavesResponse.quota.pl || 12,
-              yearlyQuotaCL: leavesResponse.quota.cl || 12,
-              yearlyQuotaSL: leavesResponse.quota.sl || 10,
+              yearlyQuotaPL: settings.yearlyQuotaPL || 12,
+              yearlyQuotaCL: settings.yearlyQuotaCL || 12,
+              yearlyQuotaSL: settings.yearlyQuotaSL || 10,
             });
           }
+        } catch (err) {
+          console.log('Using default quota values');
         }
-
-        // If Admin/Staff, fetch organization pending requests
-        if (isAdminOrStaff) {
-          try {
-            const { data: orgLeaves } = await api.get('/api/leaves/organization?status=Pending');
-            setPendingRequests(orgLeaves || []);
-          } catch (err) {
-            console.error('Failed to fetch pending requests:', err);
-          }
-        }
-
-        // Fallback: Try to fetch organization settings for quota if not already set
-        if (!leavesResponse?.quota) {
-          try {
-            const { data: settings } = await api.get('/api/organization/settings');
-            if (settings) {
-              setQuota({
-                yearlyQuotaPL: settings.yearlyQuotaPL || 12,
-                yearlyQuotaCL: settings.yearlyQuotaCL || 12,
-                yearlyQuotaSL: settings.yearlyQuotaSL || 10,
-              });
-            }
-          } catch (err) {
-            // If not SuperAdmin, use defaults
-            console.log('Using default quota values');
-          }
-        }
-      } catch (err: any) {
-        console.error('Failed to fetch leaves:', err);
-      } finally {
-        setIsLoading(false);
       }
-    };
 
+      // If Admin/Staff, fetch organization pending requests
+      if (isAdminOrStaff) {
+        try {
+          const { data: orgLeaves } = await api.get('/api/leaves/organization?status=Pending');
+          setPendingRequests(normalizeLeaves(orgLeaves));
+        } catch (err) {
+          console.error('Failed to fetch pending requests:', err);
+          setPendingRequests([]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch leaves:', err);
+      setLeaveRequests(prev => Array.isArray(prev) ? prev : []);
+    } finally {
+      if (showLoading) setIsLoading(false);
+    }
+  };
+
+  // Fetch leave requests and quota
+  useEffect(() => {
     if (user) {
-      fetchData();
+      fetchLeaveData(true);
+    } else {
+      setIsLoading(false);
     }
   }, [user, isAdminOrStaff]);
 
@@ -163,7 +168,7 @@ const Leaves: React.FC = () => {
       try {
         const { data: users } = await api.get('/api/users/my-organization');
         // Filter for Admins/Staff (SuperAdmin, CompanyAdmin, Manager, SessionAdmin)
-        const staff = users.filter((u: IUser) => 
+        const staff = users.filter((u: IUser) =>
           ['SuperAdmin', 'CompanyAdmin', 'Manager', 'SessionAdmin'].includes(u.role)
         );
         setStaffUsers(staff);
@@ -198,12 +203,13 @@ const Leaves: React.FC = () => {
   // Calculate used leaves for current year
   const getUsedLeaves = (type: 'Personal' | 'Casual' | 'Sick') => {
     const currentYear = new Date().getFullYear();
-    return leaveRequests
+    const leaves = Array.isArray(leaveRequests) ? leaveRequests : [];
+    return leaves
       .filter(leave => {
         const leaveYear = new Date(leave.startDate).getFullYear();
-        return leave.leaveType === type && 
-               leave.status === 'Approved' && 
-               leaveYear === currentYear;
+        return leave.leaveType === type &&
+          leave.status === 'Approved' &&
+          leaveYear === currentYear;
       })
       .reduce((sum, leave) => sum + leave.daysCount, 0);
   };
@@ -264,7 +270,7 @@ const Leaves: React.FC = () => {
 
     try {
       setIsSubmitting(true);
-      
+
       // Convert selected dates to ISO strings (YYYY-MM-DD format)
       const datesArray = selectedDates
         .sort((a, b) => a.getTime() - b.getTime())
@@ -279,12 +285,12 @@ const Leaves: React.FC = () => {
       formDataToSend.append('leaveType', formData.leaveType);
       formDataToSend.append('dates', JSON.stringify(datesArray));
       formDataToSend.append('reason', formData.reason);
-      
+
       // Append sendTo as array
       if (formData.sendTo && formData.sendTo.length > 0) {
         formDataToSend.append('sendTo', JSON.stringify(formData.sendTo));
       }
-      
+
       // Append file if selected
       if (selectedFile) {
         formDataToSend.append('attachment', selectedFile);
@@ -296,19 +302,8 @@ const Leaves: React.FC = () => {
         },
       });
 
-      // Refresh leave requests
-      const { data: leaves } = await api.get('/api/leaves/my-leaves');
-      setLeaveRequests(leaves || []);
-
-      // If Admin/Staff, refresh pending requests
-      if (isAdminOrStaff) {
-        try {
-          const { data: orgLeaves } = await api.get('/api/leaves/organization?status=Pending');
-          setPendingRequests(orgLeaves || []);
-        } catch (err) {
-          console.error('Failed to refresh pending requests:', err);
-        }
-      }
+      // Refresh data
+      await fetchLeaveData(false);
 
       // Show success toast
       setToast({ message: 'Leave request submitted successfully', type: 'success' });
@@ -399,12 +394,12 @@ const Leaves: React.FC = () => {
       const sortedDates = dates.sort();
       const startDate = formatDate(sortedDates[0]);
       const endDate = formatDate(sortedDates[sortedDates.length - 1]);
-      
+
       // Check if dates are consecutive
-      const isConsecutive = dates.length === 1 || 
-        (new Date(sortedDates[sortedDates.length - 1]).getTime() - new Date(sortedDates[0]).getTime()) === 
+      const isConsecutive = dates.length === 1 ||
+        (new Date(sortedDates[sortedDates.length - 1]).getTime() - new Date(sortedDates[0]).getTime()) ===
         ((dates.length - 1) * 24 * 60 * 60 * 1000);
-      
+
       if (isConsecutive) {
         // Consecutive dates - show range
         if (startDate === endDate) {
@@ -416,7 +411,7 @@ const Leaves: React.FC = () => {
         return `${startDate} - ${endDate} (${dates.length} days)`;
       }
     }
-    
+
     // Fallback to start/end date range
     const startDate = formatDate(start);
     const endDate = formatDate(end);
@@ -500,13 +495,7 @@ const Leaves: React.FC = () => {
       setRejectionReason('');
 
       // Refresh data
-      const { data: leaves } = await api.get('/api/leaves/my-leaves');
-      setLeaveRequests(leaves || []);
-
-      if (isAdminOrStaff) {
-        const { data: orgLeaves } = await api.get('/api/leaves/organization?status=Pending');
-        setPendingRequests(orgLeaves || []);
-      }
+      await fetchLeaveData(false);
     } catch (err: any) {
       console.error('Failed to reject leave:', err);
       const errorMsg = err.response?.data?.msg || 'Failed to reject leave';
@@ -558,7 +547,7 @@ const Leaves: React.FC = () => {
 
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
-    
+
     // Get applicant name - handle multiple cases with improved fallback
     let applicantName: string;
     if (typeof leave.userId === 'object' && leave.userId.profile) {
@@ -582,11 +571,11 @@ const Leaves: React.FC = () => {
       }
     } else {
       // Fallback to current user
-      applicantName = (user?.profile?.firstName && user?.profile?.lastName) 
-        ? `${user.profile.firstName} ${user.profile.lastName}` 
+      applicantName = (user?.profile?.firstName && user?.profile?.lastName)
+        ? `${user.profile.firstName} ${user.profile.lastName}`
         : 'N/A';
     }
-    
+
     // Get applicant email - handle multiple cases with improved fallback
     let applicantEmail: string;
     if (typeof leave.userId === 'object' && leave.userId.email) {
@@ -607,7 +596,7 @@ const Leaves: React.FC = () => {
       // Fallback to current user email
       applicantEmail = user?.email || 'N/A';
     }
-    
+
     pdf.text(`Name: ${applicantName}`, margin, yPos);
     yPos += 6;
     pdf.text(`Email: ${applicantEmail}`, margin, yPos);
@@ -623,25 +612,25 @@ const Leaves: React.FC = () => {
     pdf.setFont('helvetica', 'normal');
     pdf.text(`Leave Type: ${leave.leaveType}`, margin, yPos);
     yPos += 6;
-    
+
     const dateRange = formatDateRange(leave.startDate, leave.endDate, leave.dates);
     pdf.text(`Date Range: ${dateRange}`, margin, yPos);
     yPos += 6;
-    
+
     pdf.text(`Duration: ${leave.daysCount} ${leave.daysCount === 1 ? 'day' : 'days'}`, margin, yPos);
     yPos += 6;
-    
+
     // Status Section
     pdf.setFontSize(12);
     pdf.setFont('helvetica', 'bold');
     pdf.text('Status', margin, yPos);
     yPos += 8;
-    
+
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
     pdf.text(`Status: ${leave.status}`, margin, yPos);
     yPos += 6;
-    
+
     // Approval Date and Approved By (only for Approved status)
     if (leave.status === 'Approved') {
       if (leave.updatedAt) {
@@ -653,7 +642,7 @@ const Leaves: React.FC = () => {
         pdf.text(`Approved Date: ${approvedDate}`, margin, yPos);
         yPos += 6;
       }
-      
+
       if (leave.approvedBy) {
         const approverName = typeof leave.approvedBy === 'object'
           ? `${leave.approvedBy.profile.firstName} ${leave.approvedBy.profile.lastName}`
@@ -693,13 +682,13 @@ const Leaves: React.FC = () => {
         : 'N/A';
       pdf.text(`Rejected By: ${rejectorName}`, margin, yPos);
       yPos += 6;
-      
+
       if (leave.updatedAt) {
         const rejectedDate = new Date(leave.updatedAt).toLocaleDateString();
         pdf.text(`Rejected On: ${rejectedDate}`, margin, yPos);
         yPos += 6;
       }
-      
+
       if (leave.rejectionReason) {
         pdf.text(`Reason: ${leave.rejectionReason}`, margin, yPos);
         yPos += 6;
@@ -716,7 +705,7 @@ const Leaves: React.FC = () => {
   const handleDeleteLeave = async (leaveId: string) => {
     // Show confirmation dialog
     const confirmed = window.confirm('Are you sure you want to delete this leave request? This action cannot be undone.');
-    
+
     if (!confirmed) {
       return;
     }
@@ -727,18 +716,8 @@ const Leaves: React.FC = () => {
       // Show success toast
       setToast({ message: 'Leave request deleted successfully', type: 'success' });
 
-      // Remove the leave from the UI immediately
-      setLeaveRequests(prevLeaves => prevLeaves.filter(leave => leave._id !== leaveId));
-
-      // If Admin/Staff, also refresh pending requests (in case the deleted leave was pending)
-      if (isAdminOrStaff) {
-        try {
-          const { data: orgLeaves } = await api.get('/api/leaves/organization?status=Pending');
-          setPendingRequests(orgLeaves || []);
-        } catch (err) {
-          console.error('Failed to refresh pending requests:', err);
-        }
-      }
+      // Refresh all data to ensure consistency
+      await fetchLeaveData(false);
     } catch (err: any) {
       console.error('Failed to delete leave:', err);
       const errorMsg = err.response?.data?.msg || 'Failed to delete leave request';
@@ -826,64 +805,64 @@ const Leaves: React.FC = () => {
           <div className="flex flex-col gap-4">
             {pendingRequests.length > 0 ? (
               pendingRequests.map((leave) => (
-              <div
-                key={leave._id}
-                onClick={() => handleOpenDetails(leave)}
-                className="relative flex flex-col sm:flex-row gap-2 sm:gap-4 p-3 sm:p-5 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-background-dark hover:bg-gray-50 dark:hover:bg-surface-dark/50 transition-colors cursor-pointer"
-              >
-                {/* User Avatar */}
-                {typeof leave.userId === 'object' && leave.userId.profile && (
-                  <div className="flex-shrink-0">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#f04129]/20 flex items-center justify-center">
-                      <span className="text-[#f04129] text-sm sm:text-base font-bold">
-                        {leave.userId.profile.firstName?.[0]?.toUpperCase() || ''}
-                        {leave.userId.profile.lastName?.[0]?.toUpperCase() || ''}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Main Content */}
-                <div className="flex flex-col gap-1 sm:gap-2 flex-1 min-w-0 pr-12 sm:pr-0">
-                  {/* User Name - if available */}
+                <div
+                  key={leave._id}
+                  onClick={() => handleOpenDetails(leave)}
+                  className="relative flex flex-col sm:flex-row gap-2 sm:gap-4 p-3 sm:p-5 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-background-dark hover:bg-gray-50 dark:hover:bg-surface-dark/50 transition-colors cursor-pointer"
+                >
+                  {/* User Avatar */}
                   {typeof leave.userId === 'object' && leave.userId.profile && (
-                    <p className="text-sm sm:text-base font-semibold text-text-primary-light dark:text-text-primary-dark truncate">
-                      {leave.userId.profile.firstName} {leave.userId.profile.lastName}
-                    </p>
+                    <div className="flex-shrink-0">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#f04129]/20 flex items-center justify-center">
+                        <span className="text-[#f04129] text-sm sm:text-base font-bold">
+                          {leave.userId.profile.firstName?.[0]?.toUpperCase() || ''}
+                          {leave.userId.profile.lastName?.[0]?.toUpperCase() || ''}
+                        </span>
+                      </div>
+                    </div>
                   )}
-                  
-                  {/* Date Range */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm sm:text-base font-semibold text-text-primary-light dark:text-text-primary-dark break-words">
-                      {formatDateRange(leave.startDate, leave.endDate, leave.dates)}
-                    </p>
-                    {leave.dates && leave.dates.length > 0 && (
-                      <span 
-                        className="text-xs text-text-secondary-light dark:text-text-secondary-dark cursor-help whitespace-nowrap"
-                        title={formatDatesList(leave.dates)}
-                      >
-                        (Multiple Dates)
-                      </span>
+
+                  {/* Main Content */}
+                  <div className="flex flex-col gap-1 sm:gap-2 flex-1 min-w-0 pr-12 sm:pr-0">
+                    {/* User Name - if available */}
+                    {typeof leave.userId === 'object' && leave.userId.profile && (
+                      <p className="text-sm sm:text-base font-semibold text-text-primary-light dark:text-text-primary-dark truncate">
+                        {leave.userId.profile.firstName} {leave.userId.profile.lastName}
+                      </p>
                     )}
+
+                    {/* Date Range */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm sm:text-base font-semibold text-text-primary-light dark:text-text-primary-dark break-words">
+                        {formatDateRange(leave.startDate, leave.endDate, leave.dates)}
+                      </p>
+                      {leave.dates && leave.dates.length > 0 && (
+                        <span
+                          className="text-xs text-text-secondary-light dark:text-text-secondary-dark cursor-help whitespace-nowrap"
+                          title={formatDatesList(leave.dates)}
+                        >
+                          (Multiple Dates)
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Leave Type and Days */}
+                    <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark break-words">
+                      {leave.leaveType} • {leave.daysCount} {leave.daysCount === 1 ? 'day' : 'days'}
+                    </p>
                   </div>
-                  
-                  {/* Leave Type and Days */}
-                  <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark break-words">
-                    {leave.leaveType} • {leave.daysCount} {leave.daysCount === 1 ? 'day' : 'days'}
-                  </p>
+
+                  {/* Status Badge and Chevron - Top Right on Mobile, Right Side on Desktop */}
+                  <div className="absolute top-3 right-3 sm:relative sm:top-0 sm:right-0 flex sm:flex-col sm:items-end items-center gap-2 sm:gap-3 flex-shrink-0">
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(leave.status)}`}>
+                      {leave.status}
+                    </span>
+                    <span className="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark text-lg">
+                      chevron_right
+                    </span>
+                  </div>
                 </div>
-                
-                {/* Status Badge and Chevron - Top Right on Mobile, Right Side on Desktop */}
-                <div className="absolute top-3 right-3 sm:relative sm:top-0 sm:right-0 flex sm:flex-col sm:items-end items-center gap-2 sm:gap-3 flex-shrink-0">
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(leave.status)}`}>
-                    {leave.status}
-                  </span>
-                  <span className="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark text-lg">
-                    chevron_right
-                  </span>
-                </div>
-              </div>
-            ))
+              ))
             ) : (
               <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm py-4">
                 No pending leave requests.
@@ -911,7 +890,7 @@ const Leaves: React.FC = () => {
                         {formatDateRange(leave.startDate, leave.endDate, leave.dates)}
                       </p>
                       {leave.dates && leave.dates.length > 0 && (
-                        <span 
+                        <span
                           className="text-xs text-text-secondary-light dark:text-text-secondary-dark cursor-help"
                           title={formatDatesList(leave.dates)}
                         >
@@ -992,11 +971,10 @@ const Leaves: React.FC = () => {
                       name="subject"
                       value={formData.subject}
                       onChange={handleInputChange}
-                      className={`w-full px-3 py-1.5 h-9 rounded-lg border ${
-                        formErrors.subject
-                          ? 'border-red-500'
-                          : 'border-border-light dark:border-border-dark'
-                      } bg-white dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary text-sm`}
+                      className={`w-full px-3 py-1.5 h-9 rounded-lg border ${formErrors.subject
+                        ? 'border-red-500'
+                        : 'border-border-light dark:border-border-dark'
+                        } bg-white dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary text-sm`}
                       placeholder="Enter subject"
                     />
                     {formErrors.subject && (
@@ -1150,11 +1128,10 @@ const Leaves: React.FC = () => {
                       value={formData.reason}
                       onChange={handleInputChange}
                       rows={6}
-                      className={`w-full px-3 py-1.5 rounded-lg border ${
-                        formErrors.reason
-                          ? 'border-red-500'
-                          : 'border-border-light dark:border-border-dark'
-                      } bg-white dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm`}
+                      className={`w-full px-3 py-1.5 rounded-lg border ${formErrors.reason
+                        ? 'border-red-500'
+                        : 'border-border-light dark:border-border-dark'
+                        } bg-white dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm`}
                       placeholder="Enter reason for leave"
                     />
                     {formErrors.reason && (
@@ -1192,7 +1169,7 @@ const Leaves: React.FC = () => {
                       <label className="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-1">
                         Send To <span className="text-red-500">*</span>
                       </label>
-                      
+
                       {/* Selected Recipients Tags */}
                       {formData.sendTo && formData.sendTo.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 mb-2">
@@ -1223,11 +1200,10 @@ const Leaves: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setIsSendToDropdownOpen(!isSendToDropdownOpen)}
-                          className={`w-full px-3 py-1.5 h-9 rounded-lg border ${
-                            formErrors.sendTo
-                              ? 'border-red-500'
-                              : 'border-border-light dark:border-border-dark'
-                          } bg-white dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary flex items-center justify-between text-sm`}
+                          className={`w-full px-3 py-1.5 h-9 rounded-lg border ${formErrors.sendTo
+                            ? 'border-red-500'
+                            : 'border-border-light dark:border-border-dark'
+                            } bg-white dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary flex items-center justify-between text-sm`}
                         >
                           <span className={formData.sendTo && formData.sendTo.length > 0 ? 'text-text-primary-light dark:text-text-primary-dark' : 'text-text-secondary-light dark:text-text-secondary-dark'}>
                             {formData.sendTo && formData.sendTo.length > 0
@@ -1269,7 +1245,7 @@ const Leaves: React.FC = () => {
                           </div>
                         )}
                       </div>
-                      
+
                       {formErrors.sendTo && (
                         <p className="text-red-500 text-xs mt-1">{formErrors.sendTo}</p>
                       )}
@@ -1589,10 +1565,10 @@ const Leaves: React.FC = () => {
             {/* Footer */}
             <div className="p-4 border-t border-border-light dark:border-border-dark flex-shrink-0">
               {/* Show Approve/Reject buttons for Admins/Staff when viewing pending leaves that are not their own */}
-              {isAdminOrStaff && 
-               selectedLeave.status === 'Pending' && 
-               typeof selectedLeave.userId === 'object' && 
-               selectedLeave.userId._id !== user?.id ? (
+              {isAdminOrStaff &&
+                selectedLeave.status === 'Pending' &&
+                typeof selectedLeave.userId === 'object' &&
+                selectedLeave.userId._id !== user?.id ? (
                 <div className="flex justify-end gap-3">
                   <button
                     onClick={async () => {
@@ -1600,16 +1576,14 @@ const Leaves: React.FC = () => {
                         await api.put(`/api/leaves/${selectedLeave._id}/status`, {
                           status: 'Approved',
                         });
-                        setToast({ 
-                          message: `Leave approved for ${getUserName(selectedLeave)}`, 
-                          type: 'success' 
+                        setToast({
+                          message: `Leave approved for ${getUserName(selectedLeave)}`,
+                          type: 'success'
                         });
                         handleCloseDetails();
+
                         // Refresh data
-                        const { data: leaves } = await api.get('/api/leaves/my-leaves');
-                        setLeaveRequests(leaves || []);
-                        const { data: orgLeaves } = await api.get('/api/leaves/organization?status=Pending');
-                        setPendingRequests(orgLeaves || []);
+                        await fetchLeaveData(false);
                       } catch (err: any) {
                         console.error('Failed to approve leave:', err);
                         const errorMsg = err.response?.data?.msg || 'Failed to approve leave';
