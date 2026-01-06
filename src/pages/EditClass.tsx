@@ -3,6 +3,7 @@ import api from '../api';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth, IUser as IAuthUser } from '../contexts/AuthContext';
 import AddUsersModal from '../components/AddUsersModal';
+import GoogleMapPicker from '../components/GoogleMapPicker';
 import { X, ArrowLeft } from 'lucide-react';
 import { IClassBatch } from '../types';
 import { DayPicker } from 'react-day-picker';
@@ -22,7 +23,7 @@ const EditClass: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { isSuperAdmin } = useAuth();
-  
+
   const [classBatch, setClassBatch] = useState<IClassBatch | null>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -50,10 +51,11 @@ const EditClass: React.FC = () => {
   const [sessionAdmins, setSessionAdmins] = useState<IAuthUser[]>([]);
   const [showUserModal, setShowUserModal] = useState(false);
   const [userModalContext, setUserModalContext] = useState<'PHYSICAL' | 'REMOTE' | 'ALL'>('ALL');
-  const [locationInputType, setLocationInputType] = useState<'LINK' | 'COORDS'>('LINK');
-  const [locationLink, setLocationLink] = useState('');
-  const [latitude, setLatitude] = useState('');
-  const [longitude, setLongitude] = useState('');
+
+  // Location State
+  const [selectedCoordinates, setSelectedCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [showMapPicker, setShowMapPicker] = useState(false);
+
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -79,14 +81,14 @@ const EditClass: React.FC = () => {
         // Fetch sessions for this class
         const sessionsRes = await api.get(`/api/classes/${id}/sessions`);
         const sessions = sessionsRes.data.sessions || [];
-        
+
         if (sessions.length > 0) {
           const session = sessions[0];
-          
+
           // Pre-fill form from first session
           const sessionDate = new Date(session.startDate);
           const endDate = session.endDate ? new Date(session.endDate) : null;
-          
+
           setFormData({
             name: classData.name || '',
             description: classData.description || '',
@@ -104,56 +106,34 @@ const EditClass: React.FC = () => {
             sessionAdmin: session.sessionAdmin || '',
           });
 
-          // Set location input type and values
-          if (session.location) {
-            if (session.location.type === 'LINK') {
-              setLocationInputType('LINK');
-              setLocationLink(session.location.link || '');
-            } else if (session.location.type === 'COORDS') {
-              setLocationInputType('COORDS');
-              setLatitude(session.location.geolocation?.latitude?.toString() || '');
-              setLongitude(session.location.geolocation?.longitude?.toString() || '');
-            }
-          } else if (session.physicalLocation) {
-            setLocationInputType('LINK');
-            setLocationLink(session.physicalLocation);
+          // Pre-fill Coordinates
+          if (session.location && session.location.geolocation) {
+            setSelectedCoordinates(session.location.geolocation);
+          } else if (session.geolocation) {
+            // Legacy fallback
+            setSelectedCoordinates(session.geolocation);
+          } else if (classData.defaultLocation && typeof classData.defaultLocation === 'string' && classData.defaultLocation.includes(',')) {
+            // Try to parse legacy string coords if needed
+            // Ignoring generic link strings as they can't be mapped easily without geocoding API
           }
 
           // Pre-fill assigned users
           if (session.assignedUsers && session.assignedUsers.length > 0) {
-            if (session.sessionType === 'HYBRID') {
-              const physical = session.assignedUsers.filter((u: any) => u.mode === 'PHYSICAL');
-              const remote = session.assignedUsers.filter((u: any) => u.mode === 'REMOTE');
-              
-              // Fetch full user objects for physical users
-              try {
-                const physicalUserIds = physical.map((u: any) => u.userId);
-                const { data: allUsers } = await api.get('/api/users/my-organization');
-                const physicalUserObjects = allUsers.filter((u: IUser) => physicalUserIds.includes(u._id));
-                setPhysicalUsers(physicalUserObjects);
-              } catch (err) {
-                console.error('Error fetching physical users:', err);
-              }
-              
-              // Fetch full user objects for remote users
-              try {
-                const remoteUserIds = remote.map((u: any) => u.userId);
-                const { data: allUsers } = await api.get('/api/users/my-organization');
-                const remoteUserObjects = allUsers.filter((u: IUser) => remoteUserIds.includes(u._id));
-                setRemoteUsers(remoteUserObjects);
-              } catch (err) {
-                console.error('Error fetching remote users:', err);
-              }
-            } else {
-              // Fetch full user objects
-              try {
+            try {
+              const { data: allUsers } = await api.get('/api/users/my-organization');
+
+              if (session.sessionType === 'HYBRID') {
+                const physicalIds = session.assignedUsers.filter((u: any) => u.mode === 'PHYSICAL').map((u: any) => u.userId);
+                const remoteIds = session.assignedUsers.filter((u: any) => u.mode === 'REMOTE').map((u: any) => u.userId);
+
+                setPhysicalUsers(allUsers.filter((u: IUser) => physicalIds.includes(u._id)));
+                setRemoteUsers(allUsers.filter((u: IUser) => remoteIds.includes(u._id)));
+              } else {
                 const userIds = session.assignedUsers.map((u: any) => u.userId);
-                const { data: allUsers } = await api.get('/api/users/my-organization');
-                const userObjects = allUsers.filter((u: IUser) => userIds.includes(u._id));
-                setAssignedUsers(userObjects);
-              } catch (err) {
-                console.error('Error fetching users:', err);
+                setAssignedUsers(allUsers.filter((u: IUser) => userIds.includes(u._id)));
               }
+            } catch (err) {
+              console.error('Error fetching users:', err);
             }
           }
         } else {
@@ -174,10 +154,6 @@ const EditClass: React.FC = () => {
             weeklyDays: [],
             sessionAdmin: '',
           });
-          if (classData.defaultLocation) {
-            setLocationInputType('LINK');
-            setLocationLink(classData.defaultLocation);
-          }
         }
       } catch (err: any) {
         if (err.response?.status === 404) {
@@ -221,13 +197,22 @@ const EditClass: React.FC = () => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     if (error) setError('');
-    
+
     if (name === 'sessionType') {
       if (value === 'HYBRID') {
         setAssignedUsers([]);
       } else {
         setPhysicalUsers([]);
         setRemoteUsers([]);
+      }
+
+      // Auto-set locationType based on sessionType for backward compatibility
+      if (value === 'REMOTE') {
+        setFormData(prev => ({ ...prev, locationType: 'Virtual' }));
+      } else if (value === 'HYBRID') {
+        setFormData(prev => ({ ...prev, locationType: 'Hybrid' }));
+      } else {
+        setFormData(prev => ({ ...prev, locationType: 'Physical' }));
       }
     }
   };
@@ -270,35 +255,31 @@ const EditClass: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
+
     if (formData.frequency === 'Weekly' && formData.weeklyDays.length === 0) {
       setError('Please select at least one day for weekly classes/batches');
       return;
     }
-    
-    // Validate custom dates for Random frequency
+
     if (formData.frequency === 'Random' && selectedDates.length === 0) {
       setError('Please select at least one date for custom date sessions');
       return;
     }
-    
+
     if (formData.endDate && formData.startDate && formData.endDate < formData.startDate) {
       setError('End date must be after start date');
       return;
     }
-    
+
     if (formData.startTime && formData.endTime && formData.startTime >= formData.endTime) {
       setError('End time must be after start time');
       return;
     }
-    
+
+    // Validate location for PHYSICAL or HYBRID sessions
     if (formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID') {
-      if (locationInputType === 'LINK' && !locationLink.trim()) {
-        setError('Google Maps Link is required for Physical or Hybrid classes/batches.');
-        return;
-      }
-      if (locationInputType === 'COORDS' && (!latitude.trim() || !longitude.trim())) {
-        setError('Latitude and Longitude are required for Physical or Hybrid classes/batches.');
+      if (!selectedCoordinates || !selectedCoordinates.latitude || !selectedCoordinates.longitude) {
+        setError('Please select a location on the map for Physical or Hybrid classes/batches.');
         return;
       }
     }
@@ -344,31 +325,15 @@ const EditClass: React.FC = () => {
       }
 
       // Build location object
-      let locationObj: any = undefined;
+      let locationObj = undefined;
       if (formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID') {
-        if (locationInputType === 'LINK') {
-          locationObj = {
-            type: 'LINK',
-            link: locationLink.trim(),
-          };
-        } else if (locationInputType === 'COORDS') {
+        if (selectedCoordinates) {
           locationObj = {
             type: 'COORDS',
             geolocation: {
-              latitude: parseFloat(latitude) || 0,
-              longitude: parseFloat(longitude) || 0,
+              latitude: selectedCoordinates.latitude,
+              longitude: selectedCoordinates.longitude,
             },
-          };
-        }
-      }
-
-      // Build geolocation for legacy support
-      let geolocationObj: any = undefined;
-      if (formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID') {
-        if (locationInputType === 'COORDS') {
-          geolocationObj = {
-            latitude: parseFloat(latitude) || 0,
-            longitude: parseFloat(longitude) || 0,
           };
         }
       }
@@ -377,7 +342,7 @@ const EditClass: React.FC = () => {
         name: formData.name.trim(),
         description: formData.description.trim() || undefined,
         defaultTime: formData.startTime || undefined,
-        defaultLocation: locationInputType === 'LINK' ? locationLink.trim() : undefined,
+
         // Session update fields for bulk update - ALWAYS include updateSessions flag
         updateSessions: true,
         // ALWAYS include these critical fields
@@ -390,7 +355,6 @@ const EditClass: React.FC = () => {
         sessionType: formData.sessionType,
         // Always include location (even if undefined for REMOTE) so backend can clear it
         location: locationObj,
-        geolocation: geolocationObj,
         // Always include assignedUsers (even if empty array)
         assignedUsers: combinedAssignedUsers,
         // Custom dates for Random frequency
@@ -403,35 +367,24 @@ const EditClass: React.FC = () => {
       } else {
         updateData.virtualLocation = undefined; // Explicitly clear for PHYSICAL
       }
-      
+
       if (formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID') {
         updateData.radius = formData.radius || undefined;
       } else {
         updateData.radius = undefined; // Explicitly clear for REMOTE
       }
-      
+
       if (formData.frequency === 'Weekly') {
         updateData.weeklyDays = formData.weeklyDays || undefined;
       } else {
         updateData.weeklyDays = undefined; // Explicitly clear for non-weekly
       }
-      
+
       if (isSuperAdmin) {
         updateData.sessionAdmin = formData.sessionAdmin || undefined;
       }
 
-      console.log('[DEBUG] EditClass - Sending update request:', {
-        classId: id,
-        updateSessions: updateData.updateSessions,
-        startTime: updateData.startTime,
-        endTime: updateData.endTime,
-        sessionType: updateData.sessionType,
-        location: updateData.location,
-        assignedUsersCount: updateData.assignedUsers?.length || 0,
-      });
-
       const response = await api.put(`/api/classes/${id}`, updateData);
-      console.log('[DEBUG] EditClass - Update response:', response.data);
       navigate('/classes');
     } catch (err: any) {
       if (err.response && err.response.data) {
@@ -455,16 +408,6 @@ const EditClass: React.FC = () => {
     return (
       <div className="relative flex min-h-screen w-full flex-col p-4 sm:p-6 lg:p-8 bg-background-light dark:bg-background-dark font-display">
         <div className="mx-auto flex w-full max-w-4xl flex-col">
-          <div className="mb-8">
-            <Link
-              to="/classes"
-              className="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#f5f3f0] dark:bg-slate-800 text-[#181511] dark:text-gray-200 gap-2 text-sm font-bold leading-normal tracking-[0.015em] border border-gray-300 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors mb-4"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span className="truncate">Back to Classes</span>
-            </Link>
-            <p className="text-3xl font-black leading-tight tracking-[-0.033em] text-[#181511] dark:text-white sm:text-4xl">Edit Class</p>
-          </div>
           <div className="flex items-center justify-center py-12">
             <div className="flex flex-col items-center">
               <svg className="animate-spin h-8 w-8 text-[#f04129] mb-4" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -473,29 +416,6 @@ const EditClass: React.FC = () => {
               </svg>
               <p className="text-[#8a7b60] dark:text-gray-400">Loading class...</p>
             </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error && !classBatch) {
-    return (
-      <div className="relative flex min-h-screen w-full flex-col p-4 sm:p-6 lg:p-8 bg-background-light dark:bg-background-dark font-display">
-        <div className="mx-auto flex w-full max-w-4xl flex-col">
-          <div className="mb-8">
-            <Link
-              to="/classes"
-              className="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#f5f3f0] dark:bg-slate-800 text-[#181511] dark:text-gray-200 gap-2 text-sm font-bold leading-normal tracking-[0.015em] border border-gray-300 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors mb-4"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span className="truncate">Back to Classes</span>
-            </Link>
-            <p className="text-3xl font-black leading-tight tracking-[-0.033em] text-[#181511] dark:text-white sm:text-4xl">Edit Class</p>
-          </div>
-          <div className="bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800 p-4 rounded-xl flex items-center">
-            <span className="material-symbols-outlined mr-2">error</span>
-            {error}
           </div>
         </div>
       </div>
@@ -515,7 +435,7 @@ const EditClass: React.FC = () => {
           </Link>
           <p className="text-3xl font-black leading-tight tracking-[-0.033em] text-[#181511] dark:text-white sm:text-4xl">Edit Class</p>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-            Changes will be applied to the class and all associated sessions
+            Update class details, location, and assigned users. Existing session dates will be preserved.
           </p>
         </div>
 
@@ -527,7 +447,6 @@ const EditClass: React.FC = () => {
         )}
 
         <form onSubmit={handleSubmit} className="flex flex-col space-y-6">
-          {/* Reuse CreateSession form sections - I'll include the key sections */}
           {/* Section 1: Basic Details */}
           <div className="flex flex-col gap-6 rounded-xl border border-[#e6e2db] bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
             <div className="flex items-center gap-3">
@@ -560,7 +479,8 @@ const EditClass: React.FC = () => {
                   placeholder="Enter a description for the class"
                 />
               </label>
-              {/* Date/Time inputs - different layout for Random frequency */}
+
+              {/* Date/Time Inputs */}
               {formData.frequency !== 'Random' ? (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   <label className="flex flex-col">
@@ -571,6 +491,7 @@ const EditClass: React.FC = () => {
                       type="date"
                       value={formData.startDate}
                       onChange={handleChange}
+                      required
                     />
                   </label>
                   {formData.frequency !== 'OneTime' && (
@@ -636,7 +557,7 @@ const EditClass: React.FC = () => {
                       />
                     </label>
                   </div>
-                  
+
                   {/* Custom Date Picker */}
                   <div>
                     <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">
@@ -692,31 +613,10 @@ const EditClass: React.FC = () => {
                         className="mx-auto"
                       />
                     </div>
-                    {selectedDates.length === 0 && (
-                      <p className="text-xs text-red-500 dark:text-red-400 mt-2">Please select at least one date</p>
-                    )}
-                    {selectedDates.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {selectedDates.sort((a, b) => a.getTime() - b.getTime()).map((date, index) => (
-                          <span
-                            key={index}
-                            className="inline-flex items-center gap-1 px-2 py-1 bg-[#f04129]/10 text-[#f04129] text-xs rounded-full"
-                          >
-                            {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            <button
-                              type="button"
-                              onClick={() => setSelectedDates(selectedDates.filter((_, i) => i !== index))}
-                              className="hover:bg-[#f04129]/20 rounded-full p-0.5"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
+
               <label className="flex flex-col">
                 <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Frequency</p>
                 <div className="relative">
@@ -726,7 +626,6 @@ const EditClass: React.FC = () => {
                     value={formData.frequency}
                     onChange={(e) => {
                       handleChange(e);
-                      // Clear selected dates when switching away from Random
                       if (e.target.value !== 'Random') {
                         setSelectedDates([]);
                       }
@@ -737,11 +636,12 @@ const EditClass: React.FC = () => {
                     <option value="Daily">Daily</option>
                     <option value="Weekly">Weekly</option>
                     <option value="Monthly">Monthly</option>
-                    <option value="Random">Custom Dates (Select Manually)</option>
+                    <option value="Random">Custom Dates</option>
                   </select>
                   <span className="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">unfold_more</span>
                 </div>
               </label>
+
               {formData.frequency === 'Weekly' && (
                 <div>
                   <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Repeat On</p>
@@ -753,26 +653,22 @@ const EditClass: React.FC = () => {
                           key={day}
                           type="button"
                           onClick={() => handleDayToggle(day)}
-                          className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition-colors duration-200 ${
-                            isSelected
+                          className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition-colors duration-200 ${isSelected
                               ? 'bg-gradient-to-r from-orange-500 to-[#f04129] text-white'
                               : 'bg-[#f5f3f0] text-[#181511] hover:bg-[#e6e2db] dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600'
-                          }`}
+                            }`}
                         >
                           {dayLabels[index]}
                         </button>
                       );
                     })}
                   </div>
-                  {formData.weeklyDays.length === 0 && (
-                    <p className="text-xs text-red-500 dark:text-red-400 mt-2">Please select at least one day for weekly classes/batches</p>
-                  )}
                 </div>
               )}
             </div>
           </div>
 
-          {/* Section 2: Session Mode - Same as CreateSession */}
+          {/* Section 2: Session Mode */}
           <div className="flex flex-col gap-5 rounded-xl border border-[#e6e2db] bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
             <div className="flex items-center gap-3">
               <span className="material-symbols-outlined text-2xl text-[#f04129]">devices</span>
@@ -787,11 +683,10 @@ const EditClass: React.FC = () => {
                   } as React.ChangeEvent<HTMLInputElement>;
                   handleChange(syntheticEvent);
                 }}
-                className={`relative flex flex-col items-center justify-center rounded-xl border-2 p-6 text-center shadow-md transition-all duration-200 ${
-                  formData.sessionType === 'PHYSICAL'
+                className={`relative flex flex-col items-center justify-center rounded-xl border-2 p-6 text-center shadow-md transition-all duration-200 ${formData.sessionType === 'PHYSICAL'
                     ? 'border-[#f04129] dark:border-[#f04129]'
                     : 'border-[#e6e2db] hover:border-[#d6d0c6] dark:border-slate-700 dark:hover:border-slate-600'
-                }`}
+                  }`}
               >
                 {formData.sessionType === 'PHYSICAL' && (
                   <span className="material-symbols-outlined absolute right-3 top-3 text-xl text-[#f04129]">check_circle</span>
@@ -807,11 +702,10 @@ const EditClass: React.FC = () => {
                   } as React.ChangeEvent<HTMLInputElement>;
                   handleChange(syntheticEvent);
                 }}
-                className={`relative flex flex-col items-center justify-center rounded-xl border-2 p-6 text-center shadow-md transition-all duration-200 ${
-                  formData.sessionType === 'REMOTE'
+                className={`relative flex flex-col items-center justify-center rounded-xl border-2 p-6 text-center shadow-md transition-all duration-200 ${formData.sessionType === 'REMOTE'
                     ? 'border-[#f04129] dark:border-[#f04129]'
                     : 'border-[#e6e2db] hover:border-[#d6d0c6] dark:border-slate-700 dark:hover:border-slate-600'
-                }`}
+                  }`}
               >
                 {formData.sessionType === 'REMOTE' && (
                   <span className="material-symbols-outlined absolute right-3 top-3 text-xl text-[#f04129]">check_circle</span>
@@ -827,11 +721,10 @@ const EditClass: React.FC = () => {
                   } as React.ChangeEvent<HTMLInputElement>;
                   handleChange(syntheticEvent);
                 }}
-                className={`relative flex flex-col items-center justify-center rounded-xl border-2 p-6 text-center shadow-md transition-all duration-200 ${
-                  formData.sessionType === 'HYBRID'
+                className={`relative flex flex-col items-center justify-center rounded-xl border-2 p-6 text-center shadow-md transition-all duration-200 ${formData.sessionType === 'HYBRID'
                     ? 'border-[#f04129] dark:border-[#f04129]'
                     : 'border-[#e6e2db] hover:border-[#d6d0c6] dark:border-slate-700 dark:hover:border-slate-600'
-                }`}
+                  }`}
               >
                 {formData.sessionType === 'HYBRID' && (
                   <span className="material-symbols-outlined absolute right-3 top-3 text-xl text-[#f04129]">check_circle</span>
@@ -842,7 +735,7 @@ const EditClass: React.FC = () => {
             </div>
           </div>
 
-          {/* Section 3: Location (Conditional) - Same structure as CreateSession */}
+          {/* Section 3: Location (Maps Integrated) */}
           {(formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID') && (
             <div className="flex flex-col gap-6 rounded-xl border border-[#e6e2db] bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
               <div className="flex items-center justify-between">
@@ -850,86 +743,60 @@ const EditClass: React.FC = () => {
                   <span className="material-symbols-outlined text-2xl text-[#f04129]">pin_drop</span>
                   <h2 className="text-xl font-bold leading-tight tracking-[-0.015em] text-[#181511] dark:text-white">Location Details</h2>
                 </div>
-                <a
-                  href="https://maps.google.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-[#f04129] bg-red-100 dark:bg-[#f04129]/20 rounded-lg hover:bg-red-200 dark:hover:bg-[#f04129]/30 transition-colors"
-                >
-                  <span className="material-symbols-outlined text-base">map</span>
-                  Open Maps
-                </a>
               </div>
+
               <div className="flex flex-col gap-4">
-                <div>
-                  <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Input Method</p>
-                  <div className="flex space-x-2">
+                {/* Google Map Picker Overlay */}
+                <GoogleMapPicker
+                  initialCoordinates={selectedCoordinates || undefined}
+                  onLocationSelect={(data) => {
+                    setSelectedCoordinates(data.coordinates);
+                  }}
+                  isOpen={showMapPicker}
+                  onClose={() => setShowMapPicker(false)}
+                />
+
+                {/* Main Location Selection Area */}
+                <div className="relative overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+                  {/* Map Preview / Placeholder */}
+                  <div className="bg-gray-50 dark:bg-gray-900 p-6 flex flex-col items-center justify-center text-center min-h-[200px]">
+                    <div className="mb-4 p-3 bg-white dark:bg-gray-800 rounded-full shadow-sm">
+                      <span className="material-symbols-outlined text-3xl text-[#f04129]">location_on</span>
+                    </div>
+
+                    {selectedCoordinates ? (
+                      <div className="mb-4">
+                        <p className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Location Selected</p>
+                        <p className="text-sm font-mono text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full">
+                          {selectedCoordinates.latitude.toFixed(6)}, {selectedCoordinates.longitude.toFixed(6)}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 dark:text-gray-400 mb-4 max-w-xs">
+                        Select a precise location on the map for accurate attendance tracking
+                      </p>
+                    )}
+
                     <button
                       type="button"
-                      onClick={() => setLocationInputType('LINK')}
-                      className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors duration-200 ${
-                        locationInputType === 'LINK'
-                          ? 'bg-gradient-to-r from-orange-500 to-[#f04129] text-white'
-                          : 'border-[#e6e2db] bg-white text-[#181511] hover:bg-[#f5f3f0] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-700'
-                      }`}
+                      onClick={() => setShowMapPicker(true)}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-[#f04129] hover:bg-[#d63a25] text-white rounded-lg font-medium transition-colors shadow-sm"
                     >
-                      Google Maps Link
+                      <span className="material-symbols-outlined">map</span>
+                      {selectedCoordinates ? 'Change Location' : 'Select on Map'}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setLocationInputType('COORDS')}
-                      className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors duration-200 ${
-                        locationInputType === 'COORDS'
-                          ? 'bg-gradient-to-r from-orange-500 to-[#f04129] text-white'
-                          : 'border-[#e6e2db] bg-white text-[#181511] hover:bg-[#f5f3f0] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-700'
-                      }`}
-                    >
-                      Coordinates
-                    </button>
+
+                    {selectedCoordinates && (
+                      <p className="mt-3 text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-sm">check_circle</span>
+                        Location coordinates locked
+                      </p>
+                    )}
                   </div>
                 </div>
-                {locationInputType === 'LINK' ? (
-                  <label className="flex flex-col">
-                    <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Google Maps Link</p>
-                    <input
-                      className="form-input flex w-full resize-none overflow-hidden rounded-lg border border-[#e6e2db] bg-white p-3 text-base font-normal leading-normal text-[#181511] placeholder:text-[#8a7b60] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-400 dark:focus:border-primary/80"
-                      type="url"
-                      value={locationLink}
-                      onChange={(e) => setLocationLink(e.target.value)}
-                      placeholder="https://maps.app.goo.gl/example"
-                      required
-                    />
-                  </label>
-                ) : (
-                  <div className="grid grid-cols-2 gap-4">
-                    <label className="flex flex-col">
-                      <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Latitude</p>
-                      <input
-                        className="form-input flex w-full resize-none overflow-hidden rounded-lg border border-[#e6e2db] bg-white p-3 text-base font-normal leading-normal text-[#181511] placeholder:text-[#8a7b60] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-400 dark:focus:border-primary/80"
-                        type="number"
-                        step="any"
-                        value={latitude}
-                        onChange={(e) => setLatitude(e.target.value)}
-                        placeholder="e.g., 40.7128"
-                        required
-                      />
-                    </label>
-                    <label className="flex flex-col">
-                      <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Longitude</p>
-                      <input
-                        className="form-input flex w-full resize-none overflow-hidden rounded-lg border border-[#e6e2db] bg-white p-3 text-base font-normal leading-normal text-[#181511] placeholder:text-[#8a7b60] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-400 dark:focus:border-primary/80"
-                        type="number"
-                        step="any"
-                        value={longitude}
-                        onChange={(e) => setLongitude(e.target.value)}
-                        placeholder="e.g., -74.0060"
-                        required
-                      />
-                    </label>
-                  </div>
-                )}
+
                 <label className="flex flex-col">
-                  <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Radius (meters)</p>
+                  <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Geofence Radius (meters)</p>
                   <input
                     className="form-input flex w-full resize-none overflow-hidden rounded-lg border border-[#e6e2db] bg-white p-3 text-base font-normal leading-normal text-[#181511] placeholder:text-[#8a7b60] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-400 dark:focus:border-primary/80"
                     type="number"
@@ -939,12 +806,15 @@ const EditClass: React.FC = () => {
                     placeholder="e.g., 50"
                     required
                   />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Users must be within this distance to mark attendance.
+                  </p>
                 </label>
               </div>
             </div>
           )}
 
-          {/* Section 4: Virtual Location (for REMOTE/HYBRID) */}
+          {/* Section 4: Virtual Location */}
           {(formData.sessionType === 'REMOTE' || formData.sessionType === 'HYBRID') && (
             <div className="flex flex-col gap-6 rounded-xl border border-[#e6e2db] bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
               <div className="flex items-center gap-3">
@@ -965,7 +835,7 @@ const EditClass: React.FC = () => {
             </div>
           )}
 
-          {/* Section 5: Attendees - Same structure as CreateSession */}
+          {/* Section 5: Attendees */}
           <div className="flex flex-col gap-5 rounded-xl border border-[#e6e2db] bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
             <div className="flex items-center gap-3">
               <span className="material-symbols-outlined text-2xl text-[#f04129]">group</span>
