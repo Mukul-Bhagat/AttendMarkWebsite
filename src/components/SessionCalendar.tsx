@@ -5,10 +5,18 @@ interface SessionCalendarProps {
   sessions: ISession[];
   selectedDate: Date | null;
   onDateSelect: (date: Date | null) => void;
+  currentMonth: Date;
+  onMonthChange: (date: Date) => void;
 }
 
-const SessionCalendar: React.FC<SessionCalendarProps> = ({ sessions, selectedDate, onDateSelect }) => {
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+const SessionCalendar: React.FC<SessionCalendarProps> = ({
+  sessions,
+  selectedDate,
+  onDateSelect,
+  currentMonth,
+  onMonthChange
+}) => {
+  // Internal state removed - controlled by parent
 
   // Get first day of month and number of days
   const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
@@ -19,15 +27,25 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({ sessions, selectedDat
   // Adjust to Monday = 0 (instead of Sunday = 0)
   const adjustedStartingDay = startingDayOfWeek === 0 ? 6 : startingDayOfWeek - 1;
 
+  // Robust Date Comparison Helper (Local Time) to match Sessions.tsx logic exactly
+  const isSameDay = (d1: Date, d2: Date) => {
+    return (
+      d1.getFullYear() === d2.getFullYear() &&
+      d1.getMonth() === d2.getMonth() &&
+      d1.getDate() === d2.getDate()
+    );
+  };
+
   // Get sessions for a specific date
   const getSessionsForDate = (date: Date): ISession[] => {
-    const dateStr = date.toISOString().split('T')[0];
     return sessions.filter(session => {
       if (!session.startDate) return false;
       const sessionDate = new Date(session.startDate);
-      sessionDate.setHours(0, 0, 0, 0);
-      const sessionDateStr = sessionDate.toISOString().split('T')[0];
-      return sessionDateStr === dateStr && !session.isCancelled;
+
+      // Use robust local comparison
+      // Check for same day AND not cancelled (unless you want to show cancelled dots? 
+      // Original code filtered !session.isCancelled, preserving that behavior)
+      return isSameDay(sessionDate, date) && !session.isCancelled;
     });
   };
 
@@ -35,7 +53,7 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({ sessions, selectedDat
   const getSessionEndTime = (session: ISession): Date => {
     // Use startDate as the base date (for recurring sessions, this will be the actual date)
     const d = new Date(session.startDate);
-    
+
     if (session.endTime && typeof session.endTime === 'string' && session.endTime.includes(':')) {
       const [h, m] = session.endTime.split(':').map(Number);
       d.setHours(h, m, 0, 0);
@@ -43,7 +61,7 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({ sessions, selectedDat
       // If no endTime, assume end of day
       d.setHours(23, 59, 59, 999);
     }
-    
+
     return d;
   };
 
@@ -56,7 +74,7 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({ sessions, selectedDat
 
     // For each session on this date, determine its status
     const sessionStatuses: Array<'red' | 'green' | 'yellow'> = [];
-    
+
     for (const session of dateSessions) {
       // PRIORITY 1: Check if session's endTime has passed (RED)
       const sessionEndTime = getSessionEndTime(session);
@@ -95,11 +113,11 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({ sessions, selectedDat
 
   // Navigate months
   const goToPreviousMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+    onMonthChange(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
   };
 
   const goToNextMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+    onMonthChange(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
   };
 
   // Check if a date is selected
@@ -124,7 +142,7 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({ sessions, selectedDat
 
   // Generate calendar days
   const calendarDays: (Date | null)[] = [];
-  
+
   // Add empty cells for days before the first day of the month
   for (let i = 0; i < adjustedStartingDay; i++) {
     calendarDays.push(null);
@@ -189,25 +207,23 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({ sessions, selectedDat
             <button
               key={date.toISOString()}
               onClick={() => handleDateClick(date)}
-              className={`aspect-square rounded-lg text-sm font-medium transition-colors relative ${
-                isSelected
-                  ? 'bg-blue-500 text-white hover:bg-blue-600'
-                  : isToday
+              className={`aspect-square rounded-lg text-sm font-medium transition-colors relative ${isSelected
+                ? 'bg-blue-500 text-white hover:bg-blue-600'
+                : isToday
                   ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50'
                   : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-              }`}
+                }`}
             >
               {date.getDate()}
               {indicator && (
                 <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2">
                   <div
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      indicator === 'red'
-                        ? 'bg-red-500'
-                        : indicator === 'yellow'
+                    className={`w-1.5 h-1.5 rounded-full ${indicator === 'red'
+                      ? 'bg-red-500'
+                      : indicator === 'yellow'
                         ? 'bg-yellow-500'
                         : 'bg-green-500'
-                    }`}
+                      }`}
                   />
                 </div>
               )}

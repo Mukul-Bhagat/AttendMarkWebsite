@@ -23,12 +23,13 @@ const Sessions: React.FC = () => {
   const [showPastSessions, setShowPastSessions] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
+  const [currentViewDate, setCurrentViewDate] = useState(new Date());
   const [currentTime, setCurrentTime] = useState(new Date()); // Track current time for status calculations
   const calendarRef = useRef<HTMLDivElement>(null);
-  
+
   // SuperAdmin, CompanyAdmin, Manager, and SessionAdmin can create sessions
   const canCreateSession = isSuperAdmin || isCompanyAdmin || isManager || isSessionAdmin;
-  
+
   // Check if user can edit a specific session
   const canEditSession = (session: ISession) => {
     if (isSuperAdmin) return true; // SuperAdmin can edit any session
@@ -41,8 +42,12 @@ const Sessions: React.FC = () => {
       setIsLoading(true);
       try {
         if (classId) {
-          // Fetch sessions for a specific class
-          const { data } = await api.get(`/api/classes/${classId}/sessions`);
+          // Fetch sessions for a specific class with Month/Year filtering
+          const queryParams = new URLSearchParams({
+            year: currentViewDate.getFullYear().toString(),
+            month: currentViewDate.getMonth().toString()
+          });
+          const { data } = await api.get(`/api/classes/${classId}/sessions?${queryParams}`);
           setSessions(data.sessions || []);
           setClassBatch(data.classBatch || null);
         } else {
@@ -63,7 +68,7 @@ const Sessions: React.FC = () => {
     };
 
     fetchSessions();
-  }, [classId]);
+  }, [classId, currentViewDate]);
 
   // Refresh data when component comes into focus (e.g., navigating back from edit)
   useEffect(() => {
@@ -71,7 +76,11 @@ const Sessions: React.FC = () => {
       if (classId) {
         const fetchSessions = async () => {
           try {
-            const { data } = await api.get(`/api/classes/${classId}/sessions`);
+            const queryParams = new URLSearchParams({
+              year: currentViewDate.getFullYear().toString(),
+              month: currentViewDate.getMonth().toString()
+            });
+            const { data } = await api.get(`/api/classes/${classId}/sessions?${queryParams}`);
             setSessions(data.sessions || []);
             setClassBatch(data.classBatch || null);
           } catch (err) {
@@ -84,7 +93,7 @@ const Sessions: React.FC = () => {
 
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [classId]);
+  }, [classId, currentViewDate]);
 
   // Refresh session status periodically to keep "Live" and "Past" badges accurate
   // This ensures sessions transition from Live to Past correctly after the 10-minute buffer
@@ -140,11 +149,11 @@ const Sessions: React.FC = () => {
   const isSessionToday = (session: ISession): boolean => {
     try {
       if (!session.startDate || session.isCancelled) return false;
-      
+
       // Compare dates only (not time) - using toDateString() for clarity
       const today = new Date().toDateString();
       const sessionDate = new Date(session.startDate).toDateString();
-      
+
       return today === sessionDate;
     } catch {
       return false;
@@ -158,9 +167,9 @@ const Sessions: React.FC = () => {
       // Handle special cases
       if (session.isCancelled) return false; // Cancelled sessions are not "past"
       if (session.isCompleted) return true; // Completed sessions are always past
-      
+
       const now = currentTime;
-      
+
       // Parse End Time (e.g. "17:14")
       if (!session.endTime || typeof session.endTime !== 'string' || !session.endTime.includes(':')) {
         // If no end time, assume end of day
@@ -169,13 +178,13 @@ const Sessions: React.FC = () => {
         const cutoffTime = new Date(endDateTime.getTime() + 10 * 60000);
         return now.getTime() > cutoffTime.getTime();
       }
-      
+
       const [hours, minutes] = session.endTime.split(':').map(Number);
-      
+
       // Create Date object for session date + end time
       const endDateTime = new Date(session.endDate || session.startDate);
       endDateTime.setHours(hours, minutes, 0, 0);
-      
+
       // Handle overnight sessions (if end time < start time on the same day)
       if (!session.endDate && session.startTime) {
         const [startHours, startMinutes] = session.startTime.split(':').map(Number);
@@ -185,10 +194,10 @@ const Sessions: React.FC = () => {
           endDateTime.setDate(endDateTime.getDate() + 1);
         }
       }
-      
+
       // Add 10 Minute Buffer
       const cutoffTime = new Date(endDateTime.getTime() + 10 * 60000);
-      
+
       return now.getTime() > cutoffTime.getTime();
     } catch (error) {
       console.error('Error checking if session is past:', error);
@@ -203,16 +212,16 @@ const Sessions: React.FC = () => {
       // Handle cancelled/completed sessions
       if (session.isCancelled) return 'Upcoming'; // Let cancelled badge handle display
       if (session.isCompleted) return 'Past';
-      
+
       const now = currentTime;
-      
+
       // Parse Start Time
       const startDateTime = new Date(session.startDate);
       if (session.startTime && typeof session.startTime === 'string' && session.startTime.includes(':')) {
         const [startHours, startMinutes] = session.startTime.split(':').map(Number);
         startDateTime.setHours(startHours, startMinutes, 0, 0);
       }
-      
+
       // Parse End Time
       let endDateTime: Date;
       if (session.endDate) {
@@ -220,11 +229,11 @@ const Sessions: React.FC = () => {
       } else {
         endDateTime = new Date(session.startDate);
       }
-      
+
       if (session.endTime && typeof session.endTime === 'string' && session.endTime.includes(':')) {
         const [endHours, endMinutes] = session.endTime.split(':').map(Number);
         endDateTime.setHours(endHours, endMinutes, 0, 0);
-        
+
         // Handle overnight sessions
         if (!session.endDate && endDateTime < startDateTime) {
           endDateTime.setDate(endDateTime.getDate() + 1);
@@ -232,19 +241,19 @@ const Sessions: React.FC = () => {
       } else {
         endDateTime.setHours(23, 59, 59, 999);
       }
-      
+
       // Define cutoff: End Time + 10 minute buffer
       // CRITICAL: Do NOT use lateTimeLimit, gracePeriod, or any other attendance-related timing
       const cutoffTime = new Date(endDateTime.getTime() + 10 * 60000);
-      
+
       // Status Logic (Strict - Grace Period is NEVER used here)
       // "Upcoming": now < startDateTime
       if (now.getTime() < startDateTime.getTime()) return 'Upcoming';
-      
+
       // "Live": now >= startDateTime AND now <= cutoffTime
       // A session remains "Live" until 10 minutes AFTER the end time
       if (now.getTime() >= startDateTime.getTime() && now.getTime() <= cutoffTime.getTime()) return 'Live';
-      
+
       // "Past Session": ONLY if now > cutoffTime
       return 'Past';
     } catch (error) {
@@ -253,17 +262,28 @@ const Sessions: React.FC = () => {
     }
   };
 
+  // Robust Date Comparison Helper (Local Time)
+  const isSameDay = (d1: Date, d2: Date) => {
+    return (
+      d1.getFullYear() === d2.getFullYear() &&
+      d1.getMonth() === d2.getMonth() &&
+      d1.getDate() === d2.getDate()
+    );
+  };
+
   // Filter sessions based on selected date or default logic
   const getFilteredSessions = (): ISession[] => {
     if (selectedDate) {
       // Scenario A: Date selected - show ALL sessions for that specific date (past and future)
-      const dateStr = selectedDate.toISOString().split('T')[0];
+
+      // We compare the 'selectedDate' (from calendar, local time) 
+      // with each session's 'startDate' (converted to Date object, which parses ISO to local time)
       return sessions.filter(session => {
         if (!session.startDate) return false;
         const sessionDate = new Date(session.startDate);
-        sessionDate.setHours(0, 0, 0, 0);
-        const sessionDateStr = sessionDate.toISOString().split('T')[0];
-        return sessionDateStr === dateStr;
+
+        // Use robust local comparison
+        return isSameDay(sessionDate, selectedDate);
       });
     } else {
       // Scenario B: No date selected - show only Future/Active sessions (respect showPastSessions toggle)
@@ -277,10 +297,10 @@ const Sessions: React.FC = () => {
   };
 
   const filteredSessions = getFilteredSessions();
-  
+
   // Separate sessions into past (for past sessions toggle) - using isSessionPast for consistency
   const pastSessions = sessions.filter(session => isSessionPast(session));
-  
+
   // Determine which sessions to display (with limit if no date selected)
   const SESSION_LIMIT = 7;
   let displayedSessions: ISession[];
@@ -446,6 +466,8 @@ const Sessions: React.FC = () => {
                         setSelectedDate(date);
                         setIsCalendarExpanded(false); // Auto-collapse after selection
                       }}
+                      currentMonth={currentViewDate}
+                      onMonthChange={setCurrentViewDate}
                     />
                   </div>
                 )}
@@ -457,6 +479,8 @@ const Sessions: React.FC = () => {
                     sessions={sessions}
                     selectedDate={selectedDate}
                     onDateSelect={setSelectedDate}
+                    currentMonth={currentViewDate}
+                    onMonthChange={setCurrentViewDate}
                   />
                 </div>
               </div>
@@ -469,18 +493,18 @@ const Sessions: React.FC = () => {
                   <div className="flex flex-col items-center gap-6 rounded-xl border-2 border-dashed border-[#e6e2db] dark:border-slate-800 px-6 py-14">
                     <div className="flex max-w-[480px] flex-col items-center gap-2 text-center">
                       <p className="text-[#181511] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em]">
-                        {selectedDate 
+                        {selectedDate
                           ? 'No Sessions on Selected Date'
-                          : classId 
-                          ? 'No Sessions Available' 
-                          : 'No Sessions Available'}
+                          : classId
+                            ? 'No Sessions Available'
+                            : 'No Sessions Available'}
                       </p>
                       <p className="text-[#181511] dark:text-slate-300 text-sm font-normal leading-normal">
                         {selectedDate
                           ? 'There are no sessions scheduled for this date. Try selecting a different date from the calendar.'
-                          : classId 
-                          ? 'This class does not have any sessions yet. Create a new session to get started.'
-                          : 'There are currently no sessions scheduled. Get started by creating a new one.'}
+                          : classId
+                            ? 'This class does not have any sessions yet. Create a new session to get started.'
+                            : 'There are currently no sessions scheduled. Get started by creating a new one.'}
                       </p>
                     </div>
                     {canCreateSession && !selectedDate && (
@@ -498,228 +522,226 @@ const Sessions: React.FC = () => {
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 w-full">
                     {displayedSessions.map((session) => {
-                const sessionStatus = getSessionStatus(session);
-                const isPast = sessionStatus === 'Past';
-                const isLive = sessionStatus === 'Live';
-                const isUpcoming = sessionStatus === 'Upcoming';
-                const isToday = isSessionToday(session);
-                const showScanButton = isEndUser && isToday;
-                
-                return (
-                <div
-                  key={session._id}
-                  className={`flex flex-col w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 p-4 md:p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden ${
-                    isPast && !isLive ? 'opacity-60 grayscale' : ''
-                  } ${isLive ? 'ring-2 ring-green-500 dark:ring-green-400' : ''}`}
-                  onClick={() => {
-                    // Don't navigate if session is cancelled
-                    if (session.isCancelled) return;
-                    
-                    // Smart navigation based on session status
-                    if (isPast) {
-                      // Past sessions: redirect to history
-                      if (isEndUser) {
-                        // End User: go to personal attendance history
-                        navigate(`/my-attendance?scrollTo=${session._id}`);
-                      } else {
-                        // Admin: go to reports for this class
-                        const classBatchId = typeof session.classBatchId === 'object' && session.classBatchId?._id
-                          ? session.classBatchId._id
-                          : typeof session.classBatchId === 'string'
-                          ? session.classBatchId
-                          : classId;
-                        if (classBatchId) {
-                          navigate(`/reports?classBatchId=${classBatchId}&tab=logs`);
-                        } else {
-                          navigate(`/sessions/${session._id}`); // Fallback
-                        }
-                      }
-                    } else {
-                      // Live/Upcoming: normal navigation
-                      if (!isEndUser) {
-                        navigate(`/sessions/${session._id}`);
-                      }
-                    }
-                  }}
-                >
-                  {/* Cancellation Overlay */}
-                  {session.isCancelled && (
-                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-4 text-center backdrop-blur-sm bg-white/60 dark:bg-slate-900/60 rounded-xl">
-                      <div className="bg-red-50 dark:bg-red-900/30 rounded-lg p-4 border-2 border-red-300 dark:border-red-700 max-w-sm">
-                        <span className="material-symbols-outlined text-5xl text-red-600 dark:text-red-400 mb-3">warning</span>
-                        <h3 className="text-xl font-bold text-red-700 dark:text-red-400 mb-2">
-                          ⚠️ Session Cancelled
-                        </h3>
-                        {session.cancellationReason && (
-                          <p className="text-base font-semibold text-red-800 dark:text-red-300 mt-2 leading-relaxed">
-                            {session.cancellationReason}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  {/* Class Name Label (Above Session Name) */}
-                  {session.classBatchId && typeof session.classBatchId === 'object' && (
-                    <div className="mb-2">
-                      <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        {session.classBatchId.name}
-                      </span>
-                    </div>
-                  )}
-                  
-                  <div className="flex items-start justify-between mb-4 gap-2">
-                    <div className="flex-1">
-                      <h2 className="text-xl font-bold text-slate-900 dark:text-white break-words">{session.name}</h2>
-                      {/* Class Description or Session Description */}
-                      {(session.classBatchId && typeof session.classBatchId === 'object' && session.classBatchId.description) ? (
-                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">
-                          {session.classBatchId.description}
-                        </p>
-                      ) : session.description ? (
-                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">
-                          {session.description}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-col gap-2 items-end">
-                      {session.isCancelled && (
-                        <span className="whitespace-nowrap rounded-full bg-orange-100 dark:bg-orange-900/30 px-3 py-1 text-xs font-medium text-orange-600 dark:text-orange-400 border border-orange-300 dark:border-orange-800">
-                          ⚠️ Cancelled
-                        </span>
-                      )}
-                      {/* Status Badge - Using robust getSessionStatus() */}
-                      {isLive && (
-                        <span className="whitespace-nowrap rounded-full bg-green-100 dark:bg-green-900/30 px-3 py-1 text-xs font-medium text-green-600 dark:text-green-400 border border-green-300 dark:border-green-800 flex items-center gap-1">
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                          </span>
-                          Live Now
-                        </span>
-                      )}
-                      {isPast && (
-                        <span className="whitespace-nowrap rounded-full bg-gray-100 dark:bg-gray-800 px-3 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-700">
-                          {isEndUser ? 'Past' : 'Past Session'}
-                        </span>
-                      )}
-                      {isUpcoming && isToday && (
-                        <span className="whitespace-nowrap rounded-full bg-amber-100 dark:bg-amber-900/30 px-3 py-1 text-xs font-medium text-amber-600 dark:text-amber-400 border border-amber-300 dark:border-amber-800">
-                          Today
-                        </span>
-                      )}
-                      {isUpcoming && !isToday && (
-                        <span className="whitespace-nowrap rounded-full bg-blue-100 dark:bg-blue-900/30 px-3 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-800">
-                          Upcoming
-                        </span>
-                      )}
-                      <span className="whitespace-nowrap rounded-full bg-slate-100 dark:bg-slate-800 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">
-                        {formatFrequency(session.frequency)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex-grow space-y-3 text-slate-700 dark:text-slate-300 mb-4">
-                    {session.endDate ? (
-                      <div className="flex items-center text-sm">
-                        <span className="material-symbols-outlined mr-2 text-slate-500 dark:text-slate-400 text-lg flex-shrink-0">date_range</span>
-                        <span className="break-words whitespace-normal">{formatDate(session.startDate)} - {formatDate(session.endDate)}</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center text-sm">
-                        <span className="material-symbols-outlined mr-2 text-slate-500 dark:text-slate-400 text-lg flex-shrink-0">calendar_today</span>
-                        <span className="break-words whitespace-normal">{formatDate(session.startDate)}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center text-sm">
-                      <span className="material-symbols-outlined mr-2 text-slate-500 dark:text-slate-400 text-lg flex-shrink-0">schedule</span>
-                      <span className="break-words whitespace-normal">{formatTime(session.startTime)} - {formatTime(session.endTime)}</span>
-                    </div>
-                    <div className="flex items-center text-sm">
-                      <span className="material-symbols-outlined mr-2 text-slate-500 dark:text-slate-400 text-lg flex-shrink-0">location_on</span>
-                      <span className="break-words whitespace-normal">{session.locationType}</span>
-                    </div>
-                    {session.assignedUsers && Array.isArray(session.assignedUsers) && session.assignedUsers.length > 0 && (
-                      <div className="flex items-center text-sm">
-                        <span className="material-symbols-outlined mr-2 text-slate-500 dark:text-slate-400 text-lg flex-shrink-0">group</span>
-                        <span className="break-words whitespace-normal">{session.assignedUsers.length} Assigned Users</span>
-                      </div>
-                    )}
-                    {session.description && (
-                      <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 pt-1 break-words whitespace-normal">{session.description}</p>
-                    )}
-                  </div>
-                  <div className="mt-auto flex flex-row items-center justify-between gap-3">
-                    {showScanButton ? (
-                      <button
-                        className="flex flex-1 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 bg-gradient-to-r from-orange-500 to-[#f04129] text-white text-sm font-bold hover:from-orange-600 hover:to-[#d63a25] transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/scan?sessionId=${session._id}`);
-                        }}
-                      >
-                        <span className="material-symbols-outlined text-lg">qr_code_scanner</span>
-                        <span className="truncate whitespace-normal">Scan Attendance</span>
-                      </button>
-                    ) : (
-                      <>
-                        {isEndUser ? (
-                          <button
-                            className={`flex flex-1 items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 border text-sm font-medium cursor-not-allowed ${
-                              isLive 
-                                ? 'border-green-300 dark:border-green-700 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20' 
-                                : 'border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800'
-                            }`}
-                            disabled
-                          >
-                            <span className="truncate whitespace-normal">
-                              {isLive ? '🟢 In Progress' : isPast ? 'Past Session' : 'Upcoming'}
-                            </span>
-                          </button>
-                        ) : (
-                          <button
-                            className="flex flex-1 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              // Smart navigation based on session status
-                              if (isPast) {
-                                // Past sessions: redirect to reports
+                      const sessionStatus = getSessionStatus(session);
+                      const isPast = sessionStatus === 'Past';
+                      const isLive = sessionStatus === 'Live';
+                      const isUpcoming = sessionStatus === 'Upcoming';
+                      const isToday = isSessionToday(session);
+                      const showScanButton = isEndUser && isToday;
+
+                      return (
+                        <div
+                          key={session._id}
+                          className={`flex flex-col w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 p-4 md:p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden ${isPast && !isLive ? 'opacity-60 grayscale' : ''
+                            } ${isLive ? 'ring-2 ring-green-500 dark:ring-green-400' : ''}`}
+                          onClick={() => {
+                            // Don't navigate if session is cancelled
+                            if (session.isCancelled) return;
+
+                            // Smart navigation based on session status
+                            if (isPast) {
+                              // Past sessions: redirect to history
+                              if (isEndUser) {
+                                // End User: go to personal attendance history
+                                navigate(`/my-attendance?scrollTo=${session._id}`);
+                              } else {
+                                // Admin: go to reports for this class
                                 const classBatchId = typeof session.classBatchId === 'object' && session.classBatchId?._id
                                   ? session.classBatchId._id
                                   : typeof session.classBatchId === 'string'
-                                  ? session.classBatchId
-                                  : classId;
+                                    ? session.classBatchId
+                                    : classId;
                                 if (classBatchId) {
                                   navigate(`/reports?classBatchId=${classBatchId}&tab=logs`);
                                 } else {
                                   navigate(`/sessions/${session._id}`); // Fallback
                                 }
-                              } else {
-                                // Live/Upcoming: normal navigation
+                              }
+                            } else {
+                              // Live/Upcoming: normal navigation
+                              if (!isEndUser) {
                                 navigate(`/sessions/${session._id}`);
                               }
-                            }}
-                          >
-                            <Eye className="w-4 h-4 md:w-5 md:h-5 flex-shrink-0" />
-                            <span className="truncate whitespace-normal">View Details</span>
-                          </button>
-                        )}
-                      </>
-                    )}
-                    {canEditSession(session) && (
-                      <button
-                        className="flex flex-1 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 border border-[#f04129] text-[#f04129] text-sm font-bold hover:bg-red-50 dark:hover:bg-[#f04129]/10 transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/sessions/edit/${session._id}`);
-                        }}
-                      >
-                        <Edit className="w-4 h-4 md:w-5 md:h-5 flex-shrink-0" />
-                        <span className="truncate whitespace-normal">Edit</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-              })}
+                            }
+                          }}
+                        >
+                          {/* Cancellation Overlay */}
+                          {session.isCancelled && (
+                            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-4 text-center backdrop-blur-sm bg-white/60 dark:bg-slate-900/60 rounded-xl">
+                              <div className="bg-red-50 dark:bg-red-900/30 rounded-lg p-4 border-2 border-red-300 dark:border-red-700 max-w-sm">
+                                <span className="material-symbols-outlined text-5xl text-red-600 dark:text-red-400 mb-3">warning</span>
+                                <h3 className="text-xl font-bold text-red-700 dark:text-red-400 mb-2">
+                                  ⚠️ Session Cancelled
+                                </h3>
+                                {session.cancellationReason && (
+                                  <p className="text-base font-semibold text-red-800 dark:text-red-300 mt-2 leading-relaxed">
+                                    {session.cancellationReason}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          {/* Class Name Label (Above Session Name) */}
+                          {session.classBatchId && typeof session.classBatchId === 'object' && (
+                            <div className="mb-2">
+                              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                {session.classBatchId.name}
+                              </span>
+                            </div>
+                          )}
+
+                          <div className="flex items-start justify-between mb-4 gap-2">
+                            <div className="flex-1">
+                              <h2 className="text-xl font-bold text-slate-900 dark:text-white break-words">{session.name}</h2>
+                              {/* Class Description or Session Description */}
+                              {(session.classBatchId && typeof session.classBatchId === 'object' && session.classBatchId.description) ? (
+                                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">
+                                  {session.classBatchId.description}
+                                </p>
+                              ) : session.description ? (
+                                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">
+                                  {session.description}
+                                </p>
+                              ) : null}
+                            </div>
+                            <div className="flex flex-col gap-2 items-end">
+                              {session.isCancelled && (
+                                <span className="whitespace-nowrap rounded-full bg-orange-100 dark:bg-orange-900/30 px-3 py-1 text-xs font-medium text-orange-600 dark:text-orange-400 border border-orange-300 dark:border-orange-800">
+                                  ⚠️ Cancelled
+                                </span>
+                              )}
+                              {/* Status Badge - Using robust getSessionStatus() */}
+                              {isLive && (
+                                <span className="whitespace-nowrap rounded-full bg-green-100 dark:bg-green-900/30 px-3 py-1 text-xs font-medium text-green-600 dark:text-green-400 border border-green-300 dark:border-green-800 flex items-center gap-1">
+                                  <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                  </span>
+                                  Live Now
+                                </span>
+                              )}
+                              {isPast && (
+                                <span className="whitespace-nowrap rounded-full bg-gray-100 dark:bg-gray-800 px-3 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-700">
+                                  {isEndUser ? 'Past' : 'Past Session'}
+                                </span>
+                              )}
+                              {isUpcoming && isToday && (
+                                <span className="whitespace-nowrap rounded-full bg-amber-100 dark:bg-amber-900/30 px-3 py-1 text-xs font-medium text-amber-600 dark:text-amber-400 border border-amber-300 dark:border-amber-800">
+                                  Today
+                                </span>
+                              )}
+                              {isUpcoming && !isToday && (
+                                <span className="whitespace-nowrap rounded-full bg-blue-100 dark:bg-blue-900/30 px-3 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-800">
+                                  Upcoming
+                                </span>
+                              )}
+                              <span className="whitespace-nowrap rounded-full bg-slate-100 dark:bg-slate-800 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+                                {formatFrequency(session.frequency)}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex-grow space-y-3 text-slate-700 dark:text-slate-300 mb-4">
+                            {session.endDate ? (
+                              <div className="flex items-center text-sm">
+                                <span className="material-symbols-outlined mr-2 text-slate-500 dark:text-slate-400 text-lg flex-shrink-0">date_range</span>
+                                <span className="break-words whitespace-normal">{formatDate(session.startDate)} - {formatDate(session.endDate)}</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center text-sm">
+                                <span className="material-symbols-outlined mr-2 text-slate-500 dark:text-slate-400 text-lg flex-shrink-0">calendar_today</span>
+                                <span className="break-words whitespace-normal">{formatDate(session.startDate)}</span>
+                              </div>
+                            )}
+                            <div className="flex items-center text-sm">
+                              <span className="material-symbols-outlined mr-2 text-slate-500 dark:text-slate-400 text-lg flex-shrink-0">schedule</span>
+                              <span className="break-words whitespace-normal">{formatTime(session.startTime)} - {formatTime(session.endTime)}</span>
+                            </div>
+                            <div className="flex items-center text-sm">
+                              <span className="material-symbols-outlined mr-2 text-slate-500 dark:text-slate-400 text-lg flex-shrink-0">location_on</span>
+                              <span className="break-words whitespace-normal">{session.locationType}</span>
+                            </div>
+                            {session.assignedUsers && Array.isArray(session.assignedUsers) && session.assignedUsers.length > 0 && (
+                              <div className="flex items-center text-sm">
+                                <span className="material-symbols-outlined mr-2 text-slate-500 dark:text-slate-400 text-lg flex-shrink-0">group</span>
+                                <span className="break-words whitespace-normal">{session.assignedUsers.length} Assigned Users</span>
+                              </div>
+                            )}
+                            {session.description && (
+                              <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 pt-1 break-words whitespace-normal">{session.description}</p>
+                            )}
+                          </div>
+                          <div className="mt-auto flex flex-row items-center justify-between gap-3">
+                            {showScanButton ? (
+                              <button
+                                className="flex flex-1 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 bg-gradient-to-r from-orange-500 to-[#f04129] text-white text-sm font-bold hover:from-orange-600 hover:to-[#d63a25] transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/scan?sessionId=${session._id}`);
+                                }}
+                              >
+                                <span className="material-symbols-outlined text-lg">qr_code_scanner</span>
+                                <span className="truncate whitespace-normal">Scan Attendance</span>
+                              </button>
+                            ) : (
+                              <>
+                                {isEndUser ? (
+                                  <button
+                                    className={`flex flex-1 items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 border text-sm font-medium cursor-not-allowed ${isLive
+                                      ? 'border-green-300 dark:border-green-700 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'
+                                      : 'border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800'
+                                      }`}
+                                    disabled
+                                  >
+                                    <span className="truncate whitespace-normal">
+                                      {isLive ? '🟢 In Progress' : isPast ? 'Past Session' : 'Upcoming'}
+                                    </span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    className="flex flex-1 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      // Smart navigation based on session status
+                                      if (isPast) {
+                                        // Past sessions: redirect to reports
+                                        const classBatchId = typeof session.classBatchId === 'object' && session.classBatchId?._id
+                                          ? session.classBatchId._id
+                                          : typeof session.classBatchId === 'string'
+                                            ? session.classBatchId
+                                            : classId;
+                                        if (classBatchId) {
+                                          navigate(`/reports?classBatchId=${classBatchId}&tab=logs`);
+                                        } else {
+                                          navigate(`/sessions/${session._id}`); // Fallback
+                                        }
+                                      } else {
+                                        // Live/Upcoming: normal navigation
+                                        navigate(`/sessions/${session._id}`);
+                                      }
+                                    }}
+                                  >
+                                    <Eye className="w-4 h-4 md:w-5 md:h-5 flex-shrink-0" />
+                                    <span className="truncate whitespace-normal">View Details</span>
+                                  </button>
+                                )}
+                              </>
+                            )}
+                            {canEditSession(session) && (
+                              <button
+                                className="flex flex-1 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 border border-[#f04129] text-[#f04129] text-sm font-bold hover:bg-red-50 dark:hover:bg-[#f04129]/10 transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/sessions/edit/${session._id}`);
+                                }}
+                              >
+                                <Edit className="w-4 h-4 md:w-5 md:h-5 flex-shrink-0" />
+                                <span className="truncate whitespace-normal">Edit</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {/* Summary Card - Show if more than 7 sessions and no date selected */}
