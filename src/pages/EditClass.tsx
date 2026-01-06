@@ -5,7 +5,6 @@ import { useAuth, IUser as IAuthUser } from '../contexts/AuthContext';
 import AddUsersModal from '../components/AddUsersModal';
 import GoogleMapPicker from '../components/GoogleMapPicker';
 import { X, ArrowLeft } from 'lucide-react';
-import { IClassBatch } from '../types';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 
@@ -24,7 +23,6 @@ const EditClass: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { isSuperAdmin } = useAuth();
 
-  const [classBatch, setClassBatch] = useState<IClassBatch | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -76,7 +74,6 @@ const EditClass: React.FC = () => {
         // Fetch ClassBatch
         const classRes = await api.get(`/api/classes/${id}`);
         const classData = classRes.data;
-        setClassBatch(classData);
 
         // Fetch sessions for this class
         const sessionsRes = await api.get(`/api/classes/${id}/sessions`);
@@ -114,7 +111,6 @@ const EditClass: React.FC = () => {
             setSelectedCoordinates(session.geolocation);
           } else if (classData.defaultLocation && typeof classData.defaultLocation === 'string' && classData.defaultLocation.includes(',')) {
             // Try to parse legacy string coords if needed
-            // Ignoring generic link strings as they can't be mapped easily without geocoding API
           }
 
           // Pre-fill assigned users
@@ -384,7 +380,7 @@ const EditClass: React.FC = () => {
         updateData.sessionAdmin = formData.sessionAdmin || undefined;
       }
 
-      const response = await api.put(`/api/classes/${id}`, updateData);
+      await api.put(`/api/classes/${id}`, updateData);
       navigate('/classes');
     } catch (err: any) {
       if (err.response && err.response.data) {
@@ -749,8 +745,13 @@ const EditClass: React.FC = () => {
                 {/* Google Map Picker Overlay */}
                 <GoogleMapPicker
                   initialCoordinates={selectedCoordinates || undefined}
-                  onLocationSelect={(data) => {
-                    setSelectedCoordinates(data.coordinates);
+                  initialRadius={formData.radius}
+                  onConfirm={(data) => {
+                    setSelectedCoordinates({
+                      latitude: data.latitude,
+                      longitude: data.longitude,
+                    });
+                    setFormData(prev => ({ ...prev, radius: data.radius }));
                   }}
                   isOpen={showMapPicker}
                   onClose={() => setShowMapPicker(false)}
