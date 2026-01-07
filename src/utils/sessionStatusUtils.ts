@@ -1,15 +1,10 @@
 /**
- * Session Status Utilities - CANONICAL DATE: startDate
+ * Session Status Utilities - UTC-BASED WITH IST OFFSET
  * 
- * SYSTEM RULE: Use session.startDate for ALL logic
- * - UI Display: startDate
- * - Status Calculation: startDate + startTime/endTime
- * - Filtering: startDate
- * - Sorting: startDate
+ * CRITICAL FIX: All logic operates in UTC
+ * IST times are converted to UTC by subtracting 5:30 offset
  * 
- * endDate is ONLY for recurring session END (not individual occurrence)
- * 
- * @version 7.0 - Canonical startDate enforcement
+ * @version 8.0 - Final UTC-based with proper IST handling
  */
 
 // ============================================
@@ -27,60 +22,35 @@ export const BUFFER_MINUTES =
 
 export const IST_TIMEZONE = 'Asia/Kolkata';
 
+// IST is UTC+05:30
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
 // ============================================
-// IST TIME UTILITIES (BROWSER-INDEPENDENT)
+// UTC TIME UTILITIES
 // ============================================
 
 /**
- * Get current time in IST (browser-independent)
- * 
- * Uses Intl.DateTimeFormat for timezone-safe conversion
- * 
- * @returns Current IST time
+ * Get current time in UTC
+ * ALL comparisons happen in UTC
  */
-export function nowIST(): Date {
-    const now = new Date();
-
-    // Get IST time components using Intl API
-    const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: IST_TIMEZONE,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-    });
-
-    const parts = formatter.formatToParts(now);
-    const getValue = (type: string) => parts.find(p => p.type === type)?.value || '0';
-
-    const year = parseInt(getValue('year'));
-    const month = parseInt(getValue('month')) - 1;
-    const day = parseInt(getValue('day'));
-    const hour = parseInt(getValue('hour'));
-    const minute = parseInt(getValue('minute'));
-    const second = parseInt(getValue('second'));
-
-    return new Date(year, month, day, hour, minute, second);
+export function nowUTC(): Date {
+    return new Date(); // JavaScript Date is always UTC internally
 }
 
 /**
- * Build IST date from UTC date string and IST time string
+ * Convert IST date + time to UTC Date
  * 
- * CRITICAL: This is THE function for constructing session times
- * All session start/end times MUST use this
+ * CRITICAL: This is THE function for session time calculations
  * 
- * @param dateISO UTC date string (e.g., "2026-01-07T00:00:00.000Z")
- * @param time IST time string (e.g., "19:00")
- * @returns Date object representing IST time (browser-independent)
+ * @param dateISO UTC date string from backend (e.g., "2026-01-07T00:00:00.000Z" = midnight UTC = 5:30 AM IST)
+ * @param timeIST IST time string (e.g., "19:00" means 7 PM in India)
+ * @returns UTC Date representing that IST time
  */
-export function buildISTDate(dateISO: string, time: string): Date {
-    // Parse the UTC date and get its IST representation
-    const utcDate = new Date(dateISO);
+export function istTimeToUTC(dateISO: string, timeIST: string): Date {
+    // Parse backend date (midnight UTC)
+    const baseDate = new Date(dateISO);
 
-    // Get the IST date components
+    // Get the date components in IST using Intl
     const formatter = new Intl.DateTimeFormat('en-US', {
         timeZone: IST_TIMEZONE,
         year: 'numeric',
@@ -89,73 +59,86 @@ export function buildISTDate(dateISO: string, time: string): Date {
         hour12: false
     });
 
-    const parts = formatter.formatToParts(utcDate);
+    const parts = formatter.formatToParts(baseDate);
     const getValue = (type: string) => parts.find(p => p.type === type)?.value || '0';
 
-    const year = parseInt(getValue('year'));
-    const month = parseInt(getValue('month')) - 1;
-    const day = parseInt(getValue('day'));
+    const istYear = parseInt(getValue('year'));
+    const istMonth = parseInt(getValue('month')) - 1; // 0-indexed
+    const istDay = parseInt(getValue('day'));
 
-    // Parse time
-    const [hours, minutes] = time.split(':').map(Number);
+    // Parse IST time
+    const [hours, minutes] = timeIST.split(':').map(Number);
 
-    // Build Date in browser's local representation
-    return new Date(year, month, day, hours, minutes, 0, 0);
+    // Create full IST datetime in UTC by:
+    // 1. Create UTC date with IST date components
+    // 2. Set UTC time to (IST time - 5:30)
+
+    let utcHours = hours - 5;
+    let utcMinutes = minutes - 30;
+
+    // Handle wraparound
+    if (utcMinutes < 0) {
+        utcMinutes += 60;
+        utcHours -= 1;
+    }
+
+    if (utcHours < 0) {
+        utcHours += 24;
+        // Need to go to previous day
+        const result = new Date(Date.UTC(istYear, istMonth, istDay, 0, 0, 0, 0));
+        result.setUTCDate(result.getUTCDate() - 1);
+        result.setUTCHours(utcHours, utcMinutes, 0, 0);
+        return result;
+    }
+
+    // Normal case
+    return new Date(Date.UTC(istYear, istMonth, istDay, utcHours, utcMinutes, 0, 0));
 }
 
 // ============================================
-// HELPER FUNCTIONS (CANONICAL: startDate ONLY)
+// HELPER FUNCTIONS
 // ============================================
 
 /**
- * Get session end time in IST
+ * Get session end time in UTC
  * 
- * CRITICAL: Uses startDate for calculation (NOT endDate!)
- * endDate is for recurring session series end, not individual occurrence
- * 
- * @param session Session object
- * @returns IST Date when session ends
+ * CRITICAL: Uses startDate for calculation
+ * Converts IST endTime to UTC
  */
-export function getSessionEndDateTimeIST(session: {
+export function getSessionEndDateTimeUTC(session: {
     startDate: string | Date;
     endDate?: string | Date;
     startTime?: string;
     endTime?: string;
 }): Date {
-    // CANONICAL: Always use startDate for status calculation
-    const dateValue = session.startDate;
-    const dateISO = typeof dateValue === 'string' ? dateValue : dateValue.toISOString();
+    const dateISO = typeof session.startDate === 'string'
+        ? session.startDate
+        : session.startDate.toISOString();
 
     if (session.endTime?.includes(':')) {
-        // Use buildISTDate with startDate (NOT endDate)
-        const endDateIST = buildISTDate(dateISO, session.endTime);
+        const endUTC = istTimeToUTC(dateISO, session.endTime);
 
-        // Handle overnight sessions (endTime before startTime)
+        // Handle overnight sessions
         if (session.startTime) {
-            const startDateIST = buildISTDate(dateISO, session.startTime);
+            const startUTC = istTimeToUTC(dateISO, session.startTime);
 
-            if (endDateIST < startDateIST) {
+            if (endUTC < startUTC) {
                 // Session ends next day
-                endDateIST.setDate(endDateIST.getDate() + 1);
+                endUTC.setUTCDate(endUTC.getUTCDate() + 1);
             }
         }
 
-        return endDateIST;
+        return endUTC;
     } else {
-        // End of day in IST (23:59:59)
-        return buildISTDate(dateISO, '23:59');
+        // End of day IST (23:59 IST = 18:29 UTC)
+        return istTimeToUTC(dateISO, '23:59');
     }
 }
 
 /**
- * Get session start time in IST
- * 
- * CRITICAL: Uses startDate (canonical field)
- * 
- * @param session Session object
- * @returns IST Date when session starts
+ * Get session start time in UTC
  */
-export function getSessionStartDateTimeIST(session: {
+export function getSessionStartDateTimeUTC(session: {
     startDate: string | Date;
     startTime?: string;
 }): Date {
@@ -164,30 +147,28 @@ export function getSessionStartDateTimeIST(session: {
         : session.startDate.toISOString();
 
     if (session.startTime?.includes(':')) {
-        return buildISTDate(dateISO, session.startTime);
+        return istTimeToUTC(dateISO, session.startTime);
     } else {
-        // Start of day in IST (00:00:00)
-        return buildISTDate(dateISO, '00:00');
+        // Start of day IST (00:00 IST = 18:30 UTC previous day)
+        return istTimeToUTC(dateISO, '00:00');
     }
 }
 
 // ============================================
-// MAIN STATUS FUNCTION (IST-BASED)
+// MAIN STATUS FUNCTION
 // ============================================
 
 /**
- * Calculate session status using IST logic
+ * Calculate session status using pure UTC logic
  * 
- * CANONICAL ALGORITHM (startDate-BASED):
+ * CANONICAL ALGORITHM:
  * 1. Cancelled: session.isCancelled === true
- * 2. Past: session.isCompleted === true OR nowIST > (endIST + buffer)
- * 3. Upcoming: nowIST < startIST
- * 4. Live: startIST <= nowIST <= (endIST + buffer)
- * 
- * CRITICAL: All times derived from startDate (not endDate)
+ * 2. Past: session.isCompleted === true OR nowUTC > (endUTC + buffer)
+ * 3. Upcoming: nowUTC < startUTC
+ * 4. Live: startUTC <= nowUTC <= (endUTC + buffer)
  * 
  * @param session Session object
- * @param now Current IST time (defaults to nowIST())
+ * @param now Current UTC time (defaults to nowUTC())
  * @returns Session status
  */
 export function getSessionStatus(
@@ -199,7 +180,7 @@ export function getSessionStatus(
         isCancelled?: boolean;
         isCompleted?: boolean;
     },
-    now: Date = nowIST()
+    now: Date = nowUTC()
 ): SessionStatus {
     // PRIORITY 1: Cancelled sessions
     if (session.isCancelled) return 'cancelled';
@@ -207,30 +188,47 @@ export function getSessionStatus(
     // PRIORITY 2: Completed sessions (backend authority)
     if (session.isCompleted) return 'past';
 
-    // Get IST times using startDate (CANONICAL)
-    const startIST = getSessionStartDateTimeIST(session);
-    const endIST = getSessionEndDateTimeIST(session);
-    const cutoffIST = new Date(endIST.getTime() + BUFFER_MINUTES * 60 * 1000);
+    // Get UTC times
+    const startUTC = getSessionStartDateTimeUTC(session);
+    const endUTC = getSessionEndDateTimeUTC(session);
+    const cutoffUTC = new Date(endUTC.getTime() + BUFFER_MINUTES * 60 * 1000);
 
-    // Log for verification (development only)
-    if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 IST STATUS CALCULATION (startDate=' + session.startDate + '):', {
-            nowIST: now.toString(),
-            startIST: startIST.toString(),
-            endIST: endIST.toString(),
-            cutoffIST: cutoffIST.toString(),
-            comparison_live: now <= cutoffIST
-        });
+    // UTC comparison
+    const nowTime = now.getTime();
+    const startTime = startUTC.getTime();
+    const cutoffTime = cutoffUTC.getTime();
+
+    // COMPREHENSIVE LOGGING
+    console.group('🔍 SESSION CLASSIFICATION TRACE');
+    console.log('Session Name:', (session as any).name || 'Unknown');
+    console.log('startDate (from backend):', session.startDate);
+    console.log('startTime (IST):', session.startTime);
+    console.log('endTime (IST):', session.endTime);
+    console.log('---');
+    console.log('Computed startUTC:', startUTC.toISOString());
+    console.log('Computed endUTC:', endUTC.toISOString());
+    console.log('Computed cutoffUTC (with buffer):', cutoffUTC.toISOString());
+    console.log('Current nowUTC:', now.toISOString());
+    console.log('---');
+    console.log('Comparison:');
+    console.log('  nowUTC <start-15>?', nowTime, '<', startTime, '=', nowTime < startTime);
+    console.log('  nowUTC >= start?', nowTime, '>=', startTime, '=', nowTime >= startTime);
+    console.log('  nowUTC <= cutoff?', nowTime, '<=', cutoffTime, '=', nowTime <= cutoffTime);
+    console.log('---');
+
+    let status: SessionStatus;
+    if (nowTime < startTime) {
+        status = 'upcoming';
+    } else if (nowTime >= startTime && nowTime <= cutoffTime) {
+        status = 'live';
+    } else {
+        status = 'past';
     }
 
-    // Pure IST comparison
-    const nowTime = now.getTime();
-    const startTime = startIST.getTime();
-    const cutoffTime = cutoffIST.getTime();
+    console.log('📊 FINAL STATUS:', status);
+    console.groupEnd();
 
-    if (nowTime < startTime) return 'upcoming';
-    if (nowTime >= startTime && nowTime <= cutoffTime) return 'live';
-    return 'past';
+    return status;
 }
 
 // ============================================
@@ -265,15 +263,11 @@ export function isSessionCancelled(
     return getSessionStatus(session, now) === 'cancelled';
 }
 
-/**
- * Check if two dates are the same day
- * CRITICAL: Compares date components only (ignores time)
- */
 export function isSameDay(d1: Date, d2: Date): boolean {
     return (
-        d1.getFullYear() === d2.getFullYear() &&
-        d1.getMonth() === d2.getMonth() &&
-        d1.getDate() === d2.getDate()
+        d1.getUTCFullYear() === d2.getUTCFullYear() &&
+        d1.getUTCMonth() === d2.getUTCMonth() &&
+        d1.getUTCDate() === d2.getUTCDate()
     );
 }
 
@@ -283,15 +277,14 @@ export function isSameDay(d1: Date, d2: Date): boolean {
 
 export default {
     getSessionStatus,
-    getSessionStartDateTimeIST,
-    getSessionEndDateTimeIST,
+    getSessionStartDateTimeUTC,
+    getSessionEndDateTimeUTC,
     isSessionLive,
     isSessionPast,
     isSessionUpcoming,
     isSessionCancelled,
     isSameDay,
-    nowIST,
-    buildISTDate,
+    nowUTC,
     BUFFER_MINUTES,
     IST_TIMEZONE
 };

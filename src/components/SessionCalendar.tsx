@@ -1,6 +1,6 @@
 import React from 'react';
 import { ISession } from '../types';
-import { getSessionStatus, nowIST } from '../utils/sessionStatusUtils';
+import { getSessionStatus, nowUTC } from '../utils/sessionStatusUtils';
 
 interface SessionCalendarProps {
   sessions: ISession[];
@@ -55,7 +55,7 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
     const dateSessions = getSessionsForDate(date);
     if (dateSessions.length === 0) return null;
 
-    const now = nowIST(); // IST time for all comparisons
+    const now = nowUTC(); // Pure UTC for all comparisons
 
     // For each session on this date, determine its status
     const sessionStatuses: Array<'red' | 'green' | 'yellow'> = [];
