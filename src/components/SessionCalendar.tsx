@@ -1,5 +1,6 @@
 import React from 'react';
 import { ISession } from '../types';
+import { getSessionStatus, nowIST } from '../utils/sessionStatusUtils';
 
 interface SessionCalendarProps {
   sessions: ISession[];
@@ -49,36 +50,37 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
     });
   };
 
-  // Helper function to get session end time as a full Date object
-  const getSessionEndTime = (session: ISession): Date => {
-    // Use startDate as the base date (for recurring sessions, this will be the actual date)
-    const d = new Date(session.startDate);
-
-    if (session.endTime && typeof session.endTime === 'string' && session.endTime.includes(':')) {
-      const [h, m] = session.endTime.split(':').map(Number);
-      d.setHours(h, m, 0, 0);
-    } else {
-      // If no endTime, assume end of day
-      d.setHours(23, 59, 59, 999);
-    }
-
-    return d;
-  };
-
   // Check if date has sessions and determine dot color
   const getDateIndicator = (date: Date): 'red' | 'green' | 'yellow' | null => {
     const dateSessions = getSessionsForDate(date);
     if (dateSessions.length === 0) return null;
 
-    const now = new Date();
+    const now = nowIST(); // IST time for all comparisons
 
     // For each session on this date, determine its status
     const sessionStatuses: Array<'red' | 'green' | 'yellow'> = [];
 
     for (const session of dateSessions) {
-      // PRIORITY 1: Check if session's endTime has passed (RED)
-      const sessionEndTime = getSessionEndTime(session);
-      if (now > sessionEndTime) {
+      // Use canonical status function from shared utility
+      // This ensures consistent 10-minute buffer across all views
+      const status = getSessionStatus(session, now);
+
+      // DEBUG: Log calendar status for today's sessions
+      const isToday = date.toDateString() === new Date().toDateString();
+      if (isToday) {
+        console.log('📅 CALENDAR STATUS DEBUG:', {
+          sessionId: session._id,
+          sessionName: session.name,
+          date: session.startDate,
+          endTime: session.endTime,
+          calculatedStatus: status,
+          now: now.toISOString(),
+          source: 'SessionCalendar.tsx'
+        });
+      }
+
+      // PRIORITY 1: Check if session is past (using shared utility with buffer)
+      if (status === 'past') {
         sessionStatuses.push('red');
         continue; // Skip to next session
       }

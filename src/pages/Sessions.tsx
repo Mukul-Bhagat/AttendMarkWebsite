@@ -5,6 +5,7 @@ import { ISession, IClassBatch } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { Eye, Edit, ArrowLeft } from 'lucide-react';
 import SessionCalendar from '../components/SessionCalendar';
+import { getSessionStatus, isSessionPast, isSameDay, nowIST } from '../utils/sessionStatusUtils';
 
 const Sessions: React.FC = () => {
   const navigate = useNavigate();
@@ -24,7 +25,7 @@ const Sessions: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
   const [currentViewDate, setCurrentViewDate] = useState(new Date());
-  const [currentTime, setCurrentTime] = useState(new Date()); // Track current time for status calculations
+  const [currentTime, setCurrentTime] = useState(nowIST()); // Track current IST time for status calculations
   const calendarRef = useRef<HTMLDivElement>(null);
 
   // SuperAdmin, CompanyAdmin, Manager, and SessionAdmin can create sessions
@@ -100,7 +101,7 @@ const Sessions: React.FC = () => {
   useEffect(() => {
     // Update current time every minute to trigger re-calculation of session statuses
     const interval = setInterval(() => {
-      setCurrentTime(new Date());
+      setCurrentTime(nowIST()); // Update to current IST time
     }, 60000); // Check every minute
 
     return () => clearInterval(interval);
@@ -160,115 +161,33 @@ const Sessions: React.FC = () => {
     }
   };
 
-  // Helper: Check if a session is past (10 minutes after end time)
-  // CRITICAL: Do NOT use lateTimeLimit or gracePeriod - those only affect attendance marking, not session visibility
-  const isSessionPast = (session: ISession): boolean => {
-    try {
-      // Handle special cases
-      if (session.isCancelled) return false; // Cancelled sessions are not "past"
-      if (session.isCompleted) return true; // Completed sessions are always past
+  // ============================================
+  // SESSION STATUS - NOW USING SHARED UTILITY
+  // ============================================
+  // All status logic moved to: src/utils/sessionStatusUtils.ts
 
-      const now = currentTime;
+  // Wrapper with debug logging
+  const getSessionStatusWithLogging = (session: ISession) => {
+    const status = getSessionStatus(session, currentTime);
 
-      // Parse End Time (e.g. "17:14")
-      if (!session.endTime || typeof session.endTime !== 'string' || !session.endTime.includes(':')) {
-        // If no end time, assume end of day
-        const endDateTime = new Date(session.endDate || session.startDate);
-        endDateTime.setHours(23, 59, 59, 999);
-        const cutoffTime = new Date(endDateTime.getTime() + 10 * 60000);
-        return now.getTime() > cutoffTime.getTime();
-      }
-
-      const [hours, minutes] = session.endTime.split(':').map(Number);
-
-      // Create Date object for session date + end time
-      const endDateTime = new Date(session.endDate || session.startDate);
-      endDateTime.setHours(hours, minutes, 0, 0);
-
-      // Handle overnight sessions (if end time < start time on the same day)
-      if (!session.endDate && session.startTime) {
-        const [startHours, startMinutes] = session.startTime.split(':').map(Number);
-        const startDateTime = new Date(session.startDate);
-        startDateTime.setHours(startHours, startMinutes, 0, 0);
-        if (endDateTime < startDateTime) {
-          endDateTime.setDate(endDateTime.getDate() + 1);
-        }
-      }
-
-      // Add 10 Minute Buffer
-      const cutoffTime = new Date(endDateTime.getTime() + 10 * 60000);
-
-      return now.getTime() > cutoffTime.getTime();
-    } catch (error) {
-      console.error('Error checking if session is past:', error);
-      return false; // Default to not past if parsing fails
+    // DEBUG: Log status calculation for today's sessions
+    const isToday = isSameDay(new Date(session.startDate), new Date());
+    if (isToday) {
+      console.log('🔍 SESSION STATUS DEBUG:', {
+        sessionId: session._id,
+        sessionName: session.name,
+        startDate: session.startDate,
+        startTime: session.startTime,
+        endTime: session.endTime,
+        currentTime: currentTime.toISOString(),
+        calculatedStatus: status,
+        isCancelled: session.isCancelled,
+        isCompleted: session.isCompleted,
+        source: 'Sessions.tsx'
+      });
     }
-  };
 
-  // Status Helper: Returns 'Past', 'Live', or 'Upcoming'
-  // CRITICAL: Grace Period (Late Attendance Limit) is NEVER used here - it only affects attendance status (Present vs Late)
-  const getSessionStatus = (session: ISession): 'Past' | 'Live' | 'Upcoming' => {
-    try {
-      // Handle cancelled/completed sessions
-      if (session.isCancelled) return 'Upcoming'; // Let cancelled badge handle display
-      if (session.isCompleted) return 'Past';
-
-      const now = currentTime;
-
-      // Parse Start Time
-      const startDateTime = new Date(session.startDate);
-      if (session.startTime && typeof session.startTime === 'string' && session.startTime.includes(':')) {
-        const [startHours, startMinutes] = session.startTime.split(':').map(Number);
-        startDateTime.setHours(startHours, startMinutes, 0, 0);
-      }
-
-      // Parse End Time
-      let endDateTime: Date;
-      if (session.endDate) {
-        endDateTime = new Date(session.endDate);
-      } else {
-        endDateTime = new Date(session.startDate);
-      }
-
-      if (session.endTime && typeof session.endTime === 'string' && session.endTime.includes(':')) {
-        const [endHours, endMinutes] = session.endTime.split(':').map(Number);
-        endDateTime.setHours(endHours, endMinutes, 0, 0);
-
-        // Handle overnight sessions
-        if (!session.endDate && endDateTime < startDateTime) {
-          endDateTime.setDate(endDateTime.getDate() + 1);
-        }
-      } else {
-        endDateTime.setHours(23, 59, 59, 999);
-      }
-
-      // Define cutoff: End Time + 10 minute buffer
-      // CRITICAL: Do NOT use lateTimeLimit, gracePeriod, or any other attendance-related timing
-      const cutoffTime = new Date(endDateTime.getTime() + 10 * 60000);
-
-      // Status Logic (Strict - Grace Period is NEVER used here)
-      // "Upcoming": now < startDateTime
-      if (now.getTime() < startDateTime.getTime()) return 'Upcoming';
-
-      // "Live": now >= startDateTime AND now <= cutoffTime
-      // A session remains "Live" until 10 minutes AFTER the end time
-      if (now.getTime() >= startDateTime.getTime() && now.getTime() <= cutoffTime.getTime()) return 'Live';
-
-      // "Past Session": ONLY if now > cutoffTime
-      return 'Past';
-    } catch (error) {
-      console.error('Error parsing session status:', error);
-      return 'Upcoming'; // Default to upcoming if parsing fails
-    }
-  };
-
-  // Robust Date Comparison Helper (Local Time)
-  const isSameDay = (d1: Date, d2: Date) => {
-    return (
-      d1.getFullYear() === d2.getFullYear() &&
-      d1.getMonth() === d2.getMonth() &&
-      d1.getDate() === d2.getDate()
-    );
+    return status;
   };
 
   // Filter sessions based on selected date or default logic
@@ -292,14 +211,14 @@ const Sessions: React.FC = () => {
       }
       // Use isSessionPast to filter - only show sessions that are NOT past (Live or Upcoming)
       // CRITICAL: This uses the same logic as getSessionStatus to ensure consistency
-      return sessions.filter(session => !isSessionPast(session));
+      return sessions.filter(session => !isSessionPast(session, currentTime));
     }
   };
 
   const filteredSessions = getFilteredSessions();
 
-  // Separate sessions into past (for past sessions toggle) - using isSessionPast for consistency
-  const pastSessions = sessions.filter(session => isSessionPast(session));
+  // Separate sessions into past (for past sessions toggle) - using isSessionPast with currentTime for consistency
+  const pastSessions = sessions.filter(session => isSessionPast(session, currentTime));
 
   // Determine which sessions to display (with limit if no date selected)
   const SESSION_LIMIT = 7;
@@ -522,10 +441,10 @@ const Sessions: React.FC = () => {
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 w-full">
                     {displayedSessions.map((session) => {
-                      const sessionStatus = getSessionStatus(session);
-                      const isPast = sessionStatus === 'Past';
-                      const isLive = sessionStatus === 'Live';
-                      const isUpcoming = sessionStatus === 'Upcoming';
+                      const sessionStatus = getSessionStatusWithLogging(session);
+                      const isPast = sessionStatus === 'past';
+                      const isLive = sessionStatus === 'live';
+                      const isUpcoming = sessionStatus === 'upcoming';
                       const isToday = isSessionToday(session);
                       const showScanButton = isEndUser && isToday;
 

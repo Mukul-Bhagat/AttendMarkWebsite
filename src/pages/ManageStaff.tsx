@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import api from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import BulkImportStaff from '../components/BulkImportStaff';
+import EditUserModal from '../components/EditUserModal';
 
 type StaffUser = {
   _id?: string;
@@ -24,7 +25,7 @@ type StaffUser = {
 const ManageStaff: React.FC = () => {
   const { user, isSuperAdmin, isCompanyAdmin, isPlatformOwner } = useAuth();
   const canManageQuota = isSuperAdmin || isCompanyAdmin || isPlatformOwner;
-  
+
   // Form state
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -60,21 +61,26 @@ const ManageStaff: React.FC = () => {
   // Bulk import state
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
+  // Edit user modal state
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedUserForEdit, setSelectedUserForEdit] = useState<StaffUser | null>(null);
+
   // Fetch existing staff
   const fetchStaff = async () => {
     try {
       setIsLoading(true);
       setError(''); // Clear any previous errors
       const { data } = await api.get('/api/users/my-organization');
-      
+
       // Define allowed roles for staff list
       const allowedRoles = ['SessionAdmin', 'Manager'];
-      // Platform Owner can also see Company Admins
-      if (isPlatformOwner) {
-        allowedRoles.push('CompanyAdmin');
+      // SuperAdmin and CompanyAdmin can see Company Admins (stored as 'SuperAdmin' in backend)
+      if (isPlatformOwner || isSuperAdmin || isCompanyAdmin) {
+        allowedRoles.push('SuperAdmin'); // Backend role for Company Admin
+        allowedRoles.push('CompanyAdmin'); // Legacy support
       }
-      
-      // Filter for staff roles (Manager, SessionAdmin, and CompanyAdmin for Platform Owner)
+
+      // Filter for staff roles (Manager, SessionAdmin, and SuperAdmin/CompanyAdmin for admins)
       const staff = data.filter((user: StaffUser) => allowedRoles.includes(user.role));
       setStaffList(staff);
     } catch (err: any) {
@@ -171,7 +177,7 @@ const ManageStaff: React.FC = () => {
     try {
       // Use the API endpoint from Step 11
       const { data } = await api.post('/api/users/staff', staffData);
-      
+
       setMessage(data.msg || `${role} created successfully`);
       clearForm();
       // Refresh the list immediately
@@ -223,7 +229,7 @@ const ManageStaff: React.FC = () => {
       setIsSavingQuota(true);
       const staffId = selectedStaffForQuota._id || selectedStaffForQuota.id;
       await api.put(`/api/users/${staffId}/quota`, quotaForm);
-      
+
       setMessage(`Leave quota updated for ${selectedStaffForQuota.profile.firstName} ${selectedStaffForQuota.profile.lastName}`);
       handleCloseQuotaModal();
       fetchStaff(); // Refresh staff list
@@ -241,7 +247,7 @@ const ManageStaff: React.FC = () => {
       setIsSavingQuota(true);
       const staffId = selectedStaffForQuota._id || selectedStaffForQuota.id;
       await api.put(`/api/users/${staffId}/quota`, { resetToDefault: true });
-      
+
       setMessage(`Leave quota reset to default for ${selectedStaffForQuota.profile.firstName} ${selectedStaffForQuota.profile.lastName}`);
       handleCloseQuotaModal();
       fetchStaff(); // Refresh staff list
@@ -264,7 +270,7 @@ const ManageStaff: React.FC = () => {
 
     try {
       await api.put(`/api/users/${staffId}/reset-device`);
-      
+
       setMessage('Staff device reset successfully. New credentials have been emailed.');
       // Refresh the list to show updated device status
       await fetchStaff();
@@ -291,7 +297,7 @@ const ManageStaff: React.FC = () => {
 
     try {
       await api.put(`/api/users/${staffId}/reset-device-only`);
-      
+
       setMessage('Device ID reset successfully! Staff member can now register a new device.');
       // Refresh the list to show updated device status
       await fetchStaff();
@@ -318,7 +324,7 @@ const ManageStaff: React.FC = () => {
 
     try {
       const { data } = await api.delete(`/api/users/${staffId}`);
-      
+
       setMessage(data.msg || 'Staff member deleted successfully');
       // Refresh the list
       await fetchStaff();
@@ -338,23 +344,23 @@ const ManageStaff: React.FC = () => {
     const staffName = `${staff.profile.firstName} ${staff.profile.lastName}`.toLowerCase();
     const staffEmail = staff.email.toLowerCase();
     const searchLower = searchTerm.toLowerCase();
-    
+
     // Search filter: check if name or email includes search term
-    const matchesSearch = !searchTerm || 
-      staffName.includes(searchLower) || 
+    const matchesSearch = !searchTerm ||
+      staffName.includes(searchLower) ||
       staffEmail.includes(searchLower);
-    
+
     // Role filter: check if role matches
     // Map dropdown values to actual role values
     const roleMap: { [key: string]: string } = {
       'All Roles': 'All',
       'Session Admin': 'SessionAdmin',
       'Manager': 'Manager',
-      ...(isPlatformOwner ? { 'Company Admin': 'CompanyAdmin' } : {})
+      ...(isPlatformOwner || isSuperAdmin || isCompanyAdmin ? { 'Company Admin': 'SuperAdmin' } : {})
     };
     const mappedRole = roleMap[roleFilter] || roleFilter;
-    const matchesRole = mappedRole === 'All' || staff.role === mappedRole;
-    
+    const matchesRole = mappedRole === 'All' || staff.role === mappedRole || (mappedRole === 'SuperAdmin' && staff.role === 'CompanyAdmin');
+
     return matchesSearch && matchesRole;
   });
 
@@ -567,7 +573,7 @@ const ManageStaff: React.FC = () => {
                     />
                   </div>
                   <div className="relative min-w-[180px]">
-                    <select 
+                    <select
                       className="form-select w-full appearance-none rounded-lg text-sm text-[#181511] dark:text-white focus:outline-0 focus:ring-2 focus:ring-[#f04129] border border-[#e6e2db] dark:border-slate-600 bg-white dark:bg-slate-800 focus:border-primary/50 dark:focus:border-primary/50 h-12 px-4"
                       value={roleFilter}
                       onChange={(e) => setRoleFilter(e.target.value)}
@@ -575,7 +581,7 @@ const ManageStaff: React.FC = () => {
                       <option value="All Roles">All Roles</option>
                       <option value="Session Admin">Session Admin</option>
                       <option value="Manager">Manager</option>
-                      {isPlatformOwner && <option value="Company Admin">Company Admin</option>}
+                      {(isPlatformOwner || isSuperAdmin || isCompanyAdmin) && <option value="Company Admin">Company Admin</option>}
                     </select>
                     <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">expand_more</span>
                   </div>
@@ -584,7 +590,7 @@ const ManageStaff: React.FC = () => {
                 {staffList.length === 0 ? (
                   <div className="text-center py-12">
                     <p className="text-[#8a7b60] dark:text-gray-400 text-base mb-2">No staff members found.</p>
-                    <p className="text-[#8a7b60] dark:text-gray-400 text-sm">Create your first staff member using the form above.</p>
+                    <p className="text-[#8a7b60] dark:text-gray-400 text-sm">Try adjusting your search or filter criteria.</p>
                   </div>
                 ) : filteredStaff.length === 0 ? (
                   <div className="text-center py-12">
@@ -608,16 +614,16 @@ const ManageStaff: React.FC = () => {
                       <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                         {filteredStaff.map((staff) => {
                           const staffId = staff._id || staff.id || '';
-                          const roleDisplay = staff.role === 'SessionAdmin' 
-                            ? 'Session Admin' 
-                            : staff.role === 'CompanyAdmin' 
-                            ? 'Company Admin' 
-                            : staff.role;
+                          const roleDisplay = staff.role === 'SessionAdmin'
+                            ? 'Session Admin'
+                            : staff.role === 'SuperAdmin' || staff.role === 'CompanyAdmin'
+                              ? 'Company Admin'
+                              : staff.role;
                           const isDeviceLocked = !!staff.registeredDeviceId;
                           const isResetting = resettingDevice === staffId;
                           const isDeleting = deletingStaff === staffId;
                           const staffName = `${staff.profile.firstName} ${staff.profile.lastName}`;
-                          
+
                           // Determine if current user can reset this staff member's device
                           // Platform Owner can reset ANYONE, including Company Admin
                           // Company Admin can reset themselves OR subordinates (Manager, SessionAdmin)
@@ -626,19 +632,19 @@ const ManageStaff: React.FC = () => {
                           const isCurrentUser = staffId === currentUserId;
                           const isSubordinate = ['Manager', 'SessionAdmin'].includes(staff.role);
                           const canResetDevice = isPlatformOwner || isSuperAdmin || (isCompanyAdmin && (isCurrentUser || isSubordinate));
-                          
+
                           // Determine if current user can delete this staff member
                           // SuperAdmin can delete, but not themselves
                           const canDeleteStaff = isSuperAdmin && !isCurrentUser;
-                          
+
                           return (
                             <tr key={staffId} className="hover:bg-red-50 dark:hover:bg-[#f04129]/10 transition-colors duration-150">
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                                 <div className="flex items-center gap-2">
                                   <span>{staffName}</span>
                                   {isDeviceLocked && (
-                                    <span 
-                                      className="material-symbols-outlined text-red-600 dark:text-red-400 text-sm cursor-help" 
+                                    <span
+                                      className="material-symbols-outlined text-red-600 dark:text-red-400 text-sm cursor-help"
                                       title="Account Locked / Device Bound"
                                     >
                                       lock
@@ -655,7 +661,7 @@ const ManageStaff: React.FC = () => {
                                     <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>shield_person</span>
                                     {roleDisplay}
                                   </span>
-                                ) : staff.role === 'CompanyAdmin' ? (
+                                ) : (staff.role === 'SuperAdmin' || staff.role === 'CompanyAdmin') ? (
                                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs leading-5 font-semibold rounded-full border bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/50 dark:text-purple-300 dark:border-purple-800">
                                     <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>admin_panel_settings</span>
                                     {roleDisplay}
@@ -680,11 +686,28 @@ const ManageStaff: React.FC = () => {
                                     >
                                       <span className="material-symbols-outlined text-xl">more_vert</span>
                                     </button>
-                                    
+
                                     {openMenuId === staffId && (
                                       <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 z-50">
                                         <ul className="py-1">
-                                          {/* 1. Manage Leave Quota */}
+                                          {/* 1. Edit Profile */}
+                                          {(isSuperAdmin || isCompanyAdmin) && (
+                                            <li>
+                                              <button
+                                                onClick={() => {
+                                                  setOpenMenuId(null);
+                                                  setSelectedUserForEdit(staff);
+                                                  setIsEditModalOpen(true);
+                                                }}
+                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                                              >
+                                                <span className="material-symbols-outlined text-lg">edit</span>
+                                                <span>Edit Profile</span>
+                                              </button>
+                                            </li>
+                                          )}
+
+                                          {/* 2. Manage Leave Quota */}
                                           {canManageQuota && (
                                             <li>
                                               <button
@@ -699,8 +722,8 @@ const ManageStaff: React.FC = () => {
                                               </button>
                                             </li>
                                           )}
-                                          
-                                          {/* 2. Reset Device ID: Show for:
+
+                                          {/* 3. Reset Device ID: Show for:
                                               - SuperAdmin (when device is locked)
                                               - Platform Owner (can reset anyone)
                                               - Company Admin (can reset themselves or subordinates) */}
@@ -735,8 +758,8 @@ const ManageStaff: React.FC = () => {
                                               </button>
                                             </li>
                                           )}
-                                          
-                                          {/* 3. Delete Staff: Only show for SuperAdmin, and hide if trying to delete themselves */}
+
+                                          {/* 4. Delete Staff: Only show for SuperAdmin, hide if trying to delete themselves or if user is CompanyAdmin trying to delete themselves */}
                                           {canDeleteStaff && (
                                             <li>
                                               <button
@@ -744,8 +767,9 @@ const ManageStaff: React.FC = () => {
                                                   setOpenMenuId(null);
                                                   handleDeleteStaff(staffId, staffName);
                                                 }}
-                                                disabled={isDeleting}
+                                                disabled={isDeleting || ((staff.role === 'SuperAdmin' || staff.role === 'CompanyAdmin') && isCurrentUser)}
                                                 className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                title={((staff.role === 'SuperAdmin' || staff.role === 'CompanyAdmin') && isCurrentUser) ? 'You cannot delete yourself' : ''}
                                               >
                                                 {isDeleting ? (
                                                   <>
@@ -799,7 +823,7 @@ const ManageStaff: React.FC = () => {
                   <span className="material-symbols-outlined">close</span>
                 </button>
               </div>
-              
+
               <p className="text-sm text-[#8a7b60] dark:text-gray-400 mb-4">
                 Setting custom leave quotas for <strong>{selectedStaffForQuota.profile.firstName} {selectedStaffForQuota.profile.lastName}</strong>
               </p>
@@ -880,6 +904,22 @@ const ManageStaff: React.FC = () => {
         onClose={() => setIsImportModalOpen(false)}
         onSuccess={fetchStaff}
       />
+
+      {/* Edit User Modal */}
+      {selectedUserForEdit && (
+        <EditUserModal
+          user={selectedUserForEdit}
+          isOpen={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setSelectedUserForEdit(null);
+          }}
+          onSave={() => {
+            setMessage(`Profile updated for ${selectedUserForEdit.profile.firstName} ${selectedUserForEdit.profile.lastName}`);
+            fetchStaff();
+          }}
+        />
+      )}
     </div>
   );
 };

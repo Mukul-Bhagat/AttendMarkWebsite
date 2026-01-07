@@ -5,6 +5,7 @@ import { IClassBatch } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import jsPDF from 'jspdf';
+import SessionAttendanceView from '../components/attendance/SessionAttendanceView';
 
 interface AnalyticsData {
   timeline: Array<{ date: string; percentage: number; lateCount?: number }>;
@@ -65,7 +66,7 @@ const AttendanceReport: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingFilters, setIsLoadingFilters] = useState(true);
   const [error, setError] = useState('');
-  
+
   // Force Mark Modal State
   const [showForceMarkModal, setShowForceMarkModal] = useState(false);
   const [forceMarkDate, setForceMarkDate] = useState('');
@@ -76,6 +77,10 @@ const AttendanceReport: React.FC = () => {
   const [availableSessions, setAvailableSessions] = useState<Array<{ _id: string; name: string; startDate: string }>>([]);
   const [isSubmittingForceMark, setIsSubmittingForceMark] = useState(false);
   const [forceMarkError, setForceMarkError] = useState('');
+
+  // Viewing session attendance state
+  const [viewingSessionId, setViewingSessionId] = useState<string | null>(null);
+  const [viewingSessionDate, setViewingSessionDate] = useState<string | null>(null);
 
   // Fetch classes on mount
   useEffect(() => {
@@ -103,11 +108,11 @@ const AttendanceReport: React.FC = () => {
   useEffect(() => {
     const classBatchId = searchParams.get('classBatchId');
     const tab = searchParams.get('tab');
-    
+
     if (classBatchId) {
       setSelectedClass(classBatchId);
     }
-    
+
     if (tab === 'logs' || tab === 'analytics') {
       setActiveTab(tab);
     }
@@ -118,7 +123,7 @@ const AttendanceReport: React.FC = () => {
     const today = new Date();
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(today.getDate() - 30);
-    
+
     setEndDate(today.toISOString().split('T')[0]);
     setStartDate(thirtyDaysAgo.toISOString().split('T')[0]);
   }, []);
@@ -176,7 +181,7 @@ const AttendanceReport: React.FC = () => {
       // Small delay to ensure state is set
       const timer = setTimeout(() => {
         if (!selectedClass || !startDate || !endDate) return;
-        
+
         setIsLoading(true);
         setError('');
         setAnalyticsData(null);
@@ -216,7 +221,7 @@ const AttendanceReport: React.FC = () => {
             setIsLoading(false);
           }
         };
-        
+
         fetchData();
       }, 100);
       return () => clearTimeout(timer);
@@ -268,12 +273,12 @@ const AttendanceReport: React.FC = () => {
         } else if (record.locationVerified) {
           status = 'Verified';
         }
-        
+
         // Get approver name for On Leave status
         const approverName = record.attendanceStatus === 'On Leave' && record.approvedBy
           ? `${record.approvedBy.profile.firstName} ${record.approvedBy.profile.lastName}`
           : '';
-        
+
         return [
           record.userId
             ? `${record.userId.profile.firstName} ${record.userId.profile.lastName}`
@@ -382,7 +387,7 @@ const AttendanceReport: React.FC = () => {
         } else if (record.locationVerified) {
           status = 'Verified';
         }
-        
+
         // Get approver name for On Leave status
         const approverName = record.attendanceStatus === 'On Leave' && record.approvedBy
           ? `${record.approvedBy.profile.firstName} ${record.approvedBy.profile.lastName}`
@@ -475,10 +480,10 @@ const AttendanceReport: React.FC = () => {
   // Prepare pie chart data
   const pieData = analyticsData
     ? [
-        { name: 'Present', value: analyticsData.summary.present, color: '#22c55e' },
-        { name: 'Late', value: analyticsData.summary.late || 0, color: '#eab308' },
-        { name: 'Absent', value: analyticsData.summary.absent, color: '#ef4444' },
-      ].filter(item => item.value > 0) // Only show categories with values > 0
+      { name: 'Present', value: analyticsData.summary.present, color: '#22c55e' },
+      { name: 'Late', value: analyticsData.summary.late || 0, color: '#eab308' },
+      { name: 'Absent', value: analyticsData.summary.absent, color: '#ef4444' },
+    ].filter(item => item.value > 0) // Only show categories with values > 0
     : [];
 
   if (isLoadingFilters) {
@@ -625,11 +630,10 @@ const AttendanceReport: React.FC = () => {
                       handleViewReport();
                     }
                   }}
-                  className={`px-6 py-3 text-sm font-semibold transition-colors ${
-                    activeTab === 'analytics'
-                      ? 'bg-white dark:bg-slate-800 text-[#f04129] border-b-2 border-[#f04129]'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-[#181511] dark:hover:text-white'
-                  }`}
+                  className={`px-6 py-3 text-sm font-semibold transition-colors ${activeTab === 'analytics'
+                    ? 'bg-white dark:bg-slate-800 text-[#f04129] border-b-2 border-[#f04129]'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-[#181511] dark:hover:text-white'
+                    }`}
                 >
                   <span className="material-symbols-outlined align-middle mr-2">analytics</span>
                   Analytics
@@ -641,11 +645,10 @@ const AttendanceReport: React.FC = () => {
                       handleViewReport();
                     }
                   }}
-                  className={`px-6 py-3 text-sm font-semibold transition-colors ${
-                    activeTab === 'logs'
-                      ? 'bg-white dark:bg-slate-800 text-[#f04129] border-b-2 border-[#f04129]'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-[#181511] dark:hover:text-white'
-                  }`}
+                  className={`px-6 py-3 text-sm font-semibold transition-colors ${activeTab === 'logs'
+                    ? 'bg-white dark:bg-slate-800 text-[#f04129] border-b-2 border-[#f04129]'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-[#181511] dark:hover:text-white'
+                    }`}
                 >
                   <span className="material-symbols-outlined align-middle mr-2">description</span>
                   Attendance Logs
@@ -670,7 +673,7 @@ const AttendanceReport: React.FC = () => {
             {!isLoading && activeTab === 'analytics' && analyticsData && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Section 1: Trends & Stats (Top Row) */}
-                
+
                 {/* Left: Line Chart - Attendance Trend */}
                 <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-[#e6e2db] dark:border-slate-700 p-6">
                   <h3 className="text-[#181511] dark:text-white text-lg font-bold mb-4 flex items-center">
@@ -681,14 +684,14 @@ const AttendanceReport: React.FC = () => {
                     <ResponsiveContainer width="100%" height={256}>
                       <LineChart data={analyticsData.timeline}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e6e2db" className="dark:stroke-slate-700" />
-                        <XAxis 
-                          dataKey="date" 
+                        <XAxis
+                          dataKey="date"
                           stroke="#8a7b60"
                           className="dark:stroke-gray-400"
                           tick={{ fill: '#8a7b60', className: 'dark:fill-gray-400' }}
                           style={{ fontSize: '12px' }}
                         />
-                        <YAxis 
+                        <YAxis
                           stroke="#8a7b60"
                           className="dark:stroke-gray-400"
                           tick={{ fill: '#8a7b60', className: 'dark:fill-gray-400' }}
@@ -696,19 +699,19 @@ const AttendanceReport: React.FC = () => {
                           domain={[0, 100]}
                           label={{ value: 'Percentage (%)', angle: -90, position: 'insideLeft', fill: '#8a7b60', className: 'dark:fill-gray-400' }}
                         />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'white', 
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'white',
                             border: '1px solid #e6e2db',
                             borderRadius: '8px',
                             color: '#181511'
                           }}
                           labelStyle={{ color: '#181511' }}
                         />
-                        <Line 
-                          type="monotone" 
-                          dataKey="percentage" 
-                          stroke="#f04129" 
+                        <Line
+                          type="monotone"
+                          dataKey="percentage"
+                          stroke="#f04129"
                           strokeWidth={2}
                           dot={{ fill: '#f04129', r: 4 }}
                           activeDot={{ r: 6 }}
@@ -745,15 +748,15 @@ const AttendanceReport: React.FC = () => {
                             <Cell key={`cell-${index}`} fill={entry.color} />
                           ))}
                         </Pie>
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'white', 
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'white',
                             border: '1px solid #e6e2db',
                             borderRadius: '8px',
                             color: '#181511'
                           }}
                         />
-                        <Legend 
+                        <Legend
                           wrapperStyle={{ fontSize: '14px', color: '#8a7b60' }}
                           className="dark:text-gray-400"
                         />
@@ -767,7 +770,7 @@ const AttendanceReport: React.FC = () => {
                 </div>
 
                 {/* Section 2: Leaderboards (Bottom Row) */}
-                
+
                 {/* Left: Top 5 Performers */}
                 <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-[#e6e2db] dark:border-slate-700 p-6">
                   <h3 className="text-[#181511] dark:text-white text-lg font-bold mb-4 flex items-center">
@@ -919,6 +922,18 @@ const AttendanceReport: React.FC = () => {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                 <div className="flex items-center gap-2">
+                                  {/* NEW: Manage Attendance Button */}
+                                  <button
+                                    onClick={() => {
+                                      setViewingSessionId(log._id);
+                                      setViewingSessionDate(log.date);
+                                    }}
+                                    className="inline-flex items-center px-3 py-1.5 text-xs font-medium bg-[#f04129] hover:bg-[#d63a25] text-white rounded transition-colors"
+                                    title="Manage attendance (view all users, make corrections)"
+                                  >
+                                    <span className="material-symbols-outlined text-base mr-1">manage_accounts</span>
+                                    Manage
+                                  </button>
                                   <button
                                     onClick={() => fetchSessionAttendanceDetails(log._id)}
                                     className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-[#f04129] hover:text-[#d63a25] dark:text-[#f04129] dark:hover:text-[#ff6b5a] transition-colors"
@@ -991,9 +1006,9 @@ const AttendanceReport: React.FC = () => {
                                                       🏖️ On Leave
                                                     </span>
                                                   ) : record.isLate ? (
-                                                    <span 
+                                                    <span
                                                       className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300"
-                                                      title={record.lateByMinutes 
+                                                      title={record.lateByMinutes
                                                         ? `Late by ${record.lateByMinutes} ${record.lateByMinutes === 1 ? 'minute' : 'minutes'}`
                                                         : 'Late'}
                                                     >
@@ -1234,6 +1249,22 @@ const AttendanceReport: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Session Attendance View Modal */}
+      {viewingSessionId && (
+        <SessionAttendanceView
+          sessionId={viewingSessionId}
+          sessionDate={viewingSessionDate || undefined}
+          onClose={() => {
+            setViewingSessionId(null);
+            setViewingSessionDate(null);
+            // Optionally refresh the session logs
+            if (selectedClass && startDate && endDate && activeTab === 'logs') {
+              handleViewReport();
+            }
+          }}
+        />
       )}
     </div>
   );

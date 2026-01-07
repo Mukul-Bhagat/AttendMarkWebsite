@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import api from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import Papa from 'papaparse';
+import EditUserModal from '../components/EditUserModal';
 
 type EndUser = {
   _id?: string;
@@ -24,7 +25,7 @@ type EndUser = {
 const ManageUsers: React.FC = () => {
   const { isSuperAdmin, isCompanyAdmin, isPlatformOwner } = useAuth();
   const canManageQuota = isSuperAdmin || isCompanyAdmin;
-  
+
   // Form state
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -44,14 +45,14 @@ const ManageUsers: React.FC = () => {
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Status');
-  
+
   // Quota management state
   const [quotaModalOpen, setQuotaModalOpen] = useState(false);
   const [selectedUserForQuota, setSelectedUserForQuota] = useState<EndUser | null>(null);
   const [quotaForm, setQuotaForm] = useState({ pl: 12, cl: 12, sl: 10 });
   const [isSavingQuota, setIsSavingQuota] = useState(false);
   const orgDefaults = { pl: 12, cl: 12, sl: 10 };
-  
+
   // Bulk import state
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -64,6 +65,10 @@ const ManageUsers: React.FC = () => {
   // Dropdown menu state
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const menuRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+
+  // Edit user modal state
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedUserForEdit, setSelectedUserForEdit] = useState<EndUser | null>(null);
 
   // Fetch existing EndUsers
   const fetchUsers = async () => {
@@ -148,7 +153,7 @@ const ManageUsers: React.FC = () => {
 
     try {
       const { data } = await api.post('/api/users/end-user', userData);
-      
+
       setMessage(data.msg || 'EndUser created successfully');
       clearForm();
       // Refresh the list immediately
@@ -179,7 +184,7 @@ const ManageUsers: React.FC = () => {
 
     try {
       await api.put(`/api/users/${userId}/reset-device`);
-      
+
       setMessage('Device reset successfully! A new password has been generated and emailed to the user.');
       // Refresh the list to show updated device status
       await fetchUsers();
@@ -206,7 +211,7 @@ const ManageUsers: React.FC = () => {
 
     try {
       await api.put(`/api/users/${userId}/reset-device-only`);
-      
+
       setMessage('Device ID reset successfully! User can now register a new device.');
       // Refresh the list to show updated device status
       await fetchUsers();
@@ -298,12 +303,12 @@ const ManageUsers: React.FC = () => {
             email: row[emailKey]?.trim() || '',
             phone: phoneKey ? (row[phoneKey]?.trim() || '') : '',
           };
-          
+
           // Only include role if the column exists
           if (roleKey) {
             userObj.role = row[roleKey]?.trim() || '';
           }
-          
+
           return userObj;
         }).filter(user => user.firstName && user.lastName && user.email); // Filter out empty rows
 
@@ -377,7 +382,7 @@ const ManageUsers: React.FC = () => {
       setIsSavingQuota(true);
       const userId = selectedUserForQuota._id || selectedUserForQuota.id;
       await api.put(`/api/users/${userId}/quota`, quotaForm);
-      
+
       setMessage(`Leave quota updated for ${selectedUserForQuota.profile.firstName} ${selectedUserForQuota.profile.lastName}`);
       handleCloseQuotaModal();
       fetchUsers(); // Refresh user list
@@ -395,7 +400,7 @@ const ManageUsers: React.FC = () => {
       setIsSavingQuota(true);
       const userId = selectedUserForQuota._id || selectedUserForQuota.id;
       await api.put(`/api/users/${userId}/quota`, { resetToDefault: true });
-      
+
       setMessage(`Leave quota reset to default for ${selectedUserForQuota.profile.firstName} ${selectedUserForQuota.profile.lastName}`);
       handleCloseQuotaModal();
       fetchUsers(); // Refresh user list
@@ -418,7 +423,7 @@ const ManageUsers: React.FC = () => {
 
     try {
       const { data } = await api.delete(`/api/users/${userId}`);
-      
+
       setMessage(data.msg || 'User deleted successfully');
       // Refresh the list
       await fetchUsers();
@@ -438,18 +443,18 @@ const ManageUsers: React.FC = () => {
     const userName = `${user.profile.firstName} ${user.profile.lastName}`.toLowerCase();
     const userEmail = user.email.toLowerCase();
     const searchLower = searchTerm.toLowerCase();
-    
+
     // Search filter: check if name or email includes search term
-    const matchesSearch = !searchTerm || 
-      userName.includes(searchLower) || 
+    const matchesSearch = !searchTerm ||
+      userName.includes(searchLower) ||
       userEmail.includes(searchLower);
-    
+
     // Status filter: check if device is locked/unlocked
     const isDeviceLocked = !!user.registeredDeviceId;
-    const matchesStatus = statusFilter === 'All Status' || 
+    const matchesStatus = statusFilter === 'All Status' ||
       (statusFilter === 'Locked' && isDeviceLocked) ||
       (statusFilter === 'Unlocked' && !isDeviceLocked);
-    
+
     return matchesSearch && matchesStatus;
   });
 
@@ -648,7 +653,7 @@ const ManageUsers: React.FC = () => {
                           />
                         </div>
                         <div className="relative">
-                          <select 
+                          <select
                             className="form-select w-full appearance-none rounded-lg border border-[#e6e2db] dark:border-slate-600 bg-white dark:bg-slate-800 py-2 pl-3 pr-8 text-sm text-[#181511] dark:text-white focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-[#f04129] dark:focus:border-primary/50"
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value)}
@@ -696,7 +701,7 @@ const ManageUsers: React.FC = () => {
                               const isResetting = resettingDevice === userId;
                               const isDeleting = deletingUser === userId;
                               const userName = `${user.profile.firstName} ${user.profile.lastName}`;
-                              
+
                               // Determine if current user can reset this user's device
                               // SuperAdmin, CompanyAdmin, and Platform Owner can reset EndUsers
                               const canResetDevice = isSuperAdmin || isCompanyAdmin || isPlatformOwner;
@@ -707,8 +712,8 @@ const ManageUsers: React.FC = () => {
                                     <div className="flex items-center gap-2">
                                       <span>{userName}</span>
                                       {isDeviceLocked && (
-                                        <span 
-                                          className="material-symbols-outlined text-red-600 dark:text-red-400 text-sm cursor-help" 
+                                        <span
+                                          className="material-symbols-outlined text-red-600 dark:text-red-400 text-sm cursor-help"
                                           title="Account Locked / Device Bound"
                                         >
                                           lock
@@ -732,11 +737,28 @@ const ManageUsers: React.FC = () => {
                                         >
                                           <span className="material-symbols-outlined text-xl">more_vert</span>
                                         </button>
-                                        
+
                                         {openMenuId === userId && (
                                           <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 z-50">
                                             <ul className="py-1">
-                                              {/* 1. Manage Leave Quota */}
+                                              {/* 1. Edit Profile */}
+                                              {(isSuperAdmin || isCompanyAdmin) && (
+                                                <li>
+                                                  <button
+                                                    onClick={() => {
+                                                      setOpenMenuId(null);
+                                                      setSelectedUserForEdit(user);
+                                                      setIsEditModalOpen(true);
+                                                    }}
+                                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                                                  >
+                                                    <span className="material-symbols-outlined text-lg">edit</span>
+                                                    <span>Edit Profile</span>
+                                                  </button>
+                                                </li>
+                                              )}
+
+                                              {/* 2. Manage Leave Quota */}
                                               {canManageQuota && (
                                                 <li>
                                                   <button
@@ -751,8 +773,8 @@ const ManageUsers: React.FC = () => {
                                                   </button>
                                                 </li>
                                               )}
-                                              
-                                              {/* 2. Reset Device ID: Show for SuperAdmin, CompanyAdmin, or Platform Owner */}
+
+                                              {/* 3. Reset Device ID: Show for SuperAdmin, CompanyAdmin, or Platform Owner */}
                                               {canResetDevice && (
                                                 <li>
                                                   <button
@@ -785,8 +807,8 @@ const ManageUsers: React.FC = () => {
                                                   </button>
                                                 </li>
                                               )}
-                                              
-                                              {/* 3. Delete User: Only show for SuperAdmin */}
+
+                                              {/* 4. Delete User: Only show for SuperAdmin */}
                                               {isSuperAdmin && (
                                                 <li>
                                                   <button
@@ -866,13 +888,12 @@ const ManageUsers: React.FC = () => {
               {/* Left Side - File Upload */}
               <div className="space-y-4">
                 <h4 className="text-lg font-semibold text-[#181511] dark:text-white">CSV File</h4>
-                
+
                 <div
-                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                    csvFile
-                      ? 'border-[#f04129] bg-[#f04129]/5 dark:bg-[#f04129]/10'
-                      : 'border-[#e6e2db] dark:border-slate-700 hover:border-[#f04129] dark:hover:border-[#f04129]'
-                  }`}
+                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${csvFile
+                    ? 'border-[#f04129] bg-[#f04129]/5 dark:bg-[#f04129]/10'
+                    : 'border-[#e6e2db] dark:border-slate-700 hover:border-[#f04129] dark:hover:border-[#f04129]'
+                    }`}
                   onDragOver={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -1006,7 +1027,7 @@ const ManageUsers: React.FC = () => {
               {/* Right Side - Credentials */}
               <div className="space-y-4">
                 <h4 className="text-lg font-semibold text-[#181511] dark:text-white">Credentials</h4>
-                
+
                 <div className="space-y-3">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -1025,7 +1046,7 @@ const ManageUsers: React.FC = () => {
                       Auto-generate random 6-character password for each user
                     </span>
                   </label>
-                  
+
                   <label className="flex flex-col">
                     <p className="text-[#181511] dark:text-gray-200 text-sm font-medium leading-normal pb-2">
                       Temporary Password for All Users
@@ -1044,7 +1065,7 @@ const ManageUsers: React.FC = () => {
                       required={!useRandomPassword}
                     />
                     <p className="text-xs text-[#8a7b60] dark:text-gray-500 mt-1.5">
-                      {useRandomPassword 
+                      {useRandomPassword
                         ? 'Each user will receive a unique random 6-character password via email. Users will be required to change it on first login.'
                         : 'This password will be applied to every account in the uploaded file. Users will be required to change it on first login.'}
                     </p>
@@ -1113,7 +1134,7 @@ const ManageUsers: React.FC = () => {
                   <span className="material-symbols-outlined">close</span>
                 </button>
               </div>
-              
+
               <p className="text-sm text-[#8a7b60] dark:text-gray-400 mb-4">
                 Setting custom leave quotas for <strong>{selectedUserForQuota.profile.firstName} {selectedUserForQuota.profile.lastName}</strong>
               </p>
@@ -1187,6 +1208,21 @@ const ManageUsers: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Edit User Modal */}
+      <EditUserModal
+        user={selectedUserForEdit}
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setSelectedUserForEdit(null);
+        }}
+        onSave={async () => {
+          await fetchUsers();
+          setIsEditModalOpen(false);
+          setSelectedUserForEdit(null);
+        }}
+      />
     </div>
   );
 };
