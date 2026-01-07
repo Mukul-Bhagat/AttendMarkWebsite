@@ -76,6 +76,8 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, isOpen, onClose, on
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        if (!user) return; // Early return if user is null
+
         if (!validateForm()) {
             return;
         }
