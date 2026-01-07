@@ -5,7 +5,7 @@ import { ISession, IClassBatch } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { Eye, Edit, ArrowLeft } from 'lucide-react';
 import SessionCalendar from '../components/SessionCalendar';
-import { getSessionStatus, isSessionPast, isSameDay, nowUTC } from '../utils/sessionStatusUtils';
+import { getSessionStatus, isSessionPast, isSameDay, nowIST } from '../utils/sessionStatusUtils';
 
 const Sessions: React.FC = () => {
   const navigate = useNavigate();
@@ -25,7 +25,7 @@ const Sessions: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
   const [currentViewDate, setCurrentViewDate] = useState(new Date());
-  const [currentTime, setCurrentTime] = useState(nowUTC()); // Track current UTC time for status calculations
+  const [currentTime, setCurrentTime] = useState(nowIST()); // Track current IST timestamp for status calculations
   const calendarRef = useRef<HTMLDivElement>(null);
 
   // SuperAdmin, CompanyAdmin, Manager, and SessionAdmin can create sessions
@@ -101,7 +101,7 @@ const Sessions: React.FC = () => {
   useEffect(() => {
     // Update current time every minute to trigger re-calculation of session statuses
     const interval = setInterval(() => {
-      setCurrentTime(nowUTC()); // Update to current UTC time
+      setCurrentTime(nowIST()); // Update to current IST timestamp
     }, 60000); // Check every minute
 
     return () => clearInterval(interval);
@@ -179,7 +179,7 @@ const Sessions: React.FC = () => {
         startDate: session.startDate,
         startTime: session.startTime,
         endTime: session.endTime,
-        currentTime: currentTime.toISOString(),
+        currentTime: new Date(currentTime).toISOString(), // currentTime is now IST timestamp
         calculatedStatus: status,
         isCancelled: session.isCancelled,
         isCompleted: session.isCompleted,
