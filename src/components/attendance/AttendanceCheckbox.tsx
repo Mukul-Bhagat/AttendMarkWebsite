@@ -4,13 +4,19 @@ interface User {
     userId: string;
     name: string;
     email: string;
+    role: string;
     status: 'PRESENT' | 'ABSENT' | 'LATE';
+    checkInTime: string | null;
+    isLate: boolean;
+    lateByMinutes: number | null;
+    locationVerified: boolean;
     isManuallyModified: boolean;
     updatedBy: {
         name: string;
         role: string;
     } | null;
     manualUpdatedAt: string | null;
+    updateReason: string | null;
 }
 
 interface AttendanceCheckboxProps {

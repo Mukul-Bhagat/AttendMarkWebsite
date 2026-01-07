@@ -14,7 +14,7 @@ interface User {
 }
 
 interface EditUserModalProps {
-    user: User;
+    user: User | null;
     isOpen: boolean;
     onClose: () => void;
     onSave: () => void;
@@ -103,7 +103,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, isOpen, onClose, on
         }
     };
 
-    if (!isOpen) return null;
+    if (!isOpen || !user) return null;
 
     return (
         <div
@@ -142,8 +142,8 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, isOpen, onClose, on
                             value={formData.firstName}
                             onChange={handleInputChange}
                             className={`w-full px-3 py-2 rounded-lg border ${errors.firstName
-                                    ? 'border-red-500'
-                                    : 'border-border-light dark:border-border-dark'
+                                ? 'border-red-500'
+                                : 'border-border-light dark:border-border-dark'
                                 } bg-white dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary`}
                             placeholder="Enter first name"
                         />
@@ -163,8 +163,8 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, isOpen, onClose, on
                             value={formData.lastName}
                             onChange={handleInputChange}
                             className={`w-full px-3 py-2 rounded-lg border ${errors.lastName
-                                    ? 'border-red-500'
-                                    : 'border-border-light dark:border-border-dark'
+                                ? 'border-red-500'
+                                : 'border-border-light dark:border-border-dark'
                                 } bg-white dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary`}
                             placeholder="Enter last name"
                         />
@@ -184,8 +184,8 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, isOpen, onClose, on
                             value={formData.email}
                             onChange={handleInputChange}
                             className={`w-full px-3 py-2 rounded-lg border ${errors.email
-                                    ? 'border-red-500'
-                                    : 'border-border-light dark:border-border-dark'
+                                ? 'border-red-500'
+                                : 'border-border-light dark:border-border-dark'
                                 } bg-white dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary`}
                             placeholder="Enter email"
                         />
