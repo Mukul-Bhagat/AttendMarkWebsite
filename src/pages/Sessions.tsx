@@ -5,7 +5,8 @@ import { ISession, IClassBatch } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { Eye, Edit, ArrowLeft } from 'lucide-react';
 import SessionCalendar from '../components/SessionCalendar';
-import { getSessionStatus, isSessionPast, isSameDay, nowIST } from '../utils/sessionStatusUtils';
+import { getSessionStatus, getSessionStartTimeIST, nowIST } from '../utils/sessionStatusUtils';
+import { isSameISTDay, toISTDateString } from '../utils/time';
 
 const Sessions: React.FC = () => {
   const navigate = useNavigate();
@@ -24,7 +25,7 @@ const Sessions: React.FC = () => {
   const [showPastSessions, setShowPastSessions] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
-  const [currentViewDate, setCurrentViewDate] = useState(new Date());
+  const [currentViewDate, setCurrentViewDate] = useState(() => new Date(toISTDateString(nowIST()))); // Initialize to IST Today
   const [currentTime, setCurrentTime] = useState(nowIST()); // Track current IST timestamp for status calculations
   const calendarRef = useRef<HTMLDivElement>(null);
 
@@ -113,7 +114,8 @@ const Sessions: React.FC = () => {
       if (isNaN(date.getTime())) {
         return dateString; // Return original if invalid
       }
-      return date.toLocaleDateString('en-US', {
+      return date.toLocaleDateString('en-GB', {
+        weekday: 'short',
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -145,17 +147,33 @@ const Sessions: React.FC = () => {
     }
   };
 
-  // Check if a session is scheduled for today (date-only comparison)
+  const formatTitleDate = (session: ISession) => {
+    try {
+      const dateStr = session.occurrenceDate || session.startDate;
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return session.name;
+      return date.toLocaleDateString('en-GB', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      });
+    } catch {
+      return session.name;
+    }
+  };
+
+  // Check if a session is scheduled for today using IST day boundaries
   // Button should be available from 00:00 Midnight (IST) on the day of the session
   const isSessionToday = (session: ISession): boolean => {
     try {
       if (!session.startDate || session.isCancelled) return false;
 
-      // Compare dates only (not time) - using toDateString() for clarity
-      const today = new Date().toDateString();
-      const sessionDate = new Date(session.startDate).toDateString();
+      // Use IST day comparison - no Date objects!
+      const now = nowIST();
+      const sessionStartIST = getSessionStartTimeIST(session);
 
-      return today === sessionDate;
+      return isSameISTDay(now, sessionStartIST);
     } catch {
       return false;
     }
@@ -166,73 +184,80 @@ const Sessions: React.FC = () => {
   // ============================================
   // All status logic moved to: src/utils/sessionStatusUtils.ts
 
-  // Wrapper with debug logging
-  const getSessionStatusWithLogging = (session: ISession) => {
+  // Get session status with validation guard
+  const getSessionStatusSafe = (session: ISession) => {
     const status = getSessionStatus(session, currentTime);
 
-    // DEBUG: Log status calculation for today's sessions
-    const isToday = isSameDay(new Date(session.startDate), new Date());
-    if (isToday) {
-      console.log('🔍 SESSION STATUS DEBUG:', {
-        sessionId: session._id,
-        sessionName: session.name,
-        startDate: session.startDate,
-        startTime: session.startTime,
-        endTime: session.endTime,
-        currentTime: new Date(currentTime).toISOString(), // currentTime is now IST timestamp
-        calculatedStatus: status,
-        isCancelled: session.isCancelled,
-        isCompleted: session.isCompleted,
-        source: 'Sessions.tsx'
-      });
+    // GUARD: Verify session.startDate display matches status calculation date
+    // This prevents the bug where UI shows Jan 7 but status uses Jan 31
+    const sessionStartIST = getSessionStartTimeIST(session);
+
+    // Check if displayed date matches calculation date
+    // Prefer occurrenceDate as the truth
+    const displayedDateOnly = session.occurrenceDate || (typeof session.startDate === 'string' ? session.startDate.split('T')[0] : new Date(session.startDate).toISOString().split('T')[0]);
+    const calculationDate = toISTDateString(sessionStartIST);
+
+    if (displayedDateOnly !== calculationDate) {
+      console.error('🚨 DATE MISMATCH DETECTED!');
+      console.error('  UI shows:', displayedDateOnly);
+      console.error('  Status calculated using:', calculationDate);
+      console.error('  Session:', session);
+      throw new Error(
+        `TIME_GUARD_VIOLATION: Session date mismatch! ` +
+        `UI shows "${displayedDateOnly}" but status uses "${calculationDate}". ` +
+        `See TIME_ARCHITECTURE.md for details.`
+      );
     }
 
     return status;
   };
 
-  // Filter sessions based on selected date or default logic
-  const getFilteredSessions = (): ISession[] => {
+  // ============================================
+  // RESTORED: Standard Session Listing (Planning View)
+  // ============================================
+
+  // 1. Filter Logic
+  const filteredSessions = sessions.filter(session => {
+    // A. Date Filter (If Selected)
     if (selectedDate) {
-      // Scenario A: Date selected - show ALL sessions for that specific date (past and future)
-
-      // We compare the 'selectedDate' (from calendar, local time) 
-      // with each session's 'startDate' (converted to Date object, which parses ISO to local time)
-      return sessions.filter(session => {
-        if (!session.startDate) return false;
-        const sessionDate = new Date(session.startDate);
-
-        // Use robust local comparison
-        return isSameDay(sessionDate, selectedDate);
-      });
-    } else {
-      // Scenario B: No date selected - show only Future/Active sessions (respect showPastSessions toggle)
-      if (showPastSessions) {
-        return sessions; // Show all if toggle is on
-      }
-      // Use isSessionPast to filter - only show sessions that are NOT past (Live or Upcoming)
-      // CRITICAL: This uses the same logic as getSessionStatus to ensure consistency
-      return sessions.filter(session => !isSessionPast(session, currentTime));
+      const targetStr = toISTDateString(selectedDate);
+      const sDate = session.occurrenceDate || (typeof session.startDate === 'string' ? session.startDate.split('T')[0] : '');
+      if (sDate !== targetStr) return false;
     }
-  };
 
-  const filteredSessions = getFilteredSessions();
+    // B. Status Filter (Hide Past unless toggled)
+    if (!showPastSessions) {
+      const status = getSessionStatusSafe(session);
+      if (status === 'past') return false;
+    }
 
-  // Separate sessions into past (for past sessions toggle) - using isSessionPast with currentTime for consistency
-  const pastSessions = sessions.filter(session => isSessionPast(session, currentTime));
+    return true;
+  });
 
-  // Determine which sessions to display (with limit if no date selected)
-  const SESSION_LIMIT = 7;
-  let displayedSessions: ISession[];
-  let remainingCount = 0;
+  // 2. Sorting (Date + Time)
+  const displayedSessions = filteredSessions.sort((a, b) => {
+    // Primary: Date
+    const dateA = a.occurrenceDate || (typeof a.startDate === 'string' ? a.startDate.split('T')[0] : '');
+    const dateB = b.occurrenceDate || (typeof b.startDate === 'string' ? b.startDate.split('T')[0] : '');
+    const dateComp = dateA.localeCompare(dateB);
+    if (dateComp !== 0) return dateComp;
 
-  if (selectedDate) {
-    // If date selected, show all sessions for that date (no limit)
-    displayedSessions = filteredSessions;
-  } else {
-    // If no date selected, limit to 7 sessions
-    displayedSessions = filteredSessions.slice(0, SESSION_LIMIT);
-    remainingCount = filteredSessions.length - SESSION_LIMIT;
-  }
+    // Secondary: Time
+    return a.startTime.localeCompare(b.startTime);
+  });
+
+  // 3. Past Count (For Badge) - Relevant to current view
+  const relevantSessionsForCount = selectedDate
+    ? sessions.filter(s => {
+      const targetStr = toISTDateString(selectedDate);
+      const sDate = s.occurrenceDate || (typeof s.startDate === 'string' ? s.startDate.split('T')[0] : '');
+      return sDate === targetStr;
+    })
+    : sessions;
+
+  const pastSessions = relevantSessionsForCount.filter(s => getSessionStatusSafe(s) === 'past');
+
+
 
   // Scroll to calendar function
   const scrollToCalendar = () => {
@@ -318,8 +343,11 @@ const Sessions: React.FC = () => {
               <div className="flex items-center gap-2 md:gap-3">
                 <span className="material-symbols-outlined text-[#f04129] text-2xl md:text-4xl">calendar_month</span>
                 <div>
-                  <h1 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight tracking-[-0.033em]">
+                  <h1 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight tracking-[-0.033em] flex items-center gap-3">
                     {classBatch ? classBatch.name : 'Sessions'}
+                    <span className="hidden sm:inline-flex items-center justify-center px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-sm font-medium text-slate-500 dark:text-slate-400">
+                      {displayedSessions.length} Total • {displayedSessions.filter(s => getSessionStatusSafe(s) !== 'past').length} Remaining
+                    </span>
                   </h1>
                   {classBatch && classBatch.description && (
                     <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1">{classBatch.description}</p>
@@ -440,49 +468,60 @@ const Sessions: React.FC = () => {
               ) : (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 w-full">
-                    {displayedSessions.map((session) => {
-                      const sessionStatus = getSessionStatusWithLogging(session);
+                    {displayedSessions.slice(0, 7).map((session) => {
+                      // Get status using guarded function
+                      const sessionStatus = getSessionStatusSafe(session);
                       const isPast = sessionStatus === 'past';
                       const isLive = sessionStatus === 'live';
                       const isUpcoming = sessionStatus === 'upcoming';
                       const isToday = isSessionToday(session);
                       const showScanButton = isEndUser && isToday;
 
+                      // Fix 2: Date-Based Title (en-GB for "Thu, 8 Jan 2026")
+                      const dateTitle = formatTitleDate(session);
+
+                      // Fix 5: Navigation with Date Param
+                      const handleNavigate = (e?: React.MouseEvent) => {
+                        e?.stopPropagation();
+                        // Don't navigate if session is cancelled
+                        if (session.isCancelled) return;
+
+                        // Add date query param for correct context
+                        const dateParam = session.occurrenceDate ? `?date=${session.occurrenceDate}` : '';
+
+                        // Smart navigation based on session status
+                        if (isPast) {
+                          // Past sessions: redirect to history
+                          if (isEndUser) {
+                            // End User: go to personal attendance history
+                            navigate(`/my-attendance?scrollTo=${session._id}`);
+                          } else {
+                            // Admin: go to reports for this class
+                            const classBatchId = typeof session.classBatchId === 'object' && session.classBatchId?._id
+                              ? session.classBatchId._id
+                              : typeof session.classBatchId === 'string'
+                                ? session.classBatchId
+                                : classId;
+                            if (classBatchId) {
+                              navigate(`/reports?classBatchId=${classBatchId}&tab=logs`);
+                            } else {
+                              navigate(`/sessions/${session._id}${dateParam}`); // Fallback
+                            }
+                          }
+                        } else {
+                          // Live/Upcoming: normal navigation
+                          if (!isEndUser) {
+                            navigate(`/sessions/${session._id}${dateParam}`);
+                          }
+                        }
+                      };
+
                       return (
                         <div
-                          key={session._id}
-                          className={`flex flex-col w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 p-4 md:p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden ${isPast && !isLive ? 'opacity-60 grayscale' : ''
+                          key={`${session._id}_${session.occurrenceDate || session.startDate}`}
+                          className={`flex flex-col w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 p-4 md:p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden cursor-pointer ${isPast && !isLive ? 'opacity-60 grayscale' : ''
                             } ${isLive ? 'ring-2 ring-green-500 dark:ring-green-400' : ''}`}
-                          onClick={() => {
-                            // Don't navigate if session is cancelled
-                            if (session.isCancelled) return;
-
-                            // Smart navigation based on session status
-                            if (isPast) {
-                              // Past sessions: redirect to history
-                              if (isEndUser) {
-                                // End User: go to personal attendance history
-                                navigate(`/my-attendance?scrollTo=${session._id}`);
-                              } else {
-                                // Admin: go to reports for this class
-                                const classBatchId = typeof session.classBatchId === 'object' && session.classBatchId?._id
-                                  ? session.classBatchId._id
-                                  : typeof session.classBatchId === 'string'
-                                    ? session.classBatchId
-                                    : classId;
-                                if (classBatchId) {
-                                  navigate(`/reports?classBatchId=${classBatchId}&tab=logs`);
-                                } else {
-                                  navigate(`/sessions/${session._id}`); // Fallback
-                                }
-                              }
-                            } else {
-                              // Live/Upcoming: normal navigation
-                              if (!isEndUser) {
-                                navigate(`/sessions/${session._id}`);
-                              }
-                            }
-                          }}
+                          onClick={handleNavigate}
                         >
                           {/* Cancellation Overlay */}
                           {session.isCancelled && (
@@ -511,8 +550,9 @@ const Sessions: React.FC = () => {
 
                           <div className="flex items-start justify-between mb-4 gap-2">
                             <div className="flex-1">
-                              <h2 className="text-xl font-bold text-slate-900 dark:text-white break-words">{session.name}</h2>
-                              {/* Class Description or Session Description */}
+                              {/* Fix 2: Use Date as Title */}
+                              <h2 className="text-xl font-bold text-slate-900 dark:text-white break-words">Session – {dateTitle}</h2>
+                              {/* Class Description or Session Description (One Only) */}
                               {(session.classBatchId && typeof session.classBatchId === 'object' && session.classBatchId.description) ? (
                                 <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">
                                   {session.classBatchId.description}
@@ -560,17 +600,7 @@ const Sessions: React.FC = () => {
                             </div>
                           </div>
                           <div className="flex-grow space-y-3 text-slate-700 dark:text-slate-300 mb-4">
-                            {session.endDate ? (
-                              <div className="flex items-center text-sm">
-                                <span className="material-symbols-outlined mr-2 text-slate-500 dark:text-slate-400 text-lg flex-shrink-0">date_range</span>
-                                <span className="break-words whitespace-normal">{formatDate(session.startDate)} - {formatDate(session.endDate)}</span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center text-sm">
-                                <span className="material-symbols-outlined mr-2 text-slate-500 dark:text-slate-400 text-lg flex-shrink-0">calendar_today</span>
-                                <span className="break-words whitespace-normal">{formatDate(session.startDate)}</span>
-                              </div>
-                            )}
+                            {/* Removed Duplicate Date (Title already covers it) but kept Time & Location */}
                             <div className="flex items-center text-sm">
                               <span className="material-symbols-outlined mr-2 text-slate-500 dark:text-slate-400 text-lg flex-shrink-0">schedule</span>
                               <span className="break-words whitespace-normal">{formatTime(session.startTime)} - {formatTime(session.endTime)}</span>
@@ -585,9 +615,7 @@ const Sessions: React.FC = () => {
                                 <span className="break-words whitespace-normal">{session.assignedUsers.length} Assigned Users</span>
                               </div>
                             )}
-                            {session.description && (
-                              <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 pt-1 break-words whitespace-normal">{session.description}</p>
-                            )}
+                            {/* Fix 3: Duplicate Description Removed */}
                           </div>
                           <div className="mt-auto flex flex-row items-center justify-between gap-3">
                             {showScanButton ? (
@@ -618,26 +646,7 @@ const Sessions: React.FC = () => {
                                 ) : (
                                   <button
                                     className="flex flex-1 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      // Smart navigation based on session status
-                                      if (isPast) {
-                                        // Past sessions: redirect to reports
-                                        const classBatchId = typeof session.classBatchId === 'object' && session.classBatchId?._id
-                                          ? session.classBatchId._id
-                                          : typeof session.classBatchId === 'string'
-                                            ? session.classBatchId
-                                            : classId;
-                                        if (classBatchId) {
-                                          navigate(`/reports?classBatchId=${classBatchId}&tab=logs`);
-                                        } else {
-                                          navigate(`/sessions/${session._id}`); // Fallback
-                                        }
-                                      } else {
-                                        // Live/Upcoming: normal navigation
-                                        navigate(`/sessions/${session._id}`);
-                                      }
-                                    }}
+                                    onClick={handleNavigate}
                                   >
                                     <Eye className="w-4 h-4 md:w-5 md:h-5 flex-shrink-0" />
                                     <span className="truncate whitespace-normal">View Details</span>
@@ -650,7 +659,9 @@ const Sessions: React.FC = () => {
                                 className="flex flex-1 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 border border-[#f04129] text-[#f04129] text-sm font-bold hover:bg-red-50 dark:hover:bg-[#f04129]/10 transition-colors"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigate(`/sessions/edit/${session._id}`);
+                                  // Add date query param for correct context when editing a specific occurrence
+                                  const dateParam = session.occurrenceDate ? `?date=${session.occurrenceDate}` : '';
+                                  navigate(`/sessions/edit/${session._id}${dateParam}`);
                                 }}
                               >
                                 <Edit className="w-4 h-4 md:w-5 md:h-5 flex-shrink-0" />
@@ -661,26 +672,25 @@ const Sessions: React.FC = () => {
                         </div>
                       );
                     })}
-                  </div>
 
+                    {/* Fix 4: More Sessions Card */}
+                    {displayedSessions.length > 7 && (
+                      <div
+                        className="flex flex-col w-full rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-6 items-center justify-center text-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-h-[300px]"
+                        onClick={scrollToCalendar}
+                      >
+                        <span className="material-symbols-outlined text-4xl text-slate-400 mb-4">event_repeat</span>
+                        <h3 className="text-xl font-bold text-slate-700 dark:text-slate-200">
+                          + {displayedSessions.length - 7} more {selectedDate ? 'on this date' : 'upcoming sessions'}
+                        </h3>
+                        <p className="text-slate-500 dark:text-slate-400 mt-2">
+                          Select a date in the calendar to view them.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                   {/* Summary Card - Show if more than 7 sessions and no date selected */}
-                  {!selectedDate && remainingCount > 0 && (
-                    <div
-                      className="mt-4 flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-6 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors"
-                      onClick={scrollToCalendar}
-                    >
-                      <p className="text-slate-700 dark:text-slate-300 text-base font-semibold">
-                        And {remainingCount} more session{remainingCount !== 1 ? 's' : ''}...
-                      </p>
-                      <p className="text-slate-500 dark:text-slate-400 text-sm">
-                        Check the Calendar to view details.
-                      </p>
-                      <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-medium hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors">
-                        <span className="material-symbols-outlined text-lg">calendar_month</span>
-                        View Calendar
-                      </button>
-                    </div>
-                  )}
+
                 </>
               )}
             </div>

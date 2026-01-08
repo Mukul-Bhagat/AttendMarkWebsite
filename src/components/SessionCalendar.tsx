@@ -1,6 +1,7 @@
 import React from 'react';
 import { ISession } from '../types';
-import { getSessionStatus, nowIST } from '../utils/sessionStatusUtils';
+import { getSessionStatus, getSessionStartTimeIST, nowIST } from '../utils/sessionStatusUtils';
+import { isSameISTDay } from '../utils/time';
 
 interface SessionCalendarProps {
   sessions: ISession[];
@@ -17,9 +18,8 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
   currentMonth,
   onMonthChange
 }) => {
-  // Internal state removed - controlled by parent
-
   // Get first day of month and number of days
+  // Note: We still use Date for calendar UI rendering (acceptable per architecture)
   const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
   const lastDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
   const daysInMonth = lastDayOfMonth.getDate();
@@ -28,70 +28,58 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
   // Adjust to Monday = 0 (instead of Sunday = 0)
   const adjustedStartingDay = startingDayOfWeek === 0 ? 6 : startingDayOfWeek - 1;
 
-  // Robust Date Comparison Helper (Local Time) to match Sessions.tsx logic exactly
-  const isSameDay = (d1: Date, d2: Date) => {
-    return (
-      d1.getFullYear() === d2.getFullYear() &&
-      d1.getMonth() === d2.getMonth() &&
-      d1.getDate() === d2.getDate()
-    );
-  };
-
-  // Get sessions for a specific date
+  /**
+   * Get sessions for a specific calendar date using IST day boundaries
+   * 
+   * CRITICAL: Uses IST timestamps, not Date comparisons
+   */
   const getSessionsForDate = (date: Date): ISession[] => {
-    return sessions.filter(session => {
-      if (!session.startDate) return false;
-      const sessionDate = new Date(session.startDate);
+    const dateTimestamp = date.getTime();
 
-      // Use robust local comparison
-      // Check for same day AND not cancelled (unless you want to show cancelled dots? 
-      // Original code filtered !session.isCancelled, preserving that behavior)
-      return isSameDay(sessionDate, date) && !session.isCancelled;
+    return sessions.filter(session => {
+      if (!session.startDate || session.isCancelled) return false;
+
+      // Get session start as IST timestamp
+      const sessionStartIST = getSessionStartTimeIST(session);
+
+      // Compare IST days (timezone-independent)
+      return isSameISTDay(sessionStartIST, dateTimestamp);
     });
   };
 
-  // Check if date has sessions and determine dot color
+  /**
+   * Determine dot color for a date based on session status
+   * 
+   * CRITICAL: Does NOT compute status - uses provided sessionStatus
+   * Dot color is derived from status calculated by the list logic
+   */
   const getDateIndicator = (date: Date): 'red' | 'green' | 'yellow' | null => {
     const dateSessions = getSessionsForDate(date);
     if (dateSessions.length === 0) return null;
 
-    const now = nowIST(); // IST timestamp for all comparisons
+    // Get current time once
+    const now = nowIST();
 
-    // For each session on this date, determine its status
+    // For each session on this date, get its status
     const sessionStatuses: Array<'red' | 'green' | 'yellow'> = [];
 
     for (const session of dateSessions) {
-      // Use canonical status function from shared utility
-      // This ensures consistent 10-minute buffer across all views
+      // Get status from canonical function (NOT computed here)
       const status = getSessionStatus(session, now);
 
-      // DEBUG: Log calendar status for today's sessions
-      const isToday = date.toDateString() === new Date().toDateString();
-      if (isToday) {
-        console.log('📅 CALENDAR STATUS DEBUG:', {
-          sessionId: session._id,
-          sessionName: session.name,
-          date: session.startDate,
-          endTime: session.endTime,
-          calculatedStatus: status,
-          now: new Date(now).toISOString(), // now is IST timestamp
-          source: 'SessionCalendar.tsx'
-        });
-      }
-
-      // PRIORITY 1: Check if session is past (using shared utility with buffer)
+      // PRIORITY 1: Check if session is past
       if (status === 'past') {
         sessionStatuses.push('red');
-        continue; // Skip to next session
+        continue;
       }
 
       // PRIORITY 2: Check if session was edited (YELLOW) - only if not past
       if (session.updatedAt && session.createdAt) {
-        const updatedAt = new Date(session.updatedAt);
-        const createdAt = new Date(session.createdAt);
+        const updatedAt = new Date(session.updatedAt).getTime();
+        const createdAt = new Date(session.createdAt).getTime();
         if (updatedAt > createdAt) {
           sessionStatuses.push('yellow');
-          continue; // Skip to next session
+          continue;
         }
       }
 
@@ -99,15 +87,11 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
       sessionStatuses.push('green');
     }
 
-    // If multiple sessions on this date:
-    // - If ALL sessions are past (red) -> RED
-    // - If ANY session is red -> RED (highest priority)
-    // - Else if ANY session is yellow -> YELLOW
-    // - Else -> GREEN
-    if (sessionStatuses.some(status => status === 'red')) {
+    // Priority: RED > YELLOW > GREEN
+    if (sessionStatuses.some(s => s === 'red')) {
       return 'red';
     }
-    if (sessionStatuses.some(status => status === 'yellow')) {
+    if (sessionStatuses.some(s => s === 'yellow')) {
       return 'yellow';
     }
     return 'green';
@@ -122,7 +106,10 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
     onMonthChange(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
   };
 
-  // Check if a date is selected
+  /**
+   * Check if a date is selected
+   * Uses simple date comparison (acceptable for UI state)
+   */
   const isDateSelected = (date: Date): boolean => {
     if (!selectedDate) return false;
     return (
@@ -132,7 +119,10 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
     );
   };
 
-  // Handle date click
+  /**
+   * Handle date click
+   * Passes Date object to parent (parent converts to IST for filtering)
+   */
   const handleDateClick = (date: Date) => {
     if (isDateSelected(date)) {
       // Deselect if clicking the same date
@@ -157,6 +147,9 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
 
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  // Check if today using IST day boundary (for "today" highlight)
+  const todayTimestamp = nowIST();
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
@@ -199,21 +192,20 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
 
           const indicator = getDateIndicator(date);
           const isSelected = isDateSelected(date);
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          const checkDate = new Date(date);
-          checkDate.setHours(0, 0, 0, 0);
-          const isToday = checkDate.getTime() === today.getTime();
+
+          // Check if this date is "today" in IST
+          const dateTimestamp = date.getTime();
+          const isToday = isSameISTDay(dateTimestamp, todayTimestamp);
 
           return (
             <button
               key={date.toISOString()}
               onClick={() => handleDateClick(date)}
               className={`aspect-square rounded-lg text-sm font-medium transition-colors relative ${isSelected
-                ? 'bg-blue-500 text-white hover:bg-blue-600'
-                : isToday
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                  ? 'bg-blue-500 text-white hover:bg-blue-600'
+                  : isToday
+                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }`}
             >
               {date.getDate()}
@@ -221,10 +213,10 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
                 <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2">
                   <div
                     className={`w-1.5 h-1.5 rounded-full ${indicator === 'red'
-                      ? 'bg-red-500'
-                      : indicator === 'yellow'
-                        ? 'bg-yellow-500'
-                        : 'bg-green-500'
+                        ? 'bg-red-500'
+                        : indicator === 'yellow'
+                          ? 'bg-yellow-500'
+                          : 'bg-green-500'
                       }`}
                   />
                 </div>
@@ -243,7 +235,7 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-green-500" />
-            <span className="text-slate-600 dark:text-slate-400">Upcoming Session</span>
+            <span className="text-slate-600 dark:text-slate-400">Upcoming/Live Session</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-yellow-500" />
@@ -256,4 +248,3 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
 };
 
 export default SessionCalendar;
-

@@ -1,17 +1,18 @@
 /**
- * Session Status Utilities - IST-Based
+ * Session Status Utilities - IST Timestamp Based
  * 
- * Uses the global IST time system for all calculations
+ * Pure business logic for session status calculation.
+ * Uses ONLY time.ts utilities - no Date objects in logic.
  * 
- * @version 9.0 - IST timestamp-based
+ * @see TIME_ARCHITECTURE.md Section 5.2 for logic standard
  */
 
 import {
     nowIST,
     sessionTimeToIST,
-    IST_OFFSET_MS,
-    debugISTTime,
-    isSameISTDay
+    isSameISTDay,
+    formatIST,
+    type ISTTimestamp
 } from './time';
 
 // ============================================
@@ -24,132 +25,218 @@ export type SessionStatus = 'upcoming' | 'live' | 'past' | 'cancelled';
 // CONSTANTS
 // ============================================
 
-export const BUFFER_MINUTES =
-    Number(import.meta.env.VITE_SESSION_BUFFER_MINUTES ?? 10);
+/**
+ * Buffer time after session end (in minutes)
+ * Allows late attendance marking
+ */
+export const BUFFER_MINUTES = Number(import.meta.env.VITE_SESSION_BUFFER_MINUTES ?? 10);
+const BUFFER_MS = BUFFER_MINUTES * 60 * 1000;
 
+/**
+ * IST timezone constant (re-exported for convenience)
+ */
 export const IST_TIMEZONE = 'Asia/Kolkata';
 
 // ============================================
-// IST-BASED SESSION STATUS
+// HELPER FUNCTIONS
 // ============================================
 
 /**
  * Get session start time as IST timestamp
+ * 
+ * @param session Session object with startDate and optional startTime
+ * @returns IST timestamp when session starts
  */
 export function getSessionStartTimeIST(session: {
     startDate: string | Date;
+    occurrenceDate?: string;
     startTime?: string;
-}): number {
-    const dateISO = typeof session.startDate === 'string'
-        ? session.startDate
-        : session.startDate.toISOString();
-
-    if (session.startTime?.includes(':')) {
-        return sessionTimeToIST(dateISO, session.startTime);
-    } else {
-        // Start of day (00:00 IST)
-        return sessionTimeToIST(dateISO, '00:00');
+    frequency?: string;
+}): ISTTimestamp {
+    // ENFORCEMENT: Recurring sessions MUST use occurrenceDate
+    if (import.meta.env.DEV && session.frequency && session.frequency !== 'OneTime' && !session.occurrenceDate) {
+        console.error('CRITICAL: Recurring session missing occurrenceDate. Using startDate (Series Start) will cause status bugs.');
+        throw new Error('Time Architecture Violation: Recurring session used startDate for status.');
     }
+
+    // Priority: occurrenceDate > startDate
+    const dateSource = session.occurrenceDate || session.startDate;
+
+    // Convert to ISO string if Date object
+    const dateISO = typeof dateSource === 'string'
+        ? dateSource
+        : dateSource.toISOString();
+
+    // Use startTime if provided, otherwise default to start of day
+    const timeIST = session.startTime || '00:00';
+
+    return sessionTimeToIST(dateISO, timeIST);
 }
 
 /**
  * Get session end time as IST timestamp
+ * 
+ * CRITICAL: Always uses session.startDate (or occurrenceDate), NOT endDate
+ * For recurring sessions, endDate = series end, not instance end
+ * 
+ * @param session Session object
+ * @returns IST timestamp when session ends
  */
 export function getSessionEndTimeIST(session: {
     startDate: string | Date;
+    occurrenceDate?: string;
     endDate?: string | Date;
     startTime?: string;
     endTime?: string;
-}): number {
-    const dateISO = typeof session.startDate === 'string'
-        ? session.startDate
-        : session.startDate.toISOString();
-
-    if (session.endTime?.includes(':')) {
-        const endIST = sessionTimeToIST(dateISO, session.endTime);
-
-        // Handle overnight sessions
-        if (session.startTime) {
-            const startIST = sessionTimeToIST(dateISO, session.startTime);
-
-            if (endIST < startIST) {
-                // Session ends next day
-                return endIST + 24 * 60 * 60 * 1000;
-            }
-        }
-
-        return endIST;
-    } else {
-        // End of day (23:59 IST)
-        return sessionTimeToIST(dateISO, '23:59');
+    frequency?: string;
+}): ISTTimestamp {
+    // ENFORCEMENT: Recurring sessions MUST use occurrenceDate
+    if (import.meta.env.DEV && session.frequency && session.frequency !== 'OneTime' && !session.occurrenceDate) {
+        console.error('CRITICAL: Recurring session missing occurrenceDate. Using startDate (Series Start) will cause status bugs.');
+        throw new Error('Time Architecture Violation: Recurring session used startDate for status.');
     }
+
+    // Priority: occurrenceDate > startDate
+    const dateSource = session.occurrenceDate || session.startDate;
+
+    // Convert to ISO string if Date object
+    const dateISO = typeof dateSource === 'string'
+        ? dateSource
+        : dateSource.toISOString();
+
+    // Use endTime if provided, otherwise default to end of day
+    const timeIST = session.endTime || '23:59';
+
+    const endTimestamp = sessionTimeToIST(dateISO, timeIST);
+
+    // Handle overnight sessions (end time before start time)
+    if (session.startTime && session.endTime) {
+        const startTimestamp = sessionTimeToIST(dateISO, session.startTime);
+
+        if (endTimestamp < startTimestamp) {
+            // Session ends next day - add 24 hours
+            return endTimestamp + (24 * 60 * 60 * 1000);
+        }
+    }
+
+    return endTimestamp;
 }
+
+// ============================================
+// MAIN STATUS FUNCTION
+// ============================================
 
 /**
  * Calculate session status using IST timestamps
  * 
- * CANONICAL ALGORITHM (IST-BASED):
+ * CANONICAL ALGORITHM:
  * 1. Cancelled: session.isCancelled === true
- * 2. Past: session.isCompleted === true OR nowIST > (endIST + buffer)
- * 3. Upcoming: nowIST < startIST
- * 4. Live: startIST <= nowIST <= (endIST + buffer)
+ * 2. Past: session.isCompleted === true OR now > end + buffer
+ * 3. Upcoming: now < start
+ * 4. Live: start ≤ now ≤ end + buffer
  * 
  * @param session Session object
- * @param now Current IST timestamp (defaults to nowIST())
+ * @param now Optional current timestamp (defaults to nowIST())
  * @returns Session status
  */
 export function getSessionStatus(
     session: {
         startDate: string | Date;
+        occurrenceDate?: string;
         endDate?: string | Date;
         startTime?: string;
         endTime?: string;
+        frequency?: string;
         isCancelled?: boolean;
         isCompleted?: boolean;
     },
-    now?: number
+    now?: ISTTimestamp
 ): SessionStatus {
     // PRIORITY 1: Cancelled sessions
-    if (session.isCancelled) return 'cancelled';
-
-    // PRIORITY 2: Completed sessions (backend authority)
-    if (session.isCompleted) return 'past';
-
-    // Get IST timestamps
-    const startIST = getSessionStartTimeIST(session);
-    const endIST = getSessionEndTimeIST(session);
-    const bufferMS = BUFFER_MINUTES * 60 * 1000;
-    const cutoffIST = endIST + bufferMS;
-    const currentIST = now ?? nowIST();
-
-    // COMPREHENSIVE LOGGING
-    console.group('🔍 SESSION CLASSIFICATION TRACE (IST-BASED)');
-    console.log('Session Name:', (session as any).name || 'Unknown');
-    console.log('startDate (from backend):', session.startDate);
-    console.log('startTime (IST):', session.startTime);
-    console.log('endTime (IST):', session.endTime);
-    console.log('---');
-    debugISTTime('Computed startIST', startIST);
-    debugISTTime('Computed endIST', endIST);
-    debugISTTime('Computed cutoffIST (with buffer)', cutoffIST);
-    debugISTTime('Current nowIST', currentIST);
-    console.log('---');
-    console.log('Comparison:');
-    console.log('  nowIST < start?', currentIST, '<', startIST, '=', currentIST < startIST);
-    console.log('  nowIST >= start?', currentIST, '>=', startIST, '=', currentIST >= startIST);
-    console.log('  nowIST <= cutoff?', currentIST, '<=', cutoffIST, '=', currentIST <= cutoffIST);
-    console.log('---');
-
-    let status: SessionStatus;
-    if (currentIST < startIST) {
-        status = 'upcoming';
-    } else if (currentIST >= startIST && currentIST <= cutoffIST) {
-        status = 'live';
-    } else {
-        status = 'past';
+    if (session.isCancelled) {
+        console.log('📛 Session is cancelled');
+        return 'cancelled';
     }
 
-    console.log('📊 FINAL STATUS:', status);
+    // PRIORITY 2: Completed sessions (backend authority)
+    if (session.isCompleted) {
+        console.log('✅ Session marked as completed by backend');
+        return 'past';
+    }
+
+    // Get current time
+    const currentTime = now ?? nowIST();
+
+    // Calculate session times (all in IST timestamps)
+    const startIST = getSessionStartTimeIST(session);
+    const endIST = getSessionEndTimeIST(session);
+    const cutoffIST = endIST + BUFFER_MS;
+
+    // TRACE LOGGING
+    console.group('🔍 SESSION STATUS TRACE');
+    console.log('Session:', (session as any).name || 'Unknown');
+    console.log('---');
+    console.log('Input Data:');
+    console.log('  startDate:', session.startDate);
+    console.log('  startTime:', session.startTime || '(default: 00:00)');
+    console.log('  endTime:', session.endTime || '(default: 23:59)');
+    console.log('---');
+    console.log('Computed IST Timestamps:');
+    console.log('  startIST:', startIST, '→', formatIST(startIST, {
+        dateStyle: 'medium',
+        timeStyle: 'medium'
+    }));
+    console.log('  endIST:', endIST, '→', formatIST(endIST, {
+        dateStyle: 'medium',
+        timeStyle: 'medium'
+    }));
+    console.log('  cutoffIST (end + buffer):', cutoffIST, '→', formatIST(cutoffIST, {
+        dateStyle: 'medium',
+        timeStyle: 'medium'
+    }));
+    console.log('  nowIST:', currentTime, '→', formatIST(currentTime, {
+        dateStyle: 'medium',
+        timeStyle: 'medium'
+    }));
+    console.log('  buffer:', `${BUFFER_MINUTES} minutes`);
+    console.log('---');
+    console.log('Comparisons:');
+    console.log('  now < start?', currentTime, '<', startIST, '=', currentTime < startIST);
+    console.log('  now >= start?', currentTime, '>=', startIST, '=', currentTime >= startIST);
+    console.log('  now <= cutoff?', currentTime, '<=', cutoffIST, '=', currentTime <= cutoffIST);
+    console.log('  now > cutoff?', currentTime, '>', cutoffIST, '=', currentTime > cutoffIST);
+    console.log('---');
+
+    // Determine status
+    let status: SessionStatus;
+
+    if (currentTime < startIST) {
+        status = 'upcoming';
+        console.log('📅 Status: UPCOMING (before start time)');
+    } else if (currentTime >= startIST && currentTime <= cutoffIST) {
+        status = 'live';
+
+        // RUNTIME ASSERTION: Ensure "Live" status is consistent with Date logic
+        if (import.meta.env.DEV) {
+            // Verify that we aren't accidentally marking a session as live on the wrong day due to timezone bugs
+            // Note: This might trigger for valid multi-day sessions, but for standard daily sessions it's a good guard.
+            // We check only if start and end are on the same day.
+            const sTime = formatIST(startIST);
+            const eTime = formatIST(endIST);
+            if (sTime.split(' ')[0] === eTime.split(' ')[0]) { // Same day session
+                if (!isSameISTDay(currentTime, startIST)) {
+                    console.error('CRITICAL: Session is LIVE but current IST day does not match Session Start Day. Check Timezone Config.');
+                    throw new Error('Time Architecture Violation: Live status day mismatch');
+                }
+            }
+        }
+
+        console.log('🟢 Status: LIVE (within session window + buffer)');
+    } else {
+        status = 'past';
+        console.log('⏹️ Status: PAST (after cutoff time)');
+    }
+
     console.groupEnd();
 
     return status;
@@ -159,53 +246,59 @@ export function getSessionStatus(
 // CONVENIENCE FUNCTIONS
 // ============================================
 
+/**
+ * Check if session is currently live
+ */
 export function isSessionLive(
     session: Parameters<typeof getSessionStatus>[0],
-    now?: number
+    now?: ISTTimestamp
 ): boolean {
     return getSessionStatus(session, now) === 'live';
 }
 
+/**
+ * Check if session is past
+ */
 export function isSessionPast(
     session: Parameters<typeof getSessionStatus>[0],
-    now?: number
+    now?: ISTTimestamp
 ): boolean {
     return getSessionStatus(session, now) === 'past';
 }
 
+/**
+ * Check if session is upcoming
+ */
 export function isSessionUpcoming(
     session: Parameters<typeof getSessionStatus>[0],
-    now?: number
+    now?: ISTTimestamp
 ): boolean {
     return getSessionStatus(session, now) === 'upcoming';
 }
 
+/**
+ * Check if session is cancelled
+ */
 export function isSessionCancelled(
     session: Parameters<typeof getSessionStatus>[0],
-    now?: number
+    now?: ISTTimestamp
 ): boolean {
     return getSessionStatus(session, now) === 'cancelled';
 }
 
 /**
- * Check if two dates are the same day in IST
+ * Check if two dates are the same IST day
  * 
- * @param d1 Date object or ISO string
- * @param d2 Date object or ISO string
- * @returns true if same IST day
+ * Accepts Date objects or ISO strings, converts to timestamps
  */
 export function isSameDay(d1: Date | string, d2: Date | string): boolean {
     const t1 = typeof d1 === 'string' ? new Date(d1).getTime() : d1.getTime();
     const t2 = typeof d2 === 'string' ? new Date(d2).getTime() : d2.getTime();
 
-    // Convert to IST timestamps
-    const ist1 = t1 + IST_OFFSET_MS;
-    const ist2 = t2 + IST_OFFSET_MS;
-
-    return isSameISTDay(ist1, ist2);
+    return isSameISTDay(t1, t2);
 }
 
-// Re-export for convenience
+// Re-export nowIST for convenience
 export { nowIST } from './time';
 
 // ============================================

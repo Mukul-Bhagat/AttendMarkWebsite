@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { ISession } from '../types';
 import { QRCodeSVG } from 'qrcode.react';
 import { ArrowLeft } from 'lucide-react';
@@ -15,9 +15,25 @@ const SessionDetails: React.FC = () => {
   const [cancellationReason, setCancellationReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, isSuperAdmin, isSessionAdmin, isEndUser } = useAuth();
 
-  const { id } = useParams<{ id: string }>(); // Get the session ID from the URL
+  const { id: paramId } = useParams<{ id: string }>(); // Get the session ID from the URL
+
+  // Backward Capability: Handle composite IDs (sessionId_YYYY-MM-DD)
+  // If the ID contains '_', split it. The first part is the ID, the second part 'might' be useful but we prefer query params.
+  const id = (paramId || '').includes('_') ? (paramId || '').split('_')[0] : paramId;
+
+  // 🛡️ DEV GUARD: Warn about legacy composite routes
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development' && paramId?.includes('_')) {
+      console.warn(
+        '🚨 [LEGACY ROUTE DETECTED] Composite sessionId used:',
+        paramId,
+        '\n👉 Please use /sessions/:id?date=YYYY-MM-DD instead.'
+      );
+    }
+  }, [paramId]);
 
   // Check if user can manage this session
   const canManageSession = () => {
@@ -34,6 +50,25 @@ const SessionDetails: React.FC = () => {
     }
   }, [isEndUser, id, navigate]);
 
+  // 🛡️ AUTO-MIGRATE LEGACY URLS
+  // Converts /sessions/XXX_DATE -> /sessions/XXX?date=DATE
+  useEffect(() => {
+    if (paramId && paramId.includes('_')) {
+      const [cleanId, legacyDate] = paramId.split('_');
+      const query = new URLSearchParams(location.search); // Use fresh search params
+      const date = query.get('date') || legacyDate;
+
+      console.warn(
+        '[LEGACY ROUTE AUTO-FIXED]',
+        paramId,
+        '→',
+        `/sessions/${cleanId}?date=${date}`
+      );
+
+      navigate(`/sessions/${cleanId}?date=${date}`, { replace: true });
+    }
+  }, [paramId, location.search, navigate]);
+
   useEffect(() => {
     // Don't fetch session data if user is an End User (they'll be redirected)
     if (isEndUser) {
@@ -42,14 +77,29 @@ const SessionDetails: React.FC = () => {
 
     const fetchSession = async () => {
       if (!id) {
-          setError('Invalid class/batch ID.');
+        setError('Invalid class/batch ID.');
         setIsLoading(false);
         return;
       }
 
       try {
-        const { data } = await api.get(`/api/sessions/${id}`);
-        setSession(data);
+        // Use proper details endpoint with date context
+        const query = new URLSearchParams(location.search);
+        const dateParam = query.get('date');
+
+        // If date exists, fetch details, otherwise fallback to standard fetch
+        const requestUrl = dateParam
+          ? `/api/sessions/${id}/details?date=${dateParam}`
+          : `/api/sessions/${id}`;
+
+        const { data } = await api.get(requestUrl);
+
+        // Handle combined payload or standard payload
+        if (data.session) {
+          setSession(data.session);
+        } else {
+          setSession(data);
+        }
       } catch (err: any) {
         if (err.response?.status === 401) {
           setError('You are not authorized to view this class/batch.');
@@ -320,7 +370,14 @@ const SessionDetails: React.FC = () => {
                   </div>
                   <div className="shrink-0">
                     <p className="text-[#181511] dark:text-gray-200 text-base font-normal leading-normal">
-                      {session.endDate ? `${formatDate(session.startDate)} - ${formatDate(session.endDate)}` : formatDate(session.startDate)}
+                      {(() => {
+                        const query = new URLSearchParams(location.search);
+                        const dateParam = query.get('date');
+                        if (dateParam) return formatDate(dateParam);
+                        return session.endDate
+                          ? `${formatDate(session.startDate)} - ${formatDate(session.endDate)}`
+                          : formatDate(session.startDate);
+                      })()}
                     </p>
                   </div>
                 </div>

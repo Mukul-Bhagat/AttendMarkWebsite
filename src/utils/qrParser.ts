@@ -15,22 +15,23 @@ export const extractSessionIdFromQR = (qrContent: string): string | null => {
   }
 
   const trimmed = qrContent.trim();
-  
+
   // Check if it's a valid MongoDB ObjectId (24 hex characters)
-  const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+  // OR a Virtual Instance ID: ObjectId_YYYY-MM-DD
+  const objectIdPattern = /^[0-9a-fA-F]{24}(?:_\d{4}-\d{2}-\d{2})?$/;
   if (objectIdPattern.test(trimmed)) {
     return trimmed;
   }
 
   // Try to extract from URL pattern: /scan/:sessionId (new format)
-  const scanPattern = /\/scan\/([0-9a-fA-F]{24})/;
+  const scanPattern = /\/scan\/([0-9a-fA-F]{24}(?:_\d{4}-\d{2}-\d{2})?)/;
   const scanMatch = trimmed.match(scanPattern);
   if (scanMatch && scanMatch[1]) {
     return scanMatch[1];
   }
 
   // Try to extract from URL pattern: /quick-scan/:sessionId (legacy format, backward compatibility)
-  const quickScanPattern = /\/quick-scan\/([0-9a-fA-F]{24})/;
+  const quickScanPattern = /\/quick-scan\/([0-9a-fA-F]{24}(?:_\d{4}-\d{2}-\d{2})?)/;
   const quickScanMatch = trimmed.match(quickScanPattern);
   if (quickScanMatch && quickScanMatch[1]) {
     return quickScanMatch[1];
@@ -41,7 +42,7 @@ export const extractSessionIdFromQR = (qrContent: string): string | null => {
     const url = new URL(trimmed);
     const pathSegments = url.pathname.split('/').filter(Boolean);
     const lastSegment = pathSegments[pathSegments.length - 1];
-    
+
     if (lastSegment && objectIdPattern.test(lastSegment)) {
       return lastSegment;
     }
@@ -50,7 +51,7 @@ export const extractSessionIdFromQR = (qrContent: string): string | null => {
   }
 
   // Try to extract from path-like string (without protocol)
-  const pathMatch = trimmed.match(/\/([0-9a-fA-F]{24})(?:\?|$)/);
+  const pathMatch = trimmed.match(/\/([0-9a-fA-F]{24}(?:_\d{4}-\d{2}-\d{2})?)(?:\?|$)/);
   if (pathMatch && pathMatch[1]) {
     return pathMatch[1];
   }

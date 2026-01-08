@@ -8,6 +8,13 @@ import { RefreshCw, ArrowLeft } from 'lucide-react';
 import { ISession } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { FullScreenAnimation } from '../components/FullScreenAnimation';
+import {
+  getSessionStatus,
+  getSessionStartTimeIST,
+  nowIST,
+  isSameDay
+} from '../utils/sessionStatusUtils';
+import { formatIST } from '../utils/time';
 
 const ScanQR: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -128,47 +135,31 @@ const ScanQR: React.FC = () => {
     };
   }, [selectedSessionId]);
 
-  // Filter sessions based on 2-Hour Rule - STRICTLY TODAY ONLY
-  const getFilteredSessions = (): ISession[] => {
-    // Helper function to check if a date is today (explicit day/month/year comparison)
-    const isToday = (dateString: string | Date): boolean => {
-      const today = new Date();
-      const check = new Date(dateString);
-      return today.getDate() === check.getDate() &&
-        today.getMonth() === check.getMonth() &&
-        today.getFullYear() === check.getFullYear();
-    };
+  // State for current time - used to trigger re-renders and calculations
+  const [currentTime, setCurrentTime] = useState(nowIST());
 
-    const now = new Date();
+  // Update time every minute to keep status fresh
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(nowIST());
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Filter sessions - Show sessions scheduled for TODAY
+  const getFilteredSessions = (): ISession[] => {
+    const now = currentTime;
 
     return sessions.filter(session => {
       try {
-        // 1. Strict Day Check: MUST be today
-        if (!isToday(session.startDate)) return false;
+        if (!session.startDate || session.isCancelled) return false;
 
-        // 2. Cancellation Check
-        if (session.isCancelled) return false;
+        // 1. Strict Day Check using IST utils
+        // Prefer occurrenceDate -> startDate
+        const dateToCheck = session.occurrenceDate || session.startDate;
+        if (!isSameDay(dateToCheck, new Date(now))) return false;
 
-        // 3. Time Window Check (Start Time)
-        // Parse session start time (e.g., "11:00")
-        const [startHours, startMinutes] = session.startTime.split(':').map(Number);
-        const sessionStart = new Date();
-        sessionStart.setHours(startHours, startMinutes, 0, 0);
-
-        // Create "Scan Window Open" time (2 hours before start)
-        const scanWindowOpen = new Date(sessionStart);
-        scanWindowOpen.setHours(sessionStart.getHours() - 2);
-
-        // 4. Time Window Check (End Time + 10 mins buffer)
-        const [endHours, endMinutes] = session.endTime.split(':').map(Number);
-        const sessionEnd = new Date();
-        sessionEnd.setHours(endHours, endMinutes, 0, 0);
-
-        const scanWindowClose = new Date(sessionEnd);
-        scanWindowClose.setMinutes(sessionEnd.getMinutes() + 10); // 10 min buffer
-
-        // Final Logic: Must be TODAY + Inside the Time Window
-        return now >= scanWindowOpen && now <= scanWindowClose;
+        return true;
       } catch (err) {
         console.error('Error filtering session:', err);
         return false;
@@ -176,45 +167,16 @@ const ScanQR: React.FC = () => {
     });
   };
 
-  // Get session status (Live or Upcoming)
-  const getSessionStatus = (session: ISession): { type: 'live' | 'upcoming'; minutesUntilStart?: number } => {
-    try {
-      const now = new Date();
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const [startHour, startMinute] = session.startTime.split(':').map(Number);
-      const [endHour, endMinute] = session.endTime.split(':').map(Number);
-
-      let sessionStartDateTime: Date;
-      let sessionEndDateTime: Date;
-
-      if (session.frequency === 'OneTime') {
-        sessionStartDateTime = new Date(session.startDate);
-        sessionStartDateTime.setHours(startHour, startMinute, 0, 0);
-        sessionEndDateTime = new Date(session.startDate);
-        sessionEndDateTime.setHours(endHour, endMinute, 59, 999);
-      } else {
-        sessionStartDateTime = new Date(today);
-        sessionStartDateTime.setHours(startHour, startMinute, 0, 0);
-        sessionEndDateTime = new Date(today);
-        sessionEndDateTime.setHours(endHour, endMinute, 59, 999);
-      }
-
-      if (now >= sessionStartDateTime && now <= sessionEndDateTime) {
-        return { type: 'live' };
-      } else if (sessionStartDateTime > now) {
-        const minutesUntilStart = Math.floor((sessionStartDateTime.getTime() - now.getTime()) / (1000 * 60));
-        return { type: 'upcoming', minutesUntilStart };
-      }
-
-      return { type: 'upcoming', minutesUntilStart: 0 };
-    } catch {
-      return { type: 'upcoming', minutesUntilStart: 0 };
-    }
+  // Helper to get minutes until start
+  const getMinutesUntilStart = (session: ISession) => {
+    const startIST = getSessionStartTimeIST(session);
+    const now = currentTime;
+    if (now >= startIST) return 0;
+    return Math.floor((startIST - now) / 60000);
   };
 
-  const formatTime = (timeString: string) => {
+  // Helpers for time/date display
+  const formatTime12Hour = (timeString: string) => {
     try {
       const [hours, minutes] = timeString.split(':');
       const hour = parseInt(hours, 10);
@@ -226,19 +188,16 @@ const ScanQR: React.FC = () => {
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDateIST = (session: ISession) => {
     try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
-        return dateString;
-      }
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
+      const startIST = getSessionStartTimeIST(session);
+      return formatIST(startIST, {
         month: 'short',
         day: 'numeric',
+        year: 'numeric'
       });
     } catch {
-      return dateString;
+      return session.startDate;
     }
   };
 
@@ -252,6 +211,24 @@ const ScanQR: React.FC = () => {
       setCameraError(false);
       setMessageType('info');
       setMessage('Starting camera...');
+
+      // Log eligibility check
+      const currentSession = sessions.find(s => s._id === selectedSessionId);
+      if (currentSession) {
+        const status = getSessionStatus(currentSession, currentTime);
+        console.log('🔍 QR SCAN ELIGIBILITY CHECK:', {
+          nowIST: currentTime,
+          readableTime: formatIST(currentTime),
+          sessionStatus: status,
+          isEligible: status === 'live'
+        });
+
+        if (status !== 'live') {
+          setMessageType('error');
+          setMessage('Attendance is only allowed during the session time.');
+          return;
+        }
+      }
 
       const html5QrCode = new Html5Qrcode(qrCodeRegionId);
       scannerRef.current = html5QrCode;
@@ -769,8 +746,10 @@ const ScanQR: React.FC = () => {
             // Session Cards
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
               {myScanSessions.map((session) => {
-                const status = getSessionStatus(session);
-                const isLive = status.type === 'live';
+                const status = getSessionStatus(session, currentTime);
+                const isLive = status === 'live';
+                const isUpcoming = status === 'upcoming';
+                const minutesUntilStart = isUpcoming ? getMinutesUntilStart(session) : 0;
 
                 return (
                   <div
@@ -795,11 +774,11 @@ const ScanQR: React.FC = () => {
                     )}
 
                     {/* Upcoming Indicator */}
-                    {status.type === 'upcoming' && status.minutesUntilStart !== undefined && (
+                    {isUpcoming && minutesUntilStart > 0 && minutesUntilStart <= 120 && (
                       <div className="absolute top-4 right-4">
                         <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-semibold border border-blue-300 dark:border-blue-700">
                           <span className="material-symbols-outlined text-sm">schedule</span>
-                          <span>Starts in {status.minutesUntilStart} {status.minutesUntilStart === 1 ? 'minute' : 'minutes'}</span>
+                          <span>Starts in {minutesUntilStart} {minutesUntilStart === 1 ? 'minute' : 'minutes'}</span>
                         </span>
                       </div>
                     )}
@@ -818,11 +797,11 @@ const ScanQR: React.FC = () => {
                       <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
                         <div className="flex items-center gap-2">
                           <span className="material-symbols-outlined text-slate-500 dark:text-slate-400 text-lg">calendar_today</span>
-                          <span>{formatDate(session.startDate)}</span>
+                          <span>{formatDateIST(session)}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="material-symbols-outlined text-slate-500 dark:text-slate-400 text-lg">schedule</span>
-                          <span>{formatTime(session.startTime)} - {formatTime(session.endTime)}</span>
+                          <span>{formatTime12Hour(session.startTime)} - {formatTime12Hour(session.endTime)}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="material-symbols-outlined text-slate-500 dark:text-slate-400 text-lg">location_on</span>

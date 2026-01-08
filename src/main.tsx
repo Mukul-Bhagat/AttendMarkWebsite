@@ -1,3 +1,8 @@
+// 🛡️ TIME GUARDS - MUST BE FIRST IMPORT
+// Enables runtime monitoring of Date usage to prevent time bugs during migration
+// See TIME_ARCHITECTURE.md for details
+import './utils/timeGuards';
+
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'

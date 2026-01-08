@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../api';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth, IUser as IAuthUser } from '../contexts/AuthContext';
 import { ISession } from '../types';
 import AddUsersModal from '../components/AddUsersModal';
@@ -19,7 +19,32 @@ interface IUser {
 
 const EditSession: React.FC = () => {
   const navigate = useNavigate();
-  const { id: sessionId } = useParams<{ id: string }>();
+  const location = useLocation();
+  const { id: paramId } = useParams<{ id: string }>();
+
+  // Backward Compatibility: Handle composite IDs (legacy links)
+  const sessionId = (paramId || '').includes('_') ? (paramId || '').split('_')[0] : paramId;
+
+  // 🛡️ AUTO-MIGRATE LEGACY URLS (Edit Page)
+  // Converts /sessions/edit/XXX_DATE -> /sessions/edit/XXX?date=DATE
+  useEffect(() => {
+    if (paramId && paramId.includes('_')) {
+      const [cleanId, legacyDate] = paramId.split('_');
+      const query = new URLSearchParams(location.search);
+      const date = query.get('date') || legacyDate;
+
+      console.warn(
+        '[LEGACY ROUTE AUTO-FIXED]',
+        paramId,
+        '→',
+        `/sessions/edit/${cleanId}?date=${date}`
+      );
+
+      navigate(`/sessions/edit/${cleanId}?date=${date}`, { replace: true });
+    }
+  }, [paramId, location.search, navigate]);
+
+
   const { isSuperAdmin } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
@@ -63,7 +88,12 @@ const EditSession: React.FC = () => {
       }
 
       try {
-        const { data }: { data: ISession } = await api.get(`/api/sessions/${sessionId}`);
+        const query = new URLSearchParams(location.search);
+        const dateParam = query.get('date');
+        const url = dateParam ? `/api/sessions/${sessionId}/details?date=${dateParam}` : `/api/sessions/${sessionId}`;
+
+        const response = await api.get(url);
+        const data: ISession = response.data.session || response.data;
 
         // Populate form with existing data
         setFormData({
@@ -188,7 +218,7 @@ const EditSession: React.FC = () => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     if (error) setError('');
-    
+
     // When sessionType changes, clear user lists if switching to/from Hybrid
     if (name === 'sessionType') {
       if (value === 'HYBRID') {
@@ -231,19 +261,19 @@ const EditSession: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
+
     // Validate weekly days
     if (formData.frequency === 'Weekly' && formData.weeklyDays.length === 0) {
       setError('Please select at least one day for weekly classes/batches');
       return;
     }
-    
+
     // Validate end date is after start date
     if (formData.endDate && formData.startDate && formData.endDate < formData.startDate) {
       setError('End date must be after start date');
       return;
     }
-    
+
     // Validate end time is after start time
     if (formData.startTime && formData.endTime && formData.startTime >= formData.endTime) {
       setError('End time must be after start time');
@@ -258,7 +288,7 @@ const EditSession: React.FC = () => {
         return;
       }
     }
-    
+
     setIsSubmitting(true);
 
     try {
@@ -310,7 +340,7 @@ const EditSession: React.FC = () => {
           setIsSubmitting(false);
           return;
         }
-        
+
         locationObj = {
           type: 'COORDS',
           geolocation: {
@@ -332,8 +362,8 @@ const EditSession: React.FC = () => {
         sessionType: formData.sessionType,
         assignedUsers: combinedAssignedUsers,
         weeklyDays: formData.frequency === 'Weekly' ? formData.weeklyDays : undefined,
-        virtualLocation: formData.sessionType === 'REMOTE' || formData.sessionType === 'HYBRID' 
-          ? formData.virtualLocation 
+        virtualLocation: formData.sessionType === 'REMOTE' || formData.sessionType === 'HYBRID'
+          ? formData.virtualLocation
           : undefined,
         location: locationObj,
         radius: (formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID') && formData.radius
@@ -523,11 +553,10 @@ const EditSession: React.FC = () => {
                               key={day}
                               type="button"
                               onClick={() => handleDayToggle(day)}
-                              className={`flex items-center justify-center h-10 w-10 rounded-full border text-sm font-semibold transition-colors ${
-                                isSelected
-                                  ? 'bg-primary text-white border-primary'
-                                  : 'border-gray-300 dark:border-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                              }`}
+                              className={`flex items-center justify-center h-10 w-10 rounded-full border text-sm font-semibold transition-colors ${isSelected
+                                ? 'bg-primary text-white border-primary'
+                                : 'border-gray-300 dark:border-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                                }`}
                             >
                               {dayLabels[index]}
                             </button>
@@ -554,11 +583,10 @@ const EditSession: React.FC = () => {
                       } as React.ChangeEvent<HTMLInputElement>;
                       handleChange(syntheticEvent);
                     }}
-                    className={`relative flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 cursor-pointer transition-colors ${
-                      formData.sessionType === 'PHYSICAL'
-                        ? 'border-primary'
-                        : 'border-gray-300 dark:border-gray-700 hover:border-primary/50'
-                    }`}
+                    className={`relative flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 cursor-pointer transition-colors ${formData.sessionType === 'PHYSICAL'
+                      ? 'border-primary'
+                      : 'border-gray-300 dark:border-gray-700 hover:border-primary/50'
+                      }`}
                   >
                     {formData.sessionType === 'PHYSICAL' && (
                       <div className="absolute top-3 right-3 h-6 w-6 rounded-full bg-primary flex items-center justify-center">
@@ -576,11 +604,10 @@ const EditSession: React.FC = () => {
                       } as React.ChangeEvent<HTMLInputElement>;
                       handleChange(syntheticEvent);
                     }}
-                    className={`relative flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 cursor-pointer transition-colors ${
-                      formData.sessionType === 'REMOTE'
-                        ? 'border-primary'
-                        : 'border-gray-300 dark:border-gray-700 hover:border-primary/50'
-                    }`}
+                    className={`relative flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 cursor-pointer transition-colors ${formData.sessionType === 'REMOTE'
+                      ? 'border-primary'
+                      : 'border-gray-300 dark:border-gray-700 hover:border-primary/50'
+                      }`}
                   >
                     {formData.sessionType === 'REMOTE' && (
                       <div className="absolute top-3 right-3 h-6 w-6 rounded-full bg-primary flex items-center justify-center">
@@ -598,11 +625,10 @@ const EditSession: React.FC = () => {
                       } as React.ChangeEvent<HTMLInputElement>;
                       handleChange(syntheticEvent);
                     }}
-                    className={`relative flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 cursor-pointer transition-colors ${
-                      formData.sessionType === 'HYBRID'
-                        ? 'border-primary'
-                        : 'border-gray-300 dark:border-gray-700 hover:border-primary/50'
-                    }`}
+                    className={`relative flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 cursor-pointer transition-colors ${formData.sessionType === 'HYBRID'
+                      ? 'border-primary'
+                      : 'border-gray-300 dark:border-gray-700 hover:border-primary/50'
+                      }`}
                   >
                     {formData.sessionType === 'HYBRID' && (
                       <div className="absolute top-3 right-3 h-6 w-6 rounded-full bg-primary flex items-center justify-center">
@@ -840,17 +866,17 @@ const EditSession: React.FC = () => {
                 onClose={() => setShowUserModal(false)}
                 onSave={handleSaveUsers}
                 initialSelectedUsers={
-                  userModalContext === 'PHYSICAL' 
-                    ? physicalUsers 
-                    : userModalContext === 'REMOTE' 
-                      ? remoteUsers 
+                  userModalContext === 'PHYSICAL'
+                    ? physicalUsers
+                    : userModalContext === 'REMOTE'
+                      ? remoteUsers
                       : assignedUsers
                 }
                 context={
-                  userModalContext === 'PHYSICAL' 
-                    ? 'Add Physical Attendees' 
-                    : userModalContext === 'REMOTE' 
-                      ? 'Add Remote Attendees' 
+                  userModalContext === 'PHYSICAL'
+                    ? 'Add Physical Attendees'
+                    : userModalContext === 'REMOTE'
+                      ? 'Add Remote Attendees'
                       : 'Add Users to Session'
                 }
               />

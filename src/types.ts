@@ -37,7 +37,9 @@ export interface ISession {
   name: string;
   description?: string;
   frequency: 'OneTime' | 'Daily' | 'Weekly' | 'Monthly' | 'Random';
-  startDate: string; // ISO date string
+  startDate: string; // ISO date string (Series Start)
+  occurrenceDate?: string; // YYYY-MM-DD (IST) - The actual instance date
+  originalSessionId?: string; // If session is expanded, this is the rule ID
   endDate?: string; // ISO date string
   startTime: string; // HH:mm format
   endTime: string; // HH:mm format

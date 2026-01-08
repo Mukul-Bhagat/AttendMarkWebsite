@@ -1,13 +1,15 @@
 /**
- * Global Time Utilities - IST-Based System
+ * IST Time Utilities - CANONICAL IMPLEMENTATION
  * 
- * BUSINESS RULE: This application operates in Indian Standard Time (Asia/Kolkata)
+ * This is the ONLY module allowed to handle time operations.
+ * All business logic MUST use these functions.
  * 
- * - All "today", "date selection", and "calendar day" logic happens in IST
- * - Day boundaries are 00:00 AM - 11:59 PM IST
- * - UTC is used internally for storage but never for business logic
+ * Core Principle:
+ * - Returns: Numeric timestamps (milliseconds since epoch)
+ * - Input: ISO date strings, IST time strings
+ * - Timezone: All calculations in IST (Asia/Kolkata)
  * 
- * @version 1.0 - Global IST enforcement
+ * @see TIME_ARCHITECTURE.md Section 5 & 7
  */
 
 // ============================================
@@ -15,7 +17,7 @@
 // ============================================
 
 /**
- * Business timezone for the entire application
+ * Business timezone - the ONLY timezone used in this application
  */
 export const BUSINESS_TIMEZONE = 'Asia/Kolkata';
 
@@ -23,168 +25,237 @@ export const BUSINESS_TIMEZONE = 'Asia/Kolkata';
  * IST offset from UTC in milliseconds
  * IST = UTC + 5 hours 30 minutes
  */
-export const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+export const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // 19,800,000 ms
 
 // ============================================
-// CORE IST TIME FUNCTIONS
+// TYPE DEFINITIONS
 // ============================================
 
 /**
- * Get current time in IST as timestamp (milliseconds)
+ * IST Timestamp - Standard numeric timestamp (ms since epoch)
  * 
- * This is the ONLY way to get "now" in the system
- * 
- * @returns IST timestamp
+ * Note: This is NOT a special "IST-based epoch" - it's a standard UTC timestamp.
+ * The "IST" designation means this timestamp represents a specific moment
+ * that was calculated respecting IST boundaries.
  */
-export function nowIST(): number {
-    return Date.now() + IST_OFFSET_MS;
+export type ISTTimestamp = number;
+
+// ============================================
+// CORE UTILITIES
+// ============================================
+
+/**
+ * Get current time as standard timestamp
+ * 
+ * @returns Current UTC timestamp (ms since epoch)
+ */
+export function nowIST(): ISTTimestamp {
+    return Date.now();
 }
 
 /**
- * Get IST midnight (start of day) for a given date
+ * Get UTC timestamp for midnight IST on a given date
  * 
- * @param dateISO ISO date string (e.g., "2026-01-07T00:00:00.000Z" or "2026-01-07")
- * @returns IST timestamp at 00:00:00 on that day
+ * Example: istDayStart("2026-01-07") returns UTC timestamp for:
+ *   Jan 7, 2026, 00:00:00 IST
+ *   = Jan 6, 2026, 18:30:00 UTC
+ * 
+ * @param isoDate ISO date string (e.g., "2026-01-07" or "2026-01-07T00:00:00.000Z")
+ * @returns UTC timestamp representing midnight IST on that date
  */
-export function istDayStart(dateISO: string): number {
-    // Remove time component if present
-    const dateOnly = dateISO.split('T')[0];
+export function istDayStart(isoDate: string): ISTTimestamp {
+    // Extract date components (year, month, day)
+    const dateOnly = isoDate.split('T')[0];
     const [year, month, day] = dateOnly.split('-').map(Number);
 
-    // Create UTC midnight for that calendar date
-    const utcMidnight = Date.UTC(year, month - 1, day, 0, 0, 0, 0);
 
-    // Convert to IST midnight
-    // NOTE: This is the IST timestamp for 00:00:00 IST on that day
-    // Which is actually 18:30:00 UTC on the PREVIOUS day
-    return utcMidnight + IST_OFFSET_MS - 24 * 60 * 60 * 1000 + IST_OFFSET_MS;
+
+
+
+    // Now we know what UTC midnight looks like as an IST date
+    // We want the OPPOSITE: what IST midnight looks like as UTC
+    // IST midnight = UTC - 5.5 hours
+
+    // The input date components represent an IST date
+    // Create UTC timestamp for that IST date at 00:00 IST
+    // 00:00 IST = 18:30 previous day UTC
+
+    const istMidnight = Date.UTC(year, month - 1, day, 0, 0, 0, 0);
+    return istMidnight - IST_OFFSET_MS;
 }
 
 /**
- * Get IST end of day (23:59:59.999) for a given date
+ * Get UTC timestamp for end of day IST (23:59:59.999)
  * 
- * @param dateISO ISO date string
- * @returns IST timestamp at 23:59:59.999 on that day
+ * @param isoDate ISO date string
+ * @returns UTC timestamp representing 23:59:59.999 IST on that date
  */
-export function istDayEnd(dateISO: string): number {
-    const start = istDayStart(dateISO);
-    return start + 24 * 60 * 60 * 1000 - 1;
+export function istDayEnd(isoDate: string): ISTTimestamp {
+    const start = istDayStart(isoDate);
+    // Add 1 day minus 1 millisecond
+    return start + (24 * 60 * 60 * 1000) - 1;
 }
 
 /**
- * Create IST timestamp from year, month, day
+ * Convert backend ISO date + IST time to UTC timestamp
  * 
- * @param year Year (e.g., 2026)
- * @param month Month (1-12, NOT 0-11)
- * @param day Day (1-31)
- * @returns IST timestamp at midnight on that date
+ * Example: sessionTimeToIST("2026-01-07T00:00:00.000Z", "11:00")
+ *   Backend date represents: Jan 7 (as a calendar date, ignore the time component)
+ *   IST time: 11:00 IST
+ *   Result: UTC timestamp for Jan 7, 2026, 11:00:00 IST
+ *           = Jan 7, 2026, 05:30:00 UTC
+ * 
+ * @param isoDate Backend ISO date string (time component ignored, only date matters)
+ * @param timeIST IST time string in "HH:mm" format (e.g., "11:00", "19:30")
+ * @returns UTC timestamp for that IST date + time
  */
-export function istDateFromYMD(year: number, month: number, day: number): number {
-    const utcMidnight = Date.UTC(year, month - 1, day, 0, 0, 0, 0);
-    return utcMidnight;
+export function sessionTimeToIST(isoDate: string, timeIST: string): ISTTimestamp {
+    // Get midnight IST for this date
+    const dayStart = istDayStart(isoDate);
+
+    // Parse time components
+    const [hours, minutes] = timeIST.split(':').map(Number);
+
+    // Add time offset to midnight
+    const timeOffsetMs = (hours * 60 + minutes) * 60 * 1000;
+
+    return dayStart + timeOffsetMs;
 }
 
 /**
- * Convert IST timestamp to Date object for display
+ * Check if two timestamps occur on the same IST calendar day
  * 
- * @param istTimestamp IST timestamp
- * @returns Date object (in browser's local timezone, but represents IST time)
+ * @param timestampA First UTC timestamp
+ * @param timestampB Second UTC timestamp
+ * @returns true if both timestamps are on the same IST day
  */
-export function istToDate(istTimestamp: number): Date {
-    return new Date(istTimestamp - IST_OFFSET_MS);
-}
+export function isSameISTDay(timestampA: ISTTimestamp, timestampB: ISTTimestamp): boolean {
+    // Convert both timestamps to IST and check if they're on the same calendar day
+    const dateA = new Date(timestampA);
+    const dateB = new Date(timestampB);
 
-/**
- * Get date components (year, month, day) from IST timestamp
- * 
- * @param istTimestamp IST timestamp
- * @returns Object with year, month (1-12), day
- */
-export function getISTDateComponents(istTimestamp: number): {
-    year: number;
-    month: number;
-    day: number;
-} {
-    const date = istToDate(istTimestamp);
-    return {
-        year: date.getUTCFullYear(),
-        month: date.getUTCMonth() + 1,
-        day: date.getUTCDate()
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: BUSINESS_TIMEZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    });
+
+    const partsA = formatter.formatToParts(dateA);
+    const partsB = formatter.formatToParts(dateB);
+
+    const getDate = (parts: Intl.DateTimeFormatPart[]) => {
+        const year = parts.find(p => p.type === 'year')?.value;
+        const month = parts.find(p => p.type === 'month')?.value;
+        const day = parts.find(p => p.type === 'day')?.value;
+        return `${year}-${month}-${day}`;
     };
+
+    return getDate(partsA) === getDate(partsB);
 }
 
 /**
- * Check if two IST timestamps are on the same IST day
+ * Convert any date input to IST Date String (YYYY-MM-DD)
  * 
- * @param ist1 First IST timestamp
- * @param ist2 Second IST timestamp
- * @returns true if same IST day
+ * @param date Date object, ISO string, or timestamp
+ * @returns YYYY-MM-DD in IST
  */
-export function isSameISTDay(ist1: number, ist2: number): boolean {
-    const d1 = getISTDateComponents(ist1);
-    const d2 = getISTDateComponents(ist2);
+export function toISTDateString(date: Date | string | number): string {
+    const timestamp = typeof date === 'number' ? date : new Date(date).getTime();
 
-    return d1.year === d2.year && d1.month === d2.month && d1.day === d2.day;
+    // Use Intl to format in IST
+    const parts = new Intl.DateTimeFormat('en-IN', {
+        timeZone: BUSINESS_TIMEZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).formatToParts(timestamp);
+
+    const year = parts.find(p => p.type === 'year')?.value;
+    const month = parts.find(p => p.type === 'month')?.value;
+    const day = parts.find(p => p.type === 'day')?.value;
+
+    return `${year}-${month}-${day}`;
+}
+
+// ============================================
+// DEPRECATED FUNCTIONS
+// ============================================
+
+/**
+ * @deprecated DO NOT USE - This function had a critical bug
+ * Use istDayStart() instead
+ * 
+ * This function is kept only to prevent breaking existing imports.
+ * It will throw an error if called.
+ * 
+ * @see TIME_ARCHITECTURE.md Appendix A for bug details
+ */
+export function istDateFromYMD(year: number, month: number, day: number): never {
+    throw new Error(
+        'istDateFromYMD() is DEPRECATED and contained a critical bug.\n' +
+        'Use istDayStart() instead:\n' +
+        `  istDayStart("${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}")\n` +
+        'See TIME_ARCHITECTURE.md for migration guide.'
+    );
 }
 
 /**
- * Format IST timestamp for display
+ * @deprecated DO NOT USE - Exposes Date objects
+ * All utilities now return numeric timestamps only
+ */
+export function istToDate(istTimestamp: number): never {
+    throw new Error(
+        'istToDate() is DEPRECATED.\n' +
+        'Use numeric timestamps directly for all logic.\n' +
+        'For display, use Intl.DateTimeFormat with timeZone: "Asia/Kolkata".\n' +
+        'See TIME_ARCHITECTURE.md Section 5.3'
+    );
+}
+
+/**
+ * @deprecated DO NOT USE - Returns Date components
+ * Work with timestamps directly
+ */
+export function getISTDateComponents(istTimestamp: number): never {
+    throw new Error(
+        'getISTDateComponents() is DEPRECATED.\n' +
+        'Work with timestamps directly in business logic.\n' +
+        'For display formatting, use Intl.DateTimeFormat.\n' +
+        'See TIME_ARCHITECTURE.md Section 5.3'
+    );
+}
+
+// ============================================
+// DISPLAY HELPERS (Optional utilities)
+// ============================================
+
+/**
+ * Format timestamp for display in IST
  * 
- * @param istTimestamp IST timestamp
+ * This is a DISPLAY HELPER - do NOT use in business logic
+ * 
+ * @param timestamp UTC timestamp
  * @param options Intl.DateTimeFormat options
  * @returns Formatted string
  */
 export function formatIST(
-    istTimestamp: number,
+    timestamp: ISTTimestamp,
     options?: Intl.DateTimeFormatOptions
 ): string {
-    const date = istToDate(istTimestamp);
     return new Intl.DateTimeFormat('en-IN', {
         timeZone: BUSINESS_TIMEZONE,
         ...options
-    }).format(date);
+    }).format(timestamp);
 }
-
-// ============================================
-// SESSION TIME FUNCTIONS
-// ============================================
-
-/**
- * Convert backend session date + IST time to IST timestamp
- * 
- * @param dateISO Backend date (e.g., "2026-01-07T00:00:00.000Z")
- * @param timeIST IST time string (e.g., "19:00")
- * @returns IST timestamp
- */
-export function sessionTimeToIST(dateISO: string, timeIST: string): number {
-    // Extract date components from the ISO string
-    const dateOnly = dateISO.split('T')[0];
-    const [year, month, day] = dateOnly.split('-').map(Number);
-
-    // Parse IST time
-    const [hours, minutes] = timeIST.split(':').map(Number);
-
-    // Create IST timestamp
-    // Step 1: Get midnight on that calendar date in UTC
-    const utcMidnight = Date.UTC(year, month - 1, day, 0, 0, 0, 0);
-
-    // Step 2: Add hours and minutes
-    const timeOffset = (hours * 60 + minutes) * 60 * 1000;
-
-    // Step 3: This is the IST timestamp (no conversion needed - we're working in IST time)
-    return utcMidnight + timeOffset;
-}
-
-// ============================================
-// DEBUGGING UTILITIES
-// ============================================
 
 /**
  * Debug helper: Log IST time details
+ * 
+ * Use this to inspect timestamps during development
  */
-export function debugISTTime(label: string, istTimestamp: number): void {
-    const components = getISTDateComponents(istTimestamp);
-    const formatted = formatIST(istTimestamp, {
+export function debugISTTime(label: string, timestamp: ISTTimestamp): void {
+    const formatted = formatIST(timestamp, {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
@@ -195,10 +266,9 @@ export function debugISTTime(label: string, istTimestamp: number): void {
     });
 
     console.log(`[${label}]`, {
-        timestamp: istTimestamp,
-        formatted,
-        components,
-        iso: istToDate(istTimestamp).toISOString()
+        timestamp,
+        formattedIST: formatted,
+        iso: new Date(timestamp).toISOString()
     });
 }
 
@@ -207,16 +277,19 @@ export function debugISTTime(label: string, istTimestamp: number): void {
 // ============================================
 
 export default {
+    // Constants
     BUSINESS_TIMEZONE,
     IST_OFFSET_MS,
+
+    // Core utilities
     nowIST,
     istDayStart,
     istDayEnd,
-    istDateFromYMD,
-    istToDate,
-    getISTDateComponents,
-    isSameISTDay,
-    formatIST,
     sessionTimeToIST,
+    isSameISTDay,
+    toISTDateString,
+
+    // Display helpers
+    formatIST,
     debugISTTime
 };

@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "verify": "node -e \"import('./src/utils/verifyImplementation.ts').then(m => m.logVerificationResults())\""
+    "verify": "node -e \"import('./src/utils/verifyImplementation.ts').then(m => m.logVerificationResults())\"",
+    "check-time-compliance": "eslint . --ext ts,tsx --max-warnings 0"
   },
   "dependencies": {
     "@lottiefiles/dotlottie-react": "^0.17.12",
