@@ -204,7 +204,7 @@ export function istDateFromYMD(year: number, month: number, day: number): never 
  * @deprecated DO NOT USE - Exposes Date objects
  * All utilities now return numeric timestamps only
  */
-export function istToDate(istTimestamp: number): never {
+export function istToDate(_istTimestamp: number): never {
     throw new Error(
         'istToDate() is DEPRECATED.\n' +
         'Use numeric timestamps directly for all logic.\n' +
@@ -217,7 +217,7 @@ export function istToDate(istTimestamp: number): never {
  * @deprecated DO NOT USE - Returns Date components
  * Work with timestamps directly
  */
-export function getISTDateComponents(istTimestamp: number): never {
+export function getISTDateComponents(_istTimestamp: number): never {
     throw new Error(
         'getISTDateComponents() is DEPRECATED.\n' +
         'Work with timestamps directly in business logic.\n' +

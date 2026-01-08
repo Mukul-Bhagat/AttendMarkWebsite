@@ -108,22 +108,7 @@ const Sessions: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
-        return dateString; // Return original if invalid
-      }
-      return date.toLocaleDateString('en-GB', {
-        weekday: 'short',
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
-    } catch {
-      return dateString; // Return original if error
-    }
-  };
+
 
   const formatFrequency = (frequency: string) => {
     const freqMap: { [key: string]: string } = {

@@ -6,8 +6,7 @@
 
 import {
     getSessionStatus,
-    nowIST,
-    sessionTimeToIST
+    nowIST
 } from './sessionStatusUtils.js';
 
 console.log('🧪 SESSION STATUS VERIFICATION\n');

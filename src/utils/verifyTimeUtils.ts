@@ -142,7 +142,7 @@ test('Same IST day despite different UTC days', () => {
     const inSameMorning = new Date(earlyMorning);
     const eveningDate = new Date(evening);
 
-    console.log(`   Early: ${earlyMorning.getUTCDate()} UTC, Evening: ${eveningDate.getUTCDate()} UTC`);
+    console.log(`   Early: ${inSameMorning.getUTCDate()} UTC, Evening: ${eveningDate.getUTCDate()} UTC`);
     return isSameISTDay(evening, earlyMorning) === true;
 });
 

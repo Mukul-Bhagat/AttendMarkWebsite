@@ -22,8 +22,9 @@ const testSession1 = {
 };
 
 // Create a time that's 5 minutes after end time (within 10-min buffer)
-const now1 = new Date();
-now1.setHours(19, 5, 0, 0);
+const now1Date = new Date();
+now1Date.setHours(19, 5, 0, 0);
+const now1 = now1Date.getTime();
 
 const status1 = getSessionStatus(testSession1, now1);
 const isPast1 = isSessionPast(testSession1, now1);
@@ -35,8 +36,9 @@ console.log(`isPast: ${isPast1}`);
 console.log(`✅ PASS: ${status1 === 'live' && !isPast1}\n`);
 
 // Test Case 2: Session that's truly past (beyond buffer)
-const now2 = new Date();
-now2.setHours(19, 15, 0, 0);
+const now2Date = new Date();
+now2Date.setHours(19, 15, 0, 0);
+const now2 = now2Date.getTime();
 
 const status2 = getSessionStatus(testSession1, now2);
 const isPast2 = isSessionPast(testSession1, now2);
@@ -48,8 +50,9 @@ console.log(`isPast: ${isPast2}`);
 console.log(`✅ PASS: ${status2 === 'past' && isPast2}\n`);
 
 // Test Case 3: Currently live session
-const now3 = new Date();
-now3.setHours(15, 0, 0, 0);
+const now3Date = new Date();
+now3Date.setHours(15, 0, 0, 0);
+const now3 = now3Date.getTime();
 
 const status3 = getSessionStatus(testSession1, now3);
 const isPast3 = isSessionPast(testSession1, now3);
@@ -61,8 +64,9 @@ console.log(`isPast: ${isPast3}`);
 console.log(`✅ PASS: ${status3 === 'live' && !isPast3}\n`);
 
 // Test Case 4: Upcoming session
-const now4 = new Date();
-now4.setHours(10, 0, 0, 0);
+const now4Date = new Date();
+now4Date.setHours(10, 0, 0, 0);
+const now4 = now4Date.getTime();
 
 const status4 = getSessionStatus(testSession1, now4);
 const isPast4 = isSessionPast(testSession1, now4);
