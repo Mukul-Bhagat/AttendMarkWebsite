@@ -18,11 +18,16 @@ interface SessionLog {
   _id: string;
   name: string;
   date: string;
-  totalUsers: number;
+  dateStr?: string; // YYYY-MM-DD
+  totalUsers?: number; // Legacy or alternative name? Backend sends totalAssigned
+  totalAssigned: number;
   presentCount: number;
   lateCount: number;
   absentCount: number;
+  attendancePercentage: number;
   status: string;
+  startTime?: string;
+  endTime?: string;
 }
 
 interface SessionAttendanceRecord {
@@ -229,30 +234,36 @@ const AttendanceReport: React.FC = () => {
   }, [selectedClass, startDate, endDate, classes.length, searchParams, activeTab]);
 
   // Fetch attendance details for a specific session
-  const fetchSessionAttendanceDetails = async (sessionId: string) => {
-    if (sessionAttendanceDetails[sessionId]) {
+  // Fetch attendance details for a specific session
+  const fetchSessionAttendanceDetails = async (sessionId: string, date: string) => {
+    // Generate Unique Key: SessionID + Date
+    // This prevents "Jan 6" data showing for "Jan 8" row
+    const key = `${sessionId}_${date}`;
+
+    if (sessionAttendanceDetails[key]) {
       // Already loaded, just toggle
-      setExpandedSessionId(expandedSessionId === sessionId ? null : sessionId);
+      setExpandedSessionId(expandedSessionId === key ? null : key);
       return;
     }
 
-    setIsLoadingDetails({ ...isLoadingDetails, [sessionId]: true });
+    setIsLoadingDetails({ ...isLoadingDetails, [key]: true });
     try {
-      const { data } = await api.get(`/api/attendance/session/${sessionId}`);
-      setSessionAttendanceDetails({ ...sessionAttendanceDetails, [sessionId]: data || [] });
-      setExpandedSessionId(sessionId);
+      // FIX: Pass date to backend to get ONLY that day's attendance
+      const { data } = await api.get(`/api/attendance/session/${sessionId}?date=${date}`);
+      setSessionAttendanceDetails({ ...sessionAttendanceDetails, [key]: data || [] });
+      setExpandedSessionId(key);
     } catch (err: any) {
       console.error('Failed to fetch session attendance details:', err);
       setError('Failed to load attendance details for this session.');
     } finally {
-      setIsLoadingDetails({ ...isLoadingDetails, [sessionId]: false });
+      setIsLoadingDetails({ ...isLoadingDetails, [key]: false });
     }
   };
 
   // Download CSV for a specific session
-  const downloadSessionCSV = async (sessionId: string, sessionName: string) => {
+  const downloadSessionCSV = async (sessionId: string, sessionName: string, date: string) => {
     try {
-      const { data } = await api.get(`/api/attendance/session/${sessionId}`);
+      const { data } = await api.get(`/api/attendance/session/${sessionId}?date=${date}`);
       const records: SessionAttendanceRecord[] = data || [];
 
       if (records.length === 0) {
@@ -312,10 +323,11 @@ const AttendanceReport: React.FC = () => {
     }
   };
 
+
   // Download PDF for a specific session
-  const downloadSessionPDF = async (sessionId: string, sessionName: string) => {
+  const downloadSessionPDF = async (sessionId: string, sessionName: string, date: string) => {
     try {
-      const { data } = await api.get(`/api/attendance/session/${sessionId}`);
+      const { data } = await api.get(`/api/attendance/session/${sessionId}?date=${date}`);
       const records: SessionAttendanceRecord[] = data || [];
 
       if (records.length === 0) {
@@ -870,182 +882,316 @@ const AttendanceReport: React.FC = () => {
                   )}
                 </div>
                 {sessionLogs.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-full divide-y divide-[#e6e2db] dark:divide-slate-700">
-                      <thead className="bg-[#f9fafb] dark:bg-slate-900/50">
-                        <tr>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-300 uppercase tracking-wider" scope="col">Date</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-300 uppercase tracking-wider" scope="col">Session Name</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-300 uppercase tracking-wider" scope="col">Attendance</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-300 uppercase tracking-wider" scope="col">Status</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-300 uppercase tracking-wider" scope="col">Late</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-300 uppercase tracking-wider" scope="col">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white dark:bg-slate-800 divide-y divide-[#e6e2db] dark:divide-slate-700">
-                        {sessionLogs.map((log) => (
-                          <React.Fragment key={log._id}>
-                            <tr className="hover:bg-red-50 dark:hover:bg-[#f04129]/10 transition-colors duration-150">
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-[#181511] dark:text-white">
-                                {formatDate(log.date)}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[#181511] dark:text-white">
-                                {log.name}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-[#181511] dark:text-white">
-                                <span className="font-semibold">{log.presentCount}</span>
-                                <span className="text-[#8a7b60] dark:text-gray-400">/{log.totalUsers}</span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                {log.status === 'Completed' ? (
-                                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
-                                    Completed
-                                  </span>
-                                ) : log.status === 'Today' ? (
-                                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
-                                    Today
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                                    Upcoming
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                {log.lateCount > 0 ? (
-                                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300">
-                                    {log.lateCount}
-                                  </span>
-                                ) : (
-                                  <span className="text-[#8a7b60] dark:text-gray-400">0</span>
-                                )}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                <div className="flex items-center gap-2">
-                                  {/* NEW: Manage Attendance Button */}
-                                  <button
-                                    onClick={() => {
-                                      setViewingSessionId(log._id);
-                                      setViewingSessionDate(log.date);
-                                    }}
-                                    className="inline-flex items-center px-3 py-1.5 text-xs font-medium bg-[#f04129] hover:bg-[#d63a25] text-white rounded transition-colors"
-                                    title="Manage attendance (view all users, make corrections)"
-                                  >
-                                    <span className="material-symbols-outlined text-base mr-1">manage_accounts</span>
-                                    Manage
-                                  </button>
-                                  <button
-                                    onClick={() => fetchSessionAttendanceDetails(log._id)}
-                                    className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-[#f04129] hover:text-[#d63a25] dark:text-[#f04129] dark:hover:text-[#ff6b5a] transition-colors"
-                                    title="View attendance list"
-                                  >
-                                    <span className="material-symbols-outlined text-base mr-1">visibility</span>
-                                    View
-                                  </button>
-                                  <button
-                                    onClick={() => downloadSessionPDF(log._id, log.name)}
-                                    className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-[#f04129] hover:text-[#d63a25] dark:text-[#f04129] dark:hover:text-[#ff6b5a] transition-colors"
-                                    title="Download PDF"
-                                  >
-                                    <span className="material-symbols-outlined text-base mr-1">picture_as_pdf</span>
-                                    PDF
-                                  </button>
-                                  <button
-                                    onClick={() => downloadSessionCSV(log._id, log.name)}
-                                    className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-[#f04129] hover:text-[#d63a25] dark:text-[#f04129] dark:hover:text-[#ff6b5a] transition-colors"
-                                    title="Download CSV"
-                                  >
-                                    <span className="material-symbols-outlined text-base mr-1">file_download</span>
-                                    CSV
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                            {/* Expanded Row - Attendance Details */}
-                            {expandedSessionId === log._id && (
-                              <tr>
-                                <td colSpan={6} className="px-6 py-4 bg-gray-50 dark:bg-slate-900/50">
-                                  {isLoadingDetails[log._id] ? (
-                                    <div className="flex items-center justify-center py-4">
-                                      <svg className="animate-spin h-5 w-5 text-[#f04129]" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
-                                      </svg>
-                                    </div>
-                                  ) : sessionAttendanceDetails[log._id] && sessionAttendanceDetails[log._id].length > 0 ? (
-                                    <div className="space-y-2">
-                                      <h4 className="text-sm font-semibold text-[#181511] dark:text-white mb-3">Attendance List:</h4>
-                                      <div className="overflow-x-auto">
-                                        <table className="min-w-full text-sm">
-                                          <thead>
-                                            <tr className="border-b border-[#e6e2db] dark:border-slate-700">
-                                              <th className="px-4 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-400">User Name</th>
-                                              <th className="px-4 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-400">Email</th>
-                                              <th className="px-4 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-400">Check-in Time</th>
-                                              <th className="px-4 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-400">Status</th>
-                                              <th className="px-4 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-400">Approved By</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody className="divide-y divide-[#e6e2db] dark:divide-slate-700">
-                                            {sessionAttendanceDetails[log._id].map((record) => (
-                                              <tr key={record._id}>
-                                                <td className="px-4 py-2 text-[#181511] dark:text-white">
-                                                  {record.userId
-                                                    ? `${record.userId.profile.firstName} ${record.userId.profile.lastName}`
-                                                    : 'User (deleted)'}
-                                                </td>
-                                                <td className="px-4 py-2 text-[#8a7b60] dark:text-gray-400">
-                                                  {record.userId ? record.userId.email : 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-2 text-[#8a7b60] dark:text-gray-400">
-                                                  {formatDateTime(record.checkInTime)}
-                                                </td>
-                                                <td className="px-4 py-2">
-                                                  {record.attendanceStatus === 'On Leave' ? (
-                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
-                                                      🏖️ On Leave
-                                                    </span>
-                                                  ) : record.isLate ? (
-                                                    <span
-                                                      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300"
-                                                      title={record.lateByMinutes
-                                                        ? `Late by ${record.lateByMinutes} ${record.lateByMinutes === 1 ? 'minute' : 'minutes'}`
-                                                        : 'Late'}
-                                                    >
-                                                      Late{record.lateByMinutes ? ` (${record.lateByMinutes}m)` : ''}
-                                                    </span>
-                                                  ) : record.locationVerified ? (
-                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
-                                                      Verified
-                                                    </span>
-                                                  ) : (
-                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300">
-                                                      Not Verified
-                                                    </span>
-                                                  )}
-                                                </td>
-                                                <td className="px-4 py-2 text-[#8a7b60] dark:text-gray-400">
-                                                  {record.attendanceStatus === 'On Leave' && record.approvedBy
-                                                    ? `${record.approvedBy.profile.firstName} ${record.approvedBy.profile.lastName}`
-                                                    : '-'}
-                                                </td>
-                                              </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    </div>
+                  <>
+                    <div className="hidden sm:block overflow-x-auto">
+                      <table className="w-full min-w-full divide-y divide-[#e6e2db] dark:divide-slate-700">
+                        <thead className="bg-[#f9fafb] dark:bg-slate-900/50">
+                          <tr>
+                            <th className="px-6 py-4 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-300 uppercase tracking-wider" scope="col">Date</th>
+                            <th className="px-6 py-4 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-300 uppercase tracking-wider" scope="col">Session Name</th>
+                            <th className="px-6 py-4 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-300 uppercase tracking-wider" scope="col">Attendance</th>
+                            <th className="px-6 py-4 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-300 uppercase tracking-wider" scope="col">Status</th>
+                            <th className="px-6 py-4 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-300 uppercase tracking-wider hidden md:table-cell" scope="col">Late</th>
+                            <th className="px-6 py-4 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-300 uppercase tracking-wider" scope="col">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white dark:bg-slate-800 divide-y divide-[#e6e2db] dark:divide-slate-700">
+                          {sessionLogs.map((log) => (
+                            <React.Fragment key={`${log._id}_${log.dateStr || log.date}`}>
+                              <tr className="hover:bg-red-50 dark:hover:bg-[#f04129]/10 transition-colors duration-150">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-[#181511] dark:text-white">
+                                  {formatDate(log.date)}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[#181511] dark:text-white">
+                                  {log.name}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-[#181511] dark:text-white">
+                                  <span className="font-semibold">{log.presentCount}</span>
+                                  <span className="text-[#8a7b60] dark:text-gray-400">/{log.totalAssigned || log.totalUsers}</span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  {log.status === 'Completed' ? (
+                                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
+                                      Completed
+                                    </span>
+                                  ) : log.status === 'Today' ? (
+                                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
+                                      Today
+                                    </span>
                                   ) : (
-                                    <p className="text-sm text-[#8a7b60] dark:text-gray-400">No attendance records found for this session.</p>
+                                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                                      Upcoming
+                                    </span>
                                   )}
                                 </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm hidden md:table-cell">
+                                  {log.lateCount > 0 ? (
+                                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300">
+                                      {log.lateCount}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[#8a7b60] dark:text-gray-400">0</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {/* NEW: Manage Attendance Button */}
+                                    <button
+                                      onClick={() => {
+                                        setViewingSessionId(log._id);
+                                        setViewingSessionDate(log.date);
+                                      }}
+                                      className="inline-flex items-center px-3 py-1.5 text-xs font-medium bg-[#f04129] hover:bg-[#d63a25] text-white rounded transition-colors"
+                                      title="Manage attendance (view all users, make corrections)"
+                                    >
+                                      <span className="material-symbols-outlined text-base mr-1">manage_accounts</span>
+                                      Manage
+                                    </button>
+                                    <button
+                                      onClick={() => fetchSessionAttendanceDetails(log._id, log.dateStr || log.date)}
+                                      className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-[#f04129] hover:text-[#d63a25] dark:text-[#f04129] dark:hover:text-[#ff6b5a] transition-colors"
+                                      title="View attendance list"
+                                    >
+                                      <span className="material-symbols-outlined text-base mr-1">visibility</span>
+                                      View
+                                    </button>
+                                    <button
+                                      onClick={() => downloadSessionPDF(log._id, log.name, log.dateStr || log.date)}
+                                      className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-[#f04129] hover:text-[#d63a25] dark:text-[#f04129] dark:hover:text-[#ff6b5a] transition-colors"
+                                      title="Download PDF"
+                                    >
+                                      <span className="material-symbols-outlined text-base mr-1">picture_as_pdf</span>
+                                      PDF
+                                    </button>
+                                    <button
+                                      onClick={() => downloadSessionCSV(log._id, log.name, log.dateStr || log.date)}
+                                      className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-[#f04129] hover:text-[#d63a25] dark:text-[#f04129] dark:hover:text-[#ff6b5a] transition-colors"
+                                      title="Download CSV"
+                                    >
+                                      <span className="material-symbols-outlined text-base mr-1">file_download</span>
+                                      CSV
+                                    </button>
+                                  </div>
+                                </td>
                               </tr>
+                              {/* Expanded Row - Attendance Details */}
+                              {expandedSessionId === `${log._id}_${log.dateStr || log.date}` && (
+                                <tr>
+                                  <td colSpan={6} className="px-6 py-4 bg-gray-50 dark:bg-slate-900/50">
+                                    {isLoadingDetails[`${log._id}_${log.dateStr || log.date}`] ? (
+                                      <div className="flex items-center justify-center py-4">
+                                        <svg className="animate-spin h-5 w-5 text-[#f04129]" fill="none" viewBox="0 0 24 24">
+                                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                          <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
+                                        </svg>
+                                      </div>
+                                    ) : sessionAttendanceDetails[`${log._id}_${log.dateStr || log.date}`] && sessionAttendanceDetails[`${log._id}_${log.dateStr || log.date}`].length > 0 ? (
+                                      <div className="space-y-2">
+                                        <h4 className="text-sm font-semibold text-[#181511] dark:text-white mb-3">Attendance List:</h4>
+                                        <div className="overflow-x-auto">
+                                          <table className="min-w-full text-sm">
+                                            <thead>
+                                              <tr className="border-b border-[#e6e2db] dark:border-slate-700">
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-400">User Name</th>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-400">Email</th>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-400">Check-in Time</th>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-400">Status</th>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-400">Approved By</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-[#e6e2db] dark:divide-slate-700">
+                                              {sessionAttendanceDetails[`${log._id}_${log.dateStr || log.date}`].map((record) => (
+                                                <tr key={record._id}>
+                                                  <td className="px-4 py-2 text-[#181511] dark:text-white">
+                                                    {record.userId
+                                                      ? `${record.userId.profile.firstName} ${record.userId.profile.lastName}`
+                                                      : 'User (deleted)'}
+                                                  </td>
+                                                  <td className="px-4 py-2 text-[#8a7b60] dark:text-gray-400">
+                                                    {record.userId ? record.userId.email : 'N/A'}
+                                                  </td>
+                                                  <td className="px-4 py-2 text-[#8a7b60] dark:text-gray-400">
+                                                    {formatDateTime(record.checkInTime)}
+                                                  </td>
+                                                  <td className="px-4 py-2">
+                                                    {record.attendanceStatus === 'On Leave' ? (
+                                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
+                                                        🏖️ On Leave
+                                                      </span>
+                                                    ) : record.isLate ? (
+                                                      <span
+                                                        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300"
+                                                        title={record.lateByMinutes
+                                                          ? `Late by ${record.lateByMinutes} ${record.lateByMinutes === 1 ? 'minute' : 'minutes'}`
+                                                          : 'Late'}
+                                                      >
+                                                        Late{record.lateByMinutes ? ` (${record.lateByMinutes}m)` : ''}
+                                                      </span>
+                                                    ) : record.locationVerified ? (
+                                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
+                                                        Verified
+                                                      </span>
+                                                    ) : (
+                                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300">
+                                                        Not Verified
+                                                      </span>
+                                                    )}
+                                                  </td>
+                                                  <td className="px-4 py-2 text-[#8a7b60] dark:text-gray-400">
+                                                    {record.attendanceStatus === 'On Leave' && record.approvedBy
+                                                      ? `${record.approvedBy.profile.firstName} ${record.approvedBy.profile.lastName}`
+                                                      : '-'}
+                                                  </td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-sm text-[#8a7b60] dark:text-gray-400">No attendance records found for this session.</p>
+                                    )}
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile Cards (block sm:hidden) */}
+                    <div className="block sm:hidden space-y-4">
+                      {sessionLogs.map((log) => (
+                        <div key={`mobile_${log._id}_${log.dateStr || log.date}`} className="bg-white dark:bg-slate-800 rounded-lg border border-[#e6e2db] dark:border-slate-700 p-4 shadow-sm">
+                          {/* Header */}
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <p className="text-xs text-[#8a7b60] dark:text-gray-400 mb-1">
+                                {formatDate(log.date)}
+                              </p>
+                              <p className="font-semibold text-[#181511] dark:text-white line-clamp-1">
+                                {log.name}
+                              </p>
+                            </div>
+                            {log.status === 'Completed' ? (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-semibold bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
+                                Completed
+                              </span>
+                            ) : log.status === 'Today' ? (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
+                                Today
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                                Upcoming
+                              </span>
                             )}
-                          </React.Fragment>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                          </div>
+
+                          {/* Stats Grid */}
+                          <div className="grid grid-cols-3 gap-2 bg-gray-50 dark:bg-slate-900/50 rounded-lg p-3 text-center mb-4">
+                            <div>
+                              <p className="text-[10px] text-[#8a7b60] dark:text-gray-400 uppercase tracking-wide">Present</p>
+                              <p className="font-semibold text-[#181511] dark:text-white text-sm mt-0.5">{log.presentCount} <span className="text-xs font-normal text-gray-400">/ {log.totalAssigned || log.totalUsers}</span></p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-[#8a7b60] dark:text-gray-400 uppercase tracking-wide">Late</p>
+                              <p className={`font-semibold text-sm mt-0.5 ${log.lateCount > 0 ? "text-yellow-600 dark:text-yellow-400" : "text-[#181511] dark:text-white"}`}>{log.lateCount}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-[#8a7b60] dark:text-gray-400 uppercase tracking-wide">Rate</p>
+                              <p className={`font-semibold text-sm mt-0.5 ${log.attendancePercentage < 50 ? "text-red-600" : "text-green-600"}`}>{log.attendancePercentage}%</p>
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex flex-col gap-2">
+                            <button
+                              onClick={() => {
+                                setViewingSessionId(log._id);
+                                setViewingSessionDate(log.date);
+                              }}
+                              className="w-full inline-flex justify-center items-center px-3 py-2 text-sm font-medium bg-[#f04129] hover:bg-[#d63a25] text-white rounded-lg transition-colors"
+                            >
+                              <span className="material-symbols-outlined text-sm mr-2">manage_accounts</span>
+                              Manage Attendance
+                            </button>
+
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => fetchSessionAttendanceDetails(log._id, log.dateStr || log.date)}
+                                className={`flex-1 inline-flex justify-center items-center px-2 py-1.5 text-xs font-medium border border-[#e6e2db] dark:border-slate-600 rounded-lg transition-colors ${expandedSessionId === `${log._id}_${log.dateStr || log.date}`
+                                  ? 'bg-[#f04129]/10 text-[#f04129] border-[#f04129]'
+                                  : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'
+                                  }`}
+                              >
+                                <span className="material-symbols-outlined text-sm mr-1">visibility</span>
+                                {expandedSessionId === `${log._id}_${log.dateStr || log.date}` ? 'Close' : 'View'}
+                              </button>
+                              <button
+                                onClick={() => downloadSessionPDF(log._id, log.name, log.dateStr || log.date)}
+                                className="flex-1 inline-flex justify-center items-center px-2 py-1.5 text-xs font-medium border border-[#e6e2db] dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-sm mr-1">picture_as_pdf</span>
+                                PDF
+                              </button>
+                              <button
+                                onClick={() => downloadSessionCSV(log._id, log.name, log.dateStr || log.date)}
+                                className="flex-1 inline-flex justify-center items-center px-2 py-1.5 text-xs font-medium border border-[#e6e2db] dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-sm mr-1">file_download</span>
+                                CSV
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Mobile Expanded View */}
+                          {expandedSessionId === `${log._id}_${log.dateStr || log.date}` && (
+                            <div className="mt-3 pt-3 border-t border-[#e6e2db] dark:border-slate-700">
+                              {isLoadingDetails[`${log._id}_${log.dateStr || log.date}`] ? (
+                                <div className="flex justify-center py-4">
+                                  <svg className="animate-spin h-5 w-5 text-[#f04129]" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
+                                  </svg>
+                                </div>
+                              ) : (
+                                <div className="space-y-3">
+                                  <p className="text-xs font-semibold text-[#181511] dark:text-white uppercase tracking-wide">Attendance List</p>
+                                  {sessionAttendanceDetails[`${log._id}_${log.dateStr || log.date}`] && sessionAttendanceDetails[`${log._id}_${log.dateStr || log.date}`].length > 0 ? (
+                                    <div className="space-y-2">
+                                      {sessionAttendanceDetails[`${log._id}_${log.dateStr || log.date}`].map(record => (
+                                        <div key={record._id} className="flex items-center justify-between text-xs p-2 rounded bg-gray-50 dark:bg-slate-900/50">
+                                          <div className="flex flex-col">
+                                            <span className="font-medium text-[#181511] dark:text-white">
+                                              {record.userId ? `${record.userId.profile.firstName} ${record.userId.profile.lastName}` : 'User (Deleted)'}
+                                            </span>
+                                            <span className="text-[10px] text-gray-500">{formatDateTime(record.checkInTime)}</span>
+                                          </div>
+                                          <div>
+                                            {record.attendanceStatus === 'On Leave' ? (
+                                              <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Leave</span>
+                                            ) : record.isLate ? (
+                                              <span className="px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">Late</span>
+                                            ) : (
+                                              <span className="px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">Verified</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-center text-gray-500 py-2">No records found.</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 ) : (
                   <div className="text-center py-12">
                     <p className="text-[#8a7b60] dark:text-gray-400 text-base mb-2">No session logs found.</p>
@@ -1071,202 +1217,206 @@ const AttendanceReport: React.FC = () => {
       </div>
 
       {/* Force Mark Attendance Modal */}
-      {showForceMarkModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-[#e6e2db] dark:border-slate-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
-            <div className="sticky top-0 bg-white dark:bg-slate-800 border-b border-[#e6e2db] dark:border-slate-700 px-6 py-4 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-[#181511] dark:text-white flex items-center">
-                <span className="material-symbols-outlined text-amber-600 mr-2">edit</span>
-                Force Mark Attendance
-              </h3>
-              <button
-                onClick={() => {
-                  setShowForceMarkModal(false);
-                  setForceMarkError('');
-                  setForceMarkDate('');
-                  setForceMarkUserId('');
-                  setForceMarkSessionId('');
-                  setForceMarkStatus('Present');
-                }}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            <div className="p-6">
-              {forceMarkError && (
-                <div className="mb-4 bg-red-500/10 text-red-700 dark:text-red-300 border border-red-500/20 p-3 rounded-lg">
-                  {forceMarkError}
-                </div>
-              )}
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (!forceMarkSessionId || !forceMarkUserId || !forceMarkStatus) {
-                    setForceMarkError('Please fill in all fields');
-                    return;
-                  }
-                  setIsSubmittingForceMark(true);
-                  setForceMarkError('');
-                  try {
-                    await api.post('/api/attendance/force-mark', {
-                      sessionId: forceMarkSessionId,
-                      userId: forceMarkUserId,
-                      status: forceMarkStatus,
-                    });
+      {
+        showForceMarkModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-[#e6e2db] dark:border-slate-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
+              <div className="sticky top-0 bg-white dark:bg-slate-800 border-b border-[#e6e2db] dark:border-slate-700 px-6 py-4 flex items-center justify-between">
+                <h3 className="text-xl font-bold text-[#181511] dark:text-white flex items-center">
+                  <span className="material-symbols-outlined text-amber-600 mr-2">edit</span>
+                  Force Mark Attendance
+                </h3>
+                <button
+                  onClick={() => {
                     setShowForceMarkModal(false);
+                    setForceMarkError('');
                     setForceMarkDate('');
                     setForceMarkUserId('');
                     setForceMarkSessionId('');
                     setForceMarkStatus('Present');
-                    // Refresh the report if data is loaded
-                    if (selectedClass && startDate && endDate) {
-                      handleViewReport();
+                  }}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+              <div className="p-6">
+                {forceMarkError && (
+                  <div className="mb-4 bg-red-500/10 text-red-700 dark:text-red-300 border border-red-500/20 p-3 rounded-lg">
+                    {forceMarkError}
+                  </div>
+                )}
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!forceMarkSessionId || !forceMarkUserId || !forceMarkStatus) {
+                      setForceMarkError('Please fill in all fields');
+                      return;
                     }
-                  } catch (err: any) {
-                    setForceMarkError(err.response?.data?.msg || 'Failed to force mark attendance');
-                  } finally {
-                    setIsSubmittingForceMark(false);
-                  }
-                }}
-              >
-                <div className="space-y-4">
-                  <label className="flex flex-col">
-                    <span className="text-[#181511] dark:text-gray-200 text-sm font-medium mb-2">Date</span>
-                    <input
-                      type="date"
-                      value={forceMarkDate}
-                      onChange={async (e) => {
-                        setForceMarkDate(e.target.value);
-                        setForceMarkSessionId('');
-                        if (e.target.value) {
-                          try {
-                            const { data } = await api.get('/api/sessions', {
-                              params: {
-                                // Filter sessions by date if possible
-                              },
-                            });
-                            // Filter sessions by the selected date
-                            const dateStr = e.target.value;
-                            const filtered = (data || []).filter((s: any) => {
-                              const sessionDate = new Date(s.startDate).toISOString().split('T')[0];
-                              return sessionDate === dateStr;
-                            });
-                            setAvailableSessions(filtered);
-                          } catch (err) {
-                            console.error('Failed to fetch sessions:', err);
-                          }
-                        }
-                      }}
-                      className="form-input rounded-lg text-[#181511] dark:text-white border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 h-12 px-4"
-                      required
-                    />
-                  </label>
-
-                  <label className="flex flex-col">
-                    <span className="text-[#181511] dark:text-gray-200 text-sm font-medium mb-2">Session</span>
-                    <select
-                      value={forceMarkSessionId}
-                      onChange={(e) => setForceMarkSessionId(e.target.value)}
-                      className="form-select rounded-lg text-[#181511] dark:text-white border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 h-12 px-4"
-                      required
-                      disabled={!forceMarkDate || availableSessions.length === 0}
-                    >
-                      <option value="">-- Select Session --</option>
-                      {availableSessions.map((session) => (
-                        <option key={session._id} value={session._id}>
-                          {session.name} ({new Date(session.startDate).toLocaleString()})
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="flex flex-col">
-                    <span className="text-[#181511] dark:text-gray-200 text-sm font-medium mb-2">User</span>
-                    <select
-                      value={forceMarkUserId}
-                      onChange={(e) => setForceMarkUserId(e.target.value)}
-                      className="form-select rounded-lg text-[#181511] dark:text-white border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 h-12 px-4"
-                      required
-                      onFocus={async () => {
-                        if (availableUsers.length === 0) {
-                          try {
-                            const { data } = await api.get('/api/users/my-organization');
-                            setAvailableUsers(data || []);
-                          } catch (err) {
-                            console.error('Failed to fetch users:', err);
-                          }
-                        }
-                      }}
-                    >
-                      <option value="">-- Select User --</option>
-                      {availableUsers.map((user) => (
-                        <option key={user._id} value={user._id}>
-                          {user.profile.firstName} {user.profile.lastName} ({user.email})
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="flex flex-col">
-                    <span className="text-[#181511] dark:text-gray-200 text-sm font-medium mb-2">Status</span>
-                    <select
-                      value={forceMarkStatus}
-                      onChange={(e) => setForceMarkStatus(e.target.value as 'Present' | 'Absent')}
-                      className="form-select rounded-lg text-[#181511] dark:text-white border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 h-12 px-4"
-                      required
-                    >
-                      <option value="Present">Present</option>
-                      <option value="Absent">Absent</option>
-                    </select>
-                  </label>
-                </div>
-
-                <div className="flex gap-3 mt-6">
-                  <button
-                    type="submit"
-                    disabled={isSubmittingForceMark}
-                    className="flex-1 px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isSubmittingForceMark ? 'Submitting...' : 'Force Mark'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
+                    setIsSubmittingForceMark(true);
+                    setForceMarkError('');
+                    try {
+                      await api.post('/api/attendance/force-mark', {
+                        sessionId: forceMarkSessionId,
+                        userId: forceMarkUserId,
+                        status: forceMarkStatus,
+                      });
                       setShowForceMarkModal(false);
-                      setForceMarkError('');
                       setForceMarkDate('');
                       setForceMarkUserId('');
                       setForceMarkSessionId('');
                       setForceMarkStatus('Present');
-                    }}
-                    className="px-4 py-3 bg-gray-200 hover:bg-gray-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-800 dark:text-white rounded-lg font-semibold transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
+                      // Refresh the report if data is loaded
+                      if (selectedClass && startDate && endDate) {
+                        handleViewReport();
+                      }
+                    } catch (err: any) {
+                      setForceMarkError(err.response?.data?.msg || 'Failed to force mark attendance');
+                    } finally {
+                      setIsSubmittingForceMark(false);
+                    }
+                  }}
+                >
+                  <div className="space-y-4">
+                    <label className="flex flex-col">
+                      <span className="text-[#181511] dark:text-gray-200 text-sm font-medium mb-2">Date</span>
+                      <input
+                        type="date"
+                        value={forceMarkDate}
+                        onChange={async (e) => {
+                          setForceMarkDate(e.target.value);
+                          setForceMarkSessionId('');
+                          if (e.target.value) {
+                            try {
+                              const { data } = await api.get('/api/sessions', {
+                                params: {
+                                  // Filter sessions by date if possible
+                                },
+                              });
+                              // Filter sessions by the selected date
+                              const dateStr = e.target.value;
+                              const filtered = (data || []).filter((s: any) => {
+                                const sessionDate = new Date(s.startDate).toISOString().split('T')[0];
+                                return sessionDate === dateStr;
+                              });
+                              setAvailableSessions(filtered);
+                            } catch (err) {
+                              console.error('Failed to fetch sessions:', err);
+                            }
+                          }
+                        }}
+                        className="form-input rounded-lg text-[#181511] dark:text-white border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 h-12 px-4"
+                        required
+                      />
+                    </label>
+
+                    <label className="flex flex-col">
+                      <span className="text-[#181511] dark:text-gray-200 text-sm font-medium mb-2">Session</span>
+                      <select
+                        value={forceMarkSessionId}
+                        onChange={(e) => setForceMarkSessionId(e.target.value)}
+                        className="form-select rounded-lg text-[#181511] dark:text-white border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 h-12 px-4"
+                        required
+                        disabled={!forceMarkDate || availableSessions.length === 0}
+                      >
+                        <option value="">-- Select Session --</option>
+                        {availableSessions.map((session) => (
+                          <option key={session._id} value={session._id}>
+                            {session.name} ({new Date(session.startDate).toLocaleString()})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="flex flex-col">
+                      <span className="text-[#181511] dark:text-gray-200 text-sm font-medium mb-2">User</span>
+                      <select
+                        value={forceMarkUserId}
+                        onChange={(e) => setForceMarkUserId(e.target.value)}
+                        className="form-select rounded-lg text-[#181511] dark:text-white border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 h-12 px-4"
+                        required
+                        onFocus={async () => {
+                          if (availableUsers.length === 0) {
+                            try {
+                              const { data } = await api.get('/api/users/my-organization');
+                              setAvailableUsers(data || []);
+                            } catch (err) {
+                              console.error('Failed to fetch users:', err);
+                            }
+                          }
+                        }}
+                      >
+                        <option value="">-- Select User --</option>
+                        {availableUsers.map((user) => (
+                          <option key={user._id} value={user._id}>
+                            {user.profile.firstName} {user.profile.lastName} ({user.email})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="flex flex-col">
+                      <span className="text-[#181511] dark:text-gray-200 text-sm font-medium mb-2">Status</span>
+                      <select
+                        value={forceMarkStatus}
+                        onChange={(e) => setForceMarkStatus(e.target.value as 'Present' | 'Absent')}
+                        className="form-select rounded-lg text-[#181511] dark:text-white border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 h-12 px-4"
+                        required
+                      >
+                        <option value="Present">Present</option>
+                        <option value="Absent">Absent</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      type="submit"
+                      disabled={isSubmittingForceMark}
+                      className="flex-1 px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isSubmittingForceMark ? 'Submitting...' : 'Force Mark'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowForceMarkModal(false);
+                        setForceMarkError('');
+                        setForceMarkDate('');
+                        setForceMarkUserId('');
+                        setForceMarkSessionId('');
+                        setForceMarkStatus('Present');
+                      }}
+                      className="px-4 py-3 bg-gray-200 hover:bg-gray-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-800 dark:text-white rounded-lg font-semibold transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Session Attendance View Modal */}
-      {viewingSessionId && (
-        <SessionAttendanceView
-          sessionId={viewingSessionId}
-          sessionDate={viewingSessionDate || undefined}
-          onClose={() => {
-            setViewingSessionId(null);
-            setViewingSessionDate(null);
-            // Optionally refresh the session logs
-            if (selectedClass && startDate && endDate && activeTab === 'logs') {
-              handleViewReport();
-            }
-          }}
-        />
-      )}
-    </div>
+      {
+        viewingSessionId && (
+          <SessionAttendanceView
+            sessionId={viewingSessionId}
+            sessionDate={viewingSessionDate || undefined}
+            onClose={() => {
+              setViewingSessionId(null);
+              setViewingSessionDate(null);
+              // Optionally refresh the session logs
+              if (selectedClass && startDate && endDate && activeTab === 'logs') {
+                handleViewReport();
+              }
+            }}
+          />
+        )
+      }
+    </div >
   );
 };
 
