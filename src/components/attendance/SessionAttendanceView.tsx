@@ -2,7 +2,40 @@ import React, { useState, useEffect } from 'react';
 import api from '../../api';
 import { useAuth } from '../../contexts/AuthContext';
 import AttendanceCheckbox from './AttendanceCheckbox';
-import ManualUpdateModal from './ManualUpdateModal';
+// ❌ DEPRECATED - Keeping for backward compatibility but not using
+// import ManualUpdateModal from './ManualUpdateModal';
+
+// ✅ NEW COMPONENTS
+import EnhancedManualUpdateModal from './EnhancedManualUpdateModal';
+import AttendanceAuditViewer from './AttendanceAuditViewer';
+import ManualEditBadge from './ManualEditBadge';
+
+// ✅ PERMISSIONS
+import { canAdjustAttendance } from '../../utils/attendancePermissions';
+
+// ✅ API
+import { adjustAttendance } from '../../api/attendanceAdjustment';
+
+interface ModificationHistoryEntry {
+    modifiedAt: string;
+    modifiedBy: {
+        userId: string;
+        name: string;
+        role: string;
+    };
+    action: string;
+    reason: string;
+    previousState: {
+        status: string;
+        markedAt?: string;
+        lateMinutes?: number;
+    };
+    newState: {
+        status: string;
+        markedAt?: string;
+        lateMinutes?: number;
+    };
+}
 
 interface User {
     userId: string;
@@ -21,6 +54,7 @@ interface User {
     } | null;
     manualUpdatedAt: string | null;
     updateReason: string | null;
+    modificationHistory?: ModificationHistoryEntry[];
 }
 
 interface SessionDetails {
@@ -57,7 +91,8 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
     sessionDate,
     onClose
 }) => {
-    const { user } = useAuth();
+    // ✅ AUTH CONTEXT
+    const { user: currentUser } = useAuth();
 
     // State
     const [users, setUsers] = useState<User[]>([]);
@@ -83,13 +118,21 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
     const [statusFilter, setStatusFilter] = useState<'ALL' | 'PRESENT' | 'ABSENT' | 'LATE'>('ALL');
     const [currentPage, setCurrentPage] = useState(1);
 
-    // Manual update modal
-    const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
-    const [selectedUser, setSelectedUser] = useState<User | null>(null);
-    const [newStatus, setNewStatus] = useState<'PRESENT' | 'ABSENT'>('PRESENT');
+    // ✅ NEW: Enhanced modal state
+    const [selectedUserForAdjust, setSelectedUserForAdjust] = useState<User | null>(null);
+    const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
+    const [newStatusForModal, setNewStatusForModal] = useState<'PRESENT' | 'ABSENT' | 'LATE'>('PRESENT');
 
-    // Permissions
-    const canEdit = user?.role === 'CompanyAdmin' || user?.role === 'SuperAdmin' || user?.role === 'PLATFORM_OWNER';
+    // ✅ NEW: Audit viewer state
+    const [isAuditViewerOpen, setIsAuditViewerOpen] = useState(false);
+
+    // ❌ DEPRECATED - Old manual update modal state (keeping for backward compat transition)
+    // const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+    // const [selectedUser, setSelectedUser] = useState<User | null>(null);
+    // const [newStatus, setNewStatus] = useState<'PRESENT' | 'ABSENT'>('PRESENT');
+
+    // Permissions (using new permission system)
+    const canEdit = canAdjustAttendance(currentUser);
 
     // Fetch attendance data
     const fetchAttendance = async () => {
@@ -97,37 +140,78 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
             setLoading(true);
             setError(null);
 
-            const params = new URLSearchParams({
-                page: currentPage.toString(),
-                limit: '50',
-                status: statusFilter,
-                ...(searchQuery && { search: searchQuery }),
-                ...(sessionDate && { sessionDate })
+            // ✅ NEW: Call /manage endpoint (returns all users with attendance merged)
+            // 🔥 CACHE BUSTER: Add timestamp to force fresh request
+            // 🔥 CRITICAL: Include targetDate for date-scoped attendance query
+            const response = await api.get(`/attendance/session/${sessionId}/manage`, {
+                params: {
+                    _ts: Date.now(), // Force unique URL to bypass all caches
+                    targetDate: sessionDate ? sessionDate.split('T')[0] : undefined // ✅ Send YYYY-MM-DD only
+                },
+                headers: {
+                    'Cache-Control': 'no-store, no-cache',
+                    'Pragma': 'no-cache'
+                }
             });
 
-            const response = await api.get(`/attendance/session/${sessionId}/all-users?${params}`);
+            // Response format: { success: true, data: { users: [...], summary: {...}, session: {...} } }
+            const responseData = response.data?.data || response.data;
 
-            setUsers(response.data.users || []);
-            setSessionDetails(response.data.sessionDetails || null);
-            setPagination(response.data.pagination || {
+            const allUsers = responseData.users || [];
+
+            // ✅ CLIENT-SIDE FILTERING (instead of server-side)
+            let filteredUsers = allUsers;
+
+            // Apply search filter
+            if (searchQuery) {
+                const searchLower = searchQuery.toLowerCase();
+                filteredUsers = filteredUsers.filter((user: User) =>
+                    user.name.toLowerCase().includes(searchLower) ||
+                    user.email.toLowerCase().includes(searchLower)
+                );
+            }
+
+            // Apply status filter
+            if (statusFilter && statusFilter !== 'ALL') {
+                filteredUsers = filteredUsers.filter((user: User) => user.status === statusFilter);
+            }
+
+            setUsers(filteredUsers);
+
+            // Set session details from response
+            setSessionDetails({
+                sessionId: responseData.session?.id || sessionId,
+                sessionName: responseData.session?.name || 'Session',
+                sessionDate: responseData.sessionDate || sessionDate || '',
+                frequency: 'OneTime',
+                startTime: responseData.session?.startTime || '',
+                endTime: responseData.session?.endTime || ''
+            });
+
+            // Set summary (use original counts, not filtered)
+            setSummary(responseData.summary || {
+                total: allUsers.length,
+                present: allUsers.filter((u: User) => u.status === 'PRESENT').length,
+                absent: allUsers.filter((u: User) => u.status === 'ABSENT').length,
+                late: allUsers.filter((u: User) => u.isLate).length
+            });
+
+            // Set pagination (client-side, single page with all users)
+            setPagination({
                 currentPage: 1,
                 totalPages: 1,
-                totalUsers: 0,
-                limit: 50
+                totalUsers: filteredUsers.length,
+                limit: 1000 // High limit since we're client-side
             });
-            setSummary(response.data.summary || {
-                total: 0,
-                present: 0,
-                absent: 0,
-                late: 0
-            });
+
         } catch (err: any) {
             console.error('Error fetching attendance:', err);
-            setError(err.response?.data?.msg || 'Failed to load attendance data');
+            setError(err.response?.data?.message || err.response?.data?.msg || 'Failed to load attendance data');
         } finally {
             setLoading(false);
         }
     };
+
 
     // Fetch on mount and when filters change
     useEffect(() => {
@@ -146,37 +230,59 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
-    // Handle checkbox change
+    // ✅ NEW: Handle checkbox change (triggers adjust modal)
     const handleCheckboxChange = (user: User, checked: boolean) => {
         if (!canEdit) return;
 
-        setSelectedUser(user);
-        setNewStatus(checked ? 'PRESENT' : 'ABSENT');
-        setIsUpdateModalOpen(true);
+        setSelectedUserForAdjust(user);
+        setNewStatusForModal(checked ? 'PRESENT' : 'ABSENT');
+        setIsAdjustModalOpen(true);
     };
 
-    // Handle manual update confirmation
-    const handleConfirmUpdate = async (reason?: string) => {
-        if (!selectedUser) return;
+    // ✅ NEW: Handle adjustment confirmation (uses new API)
+    const handleConfirmAdjustment = async (reason: string, lateMinutes?: number) => {
+        if (!selectedUserForAdjust) return;
 
         try {
-            await api.put(`/attendance/session/${sessionId}/manual-update`, {
-                userId: selectedUser.userId,
-                status: newStatus,
+            await adjustAttendance(sessionId, {
+                userId: selectedUserForAdjust.userId,
+                newStatus: newStatusForModal,
                 reason,
-                ...(sessionDate && { sessionDate })
+                lateMinutes,
+                targetDate: sessionDate
             });
 
-            // Refresh data
+            // 🔥 CRITICAL: Re-fetch from backend (single source of truth)
             await fetchAttendance();
 
-            setIsUpdateModalOpen(false);
-            setSelectedUser(null);
+            // Close modal
+            setIsAdjustModalOpen(false);
+            setSelectedUserForAdjust(null);
         } catch (err: any) {
-            console.error('Error updating attendance:', err);
-            alert(err.response?.data?.msg || 'Failed to update attendance');
+            console.error('Error adjusting attendance:', err);
+            // Error handling is done in the modal via toast
+            throw err; // Re-throw so modal can handle it
         }
     };
+
+    // ❌ DEPRECATED - Old manual update (no longer used)
+    // const handleConfirmUpdate = async (reason?: string) => {
+    //     if (!selectedUser) return;
+    //     try {
+    //         await api.put(`/attendance/session/${sessionId}/manual-update`, {
+    //             userId: selectedUser.userId,
+    //             status: newStatus,
+    //             reason,
+    //             ...(sessionDate && { sessionDate })
+    //         });
+    //         await fetchAttendance();
+    //         setIsUpdateModalOpen(false);
+    //         setSelectedUser(null);
+    //     } catch (err: any) {
+    //         console.error('Error updating attendance:', err);
+    //         alert(err.response?.data?.msg || 'Failed to update attendance');
+    //     }
+    // };
 
     // Format date/time
     const formatDateTime = (dateString: string | null) => {
@@ -208,14 +314,26 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                                 </p>
                             )}
                         </div>
-                        {onClose && (
-                            <button
-                                onClick={onClose}
-                                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                            >
-                                <span className="material-symbols-outlined text-2xl">close</span>
-                            </button>
-                        )}
+                        <div className="flex items-center gap-3">
+                            {/* ✅ NEW: Audit Trail Button (Permission-gated) */}
+                            {canEdit && (
+                                <button
+                                    onClick={() => setIsAuditViewerOpen(true)}
+                                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium flex items-center gap-2"
+                                >
+                                    <span className="material-symbols-outlined text-lg">history</span>
+                                    View Audit Trail
+                                </button>
+                            )}
+                            {onClose && (
+                                <button
+                                    onClick={onClose}
+                                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                                >
+                                    <span className="material-symbols-outlined text-2xl">close</span>
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {/* Summary Stats */}
@@ -314,6 +432,12 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                         Info
                                     </th>
+                                    {/* ✅ NEW: Actions column for admin */}
+                                    {canEdit && (
+                                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                            Actions
+                                        </th>
+                                    )}
                                 </tr>
                             </thead>
                             <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
@@ -327,7 +451,7 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                                             />
                                         </td>
                                         <td className="px-4 py-4">
-                                            <div className="flex items-center">
+                                            <div className="flex items-center gap-2">
                                                 <div>
                                                     <div className="text-sm font-medium text-gray-900 dark:text-white">
                                                         {user.name}
@@ -336,6 +460,18 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                                                         {user.role}
                                                     </div>
                                                 </div>
+                                                {/* ✅ NEW: Manual Edit Badge */}
+                                                {user.modificationHistory && user.modificationHistory.length > 0 && (
+                                                    <ManualEditBadge
+                                                        isModified={true}
+                                                        modifiedBy={user.modificationHistory[user.modificationHistory.length - 1]?.modifiedBy}
+                                                        modifiedAt={user.modificationHistory[user.modificationHistory.length - 1]?.modifiedAt}
+                                                        modificationCount={user.modificationHistory.length}
+                                                        onViewHistory={() => {
+                                                            setIsAuditViewerOpen(true);
+                                                        }}
+                                                    />
+                                                )}
                                             </div>
                                         </td>
                                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
@@ -358,6 +494,22 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                                                 )}
                                             </div>
                                         </td>
+                                        {/* ✅ NEW: Adjust Attendance Button (Permission-gated) */}
+                                        {canEdit && (
+                                            <td className="px-4 py-4 text-right">
+                                                <button
+                                                    data-testid="adjust-button"
+                                                    onClick={() => {
+                                                        setSelectedUserForAdjust(user);
+                                                        setNewStatusForModal(user.status === 'ABSENT' ? 'PRESENT' : 'ABSENT');
+                                                        setIsAdjustModalOpen(true);
+                                                    }}
+                                                    className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded text-sm font-medium transition-colors"
+                                                >
+                                                    Adjust
+                                                </button>
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>
@@ -396,8 +548,37 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                 )}
             </div>
 
-            {/* Manual Update Modal */}
-            <ManualUpdateModal
+            {/* ✅ NEW: Enhanced Manual Update Modal */}
+            {isAdjustModalOpen && selectedUserForAdjust && (
+                <EnhancedManualUpdateModal
+                    isOpen={isAdjustModalOpen}
+                    user={selectedUserForAdjust}
+                    newStatus={newStatusForModal}
+                    sessionName={sessionDetails?.sessionName}
+                    sessionDate={sessionDate}
+                    onConfirm={handleConfirmAdjustment}
+                    onCancel={() => {
+                        setIsAdjustModalOpen(false);
+                        setSelectedUserForAdjust(null);
+                    }}
+                />
+            )}
+
+            {/* ✅ NEW: Attendance Audit Viewer */}
+            {isAuditViewerOpen && (
+                <AttendanceAuditViewer
+                    sessionId={sessionId}
+                    sessionName={sessionDetails?.sessionName || 'Session'}
+                    sessionDate={sessionDate}
+                    isOpen={isAuditViewerOpen}
+                    onClose={() => {
+                        setIsAuditViewerOpen(false);
+                    }}
+                />
+            )}
+
+            {/* ❌ DEPRECATED: Old Manual Update Modal (removed) */}
+            {/* <ManualUpdateModal
                 isOpen={isUpdateModalOpen}
                 user={selectedUser}
                 newStatus={newStatus}
@@ -406,7 +587,7 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                     setIsUpdateModalOpen(false);
                     setSelectedUser(null);
                 }}
-            />
+            /> */}
         </div>
     );
 };
