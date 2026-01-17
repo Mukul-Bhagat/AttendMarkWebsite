@@ -126,27 +126,29 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
     // ✅ NEW: Audit viewer state
     const [isAuditViewerOpen, setIsAuditViewerOpen] = useState(false);
 
-    // ❌ DEPRECATED - Old manual update modal state (keeping for backward compat transition)
-    // const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
-    // const [selectedUser, setSelectedUser] = useState<User | null>(null);
-    // const [newStatus, setNewStatus] = useState<'PRESENT' | 'ABSENT'>('PRESENT');
-
     // Permissions (using new permission system)
     const canEdit = canAdjustAttendance(currentUser);
 
     // Fetch attendance data
     const fetchAttendance = async () => {
+        console.log('🔍 [FRONTEND] fetchAttendance called', { sessionId, sessionDate });
+
         try {
             setLoading(true);
             setError(null);
 
             // ✅ NEW: Call /manage endpoint (returns all users with attendance merged)
             // 🔥 CACHE BUSTER: Add timestamp to force fresh request
-            // 🔥 CRITICAL: Include targetDate for date-scoped attendance query
-            const response = await api.get(`/attendance/session/${sessionId}/manage`, {
+            // 🔒 CRITICAL: NO targetDate - backend uses Session.sessionDate as source of truth
+            console.log('🔍 [FRONTEND] Making API call to /api/attendance/session/.../manage', {
+                sessionId,
+                note: 'Backend will use session.sessionDate automatically'
+            });
+
+            const response = await api.get(`/api/attendance/session/${sessionId}/manage`, {
                 params: {
-                    _ts: Date.now(), // Force unique URL to bypass all caches
-                    targetDate: sessionDate ? sessionDate.split('T')[0] : undefined // ✅ Send YYYY-MM-DD only
+                    _ts: Date.now() // Force unique URL to bypass all caches
+                    // ❌ NO targetDate - removed to eliminate date ambiguity
                 },
                 headers: {
                     'Cache-Control': 'no-store, no-cache',
@@ -154,10 +156,26 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                 }
             });
 
+            console.log('🔍 [FRONTEND] API Response received', {
+                status: response.status,
+                hasData: !!response.data,
+                dataKeys: Object.keys(response.data || {})
+            });
+
             // Response format: { success: true, data: { users: [...], summary: {...}, session: {...} } }
             const responseData = response.data?.data || response.data;
 
+            console.log('🔍 [FRONTEND] Parsed responseData', {
+                hasUsers: !!responseData.users,
+                usersLength: responseData.users?.length || 0,
+                hasSummary: !!responseData.summary
+            });
+
             const allUsers = responseData.users || [];
+            console.log('🔍 [FRONTEND] All users extracted', {
+                count: allUsers.length,
+                sampleUser: allUsers[0]
+            });
 
             // ✅ CLIENT-SIDE FILTERING (instead of server-side)
             let filteredUsers = allUsers;
@@ -176,7 +194,15 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                 filteredUsers = filteredUsers.filter((user: User) => user.status === statusFilter);
             }
 
+            console.log('🔍 [FRONTEND] After filtering', {
+                allUsersCount: allUsers.length,
+                filteredUsersCount: filteredUsers.length,
+                statusFilter,
+                searchQuery
+            });
+
             setUsers(filteredUsers);
+            console.log('🔍 [FRONTEND] setUsers called with', filteredUsers.length, 'users');
 
             // Set session details from response
             setSessionDetails({
@@ -213,10 +239,13 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
     };
 
 
-    // Fetch on mount and when filters change
+    // ✅ CRITICAL: Fetch attendance data on component mount and when session changes
     useEffect(() => {
-        fetchAttendance();
-    }, [sessionId, currentPage, statusFilter, sessionDate]);
+        console.log('🔍 [FRONTEND] useEffect triggered - fetching attendance', { sessionId, sessionDate });
+        if (sessionId) {
+            fetchAttendance();
+        }
+    }, [sessionId, sessionDate]); // Only re-fetch when session/date changes, not on filter changes
 
     // Debounced search
     useEffect(() => {
@@ -240,13 +269,16 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
     };
 
     // ✅ NEW: Handle adjustment confirmation (uses new API)
-    const handleConfirmAdjustment = async (reason: string, lateMinutes?: number) => {
+    const handleConfirmAdjustment = async (reason: string, lateMinutes?: number, status?: 'PRESENT' | 'ABSENT' | 'LATE') => {
         if (!selectedUserForAdjust) return;
+
+        // Use status from modal if provided, otherwise fall back to state
+        const finalStatus = status || newStatusForModal;
 
         try {
             await adjustAttendance(sessionId, {
                 userId: selectedUserForAdjust.userId,
-                newStatus: newStatusForModal,
+                newStatus: finalStatus,
                 reason,
                 lateMinutes,
                 targetDate: sessionDate
@@ -264,25 +296,6 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
             throw err; // Re-throw so modal can handle it
         }
     };
-
-    // ❌ DEPRECATED - Old manual update (no longer used)
-    // const handleConfirmUpdate = async (reason?: string) => {
-    //     if (!selectedUser) return;
-    //     try {
-    //         await api.put(`/attendance/session/${sessionId}/manual-update`, {
-    //             userId: selectedUser.userId,
-    //             status: newStatus,
-    //             reason,
-    //             ...(sessionDate && { sessionDate })
-    //         });
-    //         await fetchAttendance();
-    //         setIsUpdateModalOpen(false);
-    //         setSelectedUser(null);
-    //     } catch (err: any) {
-    //         console.error('Error updating attendance:', err);
-    //         alert(err.response?.data?.msg || 'Failed to update attendance');
-    //     }
-    // };
 
     // Format date/time
     const formatDateTime = (dateString: string | null) => {
@@ -315,6 +328,19 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                             )}
                         </div>
                         <div className="flex items-center gap-3">
+                            {/* ✅ REFRESH BUTTON: Manual data reload */}
+                            <button
+                                onClick={() => fetchAttendance()}
+                                disabled={loading}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+                                title="Refresh attendance data"
+                            >
+                                <span className="material-symbols-outlined text-lg">
+                                    {loading ? 'sync' : 'refresh'}
+                                </span>
+                                {loading ? 'Refreshing...' : 'Refresh'}
+                            </button>
+
                             {/* ✅ NEW: Audit Trail Button (Permission-gated) */}
                             {canEdit && (
                                 <button
@@ -564,7 +590,6 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                 />
             )}
 
-            {/* ✅ NEW: Attendance Audit Viewer */}
             {isAuditViewerOpen && (
                 <AttendanceAuditViewer
                     sessionId={sessionId}
@@ -576,18 +601,6 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                     }}
                 />
             )}
-
-            {/* ❌ DEPRECATED: Old Manual Update Modal (removed) */}
-            {/* <ManualUpdateModal
-                isOpen={isUpdateModalOpen}
-                user={selectedUser}
-                newStatus={newStatus}
-                onConfirm={handleConfirmUpdate}
-                onCancel={() => {
-                    setIsUpdateModalOpen(false);
-                    setSelectedUser(null);
-                }}
-            /> */}
         </div>
     );
 };

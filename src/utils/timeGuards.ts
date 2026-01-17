@@ -28,32 +28,45 @@ const ENABLE_GUARDS = import.meta.env.MODE !== 'production' ||
  */
 if (ENABLE_GUARDS) {
     const OriginalDate = Date;
+    let isInDateProxy = false; // Recursion guard
+
     const dateConstructorHandler = {
         construct(target: any, args: any[]) {
-            // Get stack trace
-            const stack = new Error().stack || '';
-
-            // Check if called from display-only file
-            const isDisplayFile = DISPLAY_ONLY_FILES.some(file =>
-                stack.includes(file)
-            );
-
-            // Check if called from time utilities (allowed)
-            const isTimeUtil = stack.includes('time.ts') ||
-                stack.includes('sessionStatusUtils.ts');
-
-            if (!isDisplayFile && !isTimeUtil) {
-                // Not from approved location - issue warning
-                console.warn(
-                    '⚠️ TIME GUARD WARNING: new Date() called outside display layer',
-                    '\nStack trace:',
-                    stack.split('\n').slice(1, 4).join('\n'),
-                    '\n\n✅ Use nowIST() from utils/time.ts instead',
-                    '\n📖 See TIME_ARCHITECTURE.md for migration guide'
-                );
+            // Prevent infinite recursion
+            if (isInDateProxy) {
+                return new target(...args);
             }
 
-            return new target(...args);
+            try {
+                isInDateProxy = true;
+
+                // Get stack trace
+                const stack = new Error().stack || '';
+
+                // Check if called from display-only file
+                const isDisplayFile = DISPLAY_ONLY_FILES.some(file =>
+                    stack.includes(file)
+                );
+
+                // Check if called from time utilities (allowed)
+                const isTimeUtil = stack.includes('time.ts') ||
+                    stack.includes('sessionStatusUtils.ts');
+
+                if (!isDisplayFile && !isTimeUtil) {
+                    // Not from approved location - issue warning
+                    console.warn(
+                        '⚠️ TIME GUARD WARNING: new Date() called outside display layer',
+                        '\nStack trace:',
+                        stack.split('\n').slice(1, 4).join('\n'),
+                        '\n\n✅ Use nowIST() from utils/time.ts instead',
+                        '\n📖 See TIME_ARCHITECTURE.md for migration guide'
+                    );
+                }
+
+                return new target(...args);
+            } finally {
+                isInDateProxy = false;
+            }
         }
     };
 

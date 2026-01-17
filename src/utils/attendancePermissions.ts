@@ -112,9 +112,11 @@ export const canAdjustAttendance = (user: User | null | undefined): boolean => {
         return false;
     }
 
-    // STRICT: Only CompanyAdmin and PLATFORM_OWNER
+    // STRICT: CompanyAdmin, SuperAdmin, SUPER_ADMIN, and PLATFORM_OWNER
     return (
         user.role === 'CompanyAdmin' ||
+        user.role === 'SuperAdmin' ||
+        user.role === 'SUPER_ADMIN' ||
         user.role === 'PLATFORM_OWNER'
     );
 };
@@ -236,7 +238,7 @@ export const canAdjustSession = (
  * Permission constants for easy reference
  */
 export const PERMISSION_ROLES = {
-    CAN_ADJUST: ['CompanyAdmin', 'PLATFORM_OWNER'],
+    CAN_ADJUST: ['CompanyAdmin', 'SuperAdmin', 'SUPER_ADMIN', 'PLATFORM_OWNER'],
     CAN_VIEW_AUDIT: ['CompanyAdmin', 'PLATFORM_OWNER', 'Manager', 'SessionAdmin'],
     CAN_EXPORT: ['CompanyAdmin', 'PLATFORM_OWNER', 'Manager', 'SessionAdmin'],
     NO_ACCESS: ['EndUser']

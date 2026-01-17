@@ -45,7 +45,7 @@ interface ManualUpdateModalProps {
     newStatus: 'PRESENT' | 'ABSENT' | 'LATE';
     sessionName?: string;
     sessionDate?: string;
-    onConfirm: (reason: string, lateMinutes?: number) => Promise<void>;
+    onConfirm: (reason: string, lateMinutes?: number, status?: 'PRESENT' | 'ABSENT' | 'LATE') => Promise<void>;
     onCancel: () => void;
 }
 
@@ -59,6 +59,7 @@ const EnhancedManualUpdateModal: React.FC<ManualUpdateModalProps> = ({
     onCancel
 }) => {
     const { user: currentUser } = useAuth();
+    const [selectedStatus, setSelectedStatus] = useState<'PRESENT' | 'ABSENT' | 'LATE'>(newStatus); // ✅ NEW: Editable status
     const [reason, setReason] = useState('');
     const [lateMinutes, setLateMinutes] = useState<number>(15);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -70,11 +71,12 @@ const EnhancedManualUpdateModal: React.FC<ManualUpdateModalProps> = ({
     // Reset state when modal opens/closes
     useEffect(() => {
         if (isOpen) {
+            setSelectedStatus(newStatus); // Reset to initial status
             setReason('');
             setLateMinutes(15);
             setShowHistory(false);
         }
-    }, [isOpen]);
+    }, [isOpen, newStatus]);
 
     if (!isOpen || !user) return null;
 
@@ -91,11 +93,11 @@ const EnhancedManualUpdateModal: React.FC<ManualUpdateModalProps> = ({
         ? 'Reason must be between 10 and 500 characters'
         : '';
 
-    // NO-OP detection
-    const isNoOp = user.status === newStatus;
+    // NO-OP detection (compare with selected status, not prop)
+    const isNoOp = user.status === selectedStatus;
 
-    // Validate form
-    const canSubmit = !isSubmitting && isReasonValid && !isNoOp && (newStatus !== 'LATE' || lateMinutes > 0);
+    // Validate form (using selectedStatus)
+    const canSubmit = !isSubmitting && isReasonValid && !isNoOp && (selectedStatus !== 'LATE' || lateMinutes > 0);
 
     const handleConfirm = async () => {
         // Final frontend validation
@@ -109,14 +111,20 @@ const EnhancedManualUpdateModal: React.FC<ManualUpdateModalProps> = ({
             return;
         }
 
-        if (newStatus === 'LATE' && (!lateMinutes || lateMinutes < 1)) {
+        if (selectedStatus === 'LATE' && (!lateMinutes || lateMinutes < 1)) {
             toast.error('Late minutes must be greater than 0');
             return;
         }
 
         setIsSubmitting(true);
         try {
-            await onConfirm(reason.trim(), newStatus === 'LATE' ? lateMinutes : undefined);
+            // Pass selectedStatus to parent (who then calls API with correct newStatus)
+            // CRITICAL: Always pass lateMinutes (even if undefined) to preserve parameter order
+            await onConfirm(
+                reason.trim(),
+                selectedStatus === 'LATE' ? lateMinutes : undefined,
+                selectedStatus
+            );
             setReason('');
             toast.success('Attendance adjusted successfully');
         } catch (error: any) {
@@ -132,12 +140,12 @@ const EnhancedManualUpdateModal: React.FC<ManualUpdateModalProps> = ({
         onCancel();
     };
 
-    // Determine action color
+    // Determine action color (using selectedStatus)
     const actionColor = {
         PRESENT: 'green',
         ABSENT: 'red',
         LATE: 'yellow'
-    }[newStatus];
+    }[selectedStatus];
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[60] p-4">
@@ -205,12 +213,17 @@ const EnhancedManualUpdateModal: React.FC<ManualUpdateModalProps> = ({
                             </span>
                             <div>
                                 <p className="text-xs text-blue-800 dark:text-blue-300 mb-1">New Status</p>
-                                <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${newStatus === 'PRESENT' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                                    newStatus === 'LATE' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
-                                        'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                                    }`}>
-                                    {newStatus}
-                                </span>
+                                {/* ✅ NEW: Status Selector Dropdown */}
+                                <select
+                                    value={selectedStatus}
+                                    onChange={(e) => setSelectedStatus(e.target.value as 'PRESENT' | 'ABSENT' | 'LATE')}
+                                    disabled={isSubmitting}
+                                    className="px-3 py-1 rounded-full text-xs font-bold bg-white dark:bg-slate-700 border-2 border-blue-500 dark:border-blue-400 text-blue-900 dark:text-blue-100 focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
+                                >
+                                    <option value="PRESENT">PRESENT</option>
+                                    <option value="ABSENT">ABSENT</option>
+                                    <option value="LATE">LATE</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -229,8 +242,8 @@ const EnhancedManualUpdateModal: React.FC<ManualUpdateModalProps> = ({
                         </div>
                     )}
 
-                    {/* Late Minutes Input (only if marking LATE) */}
-                    {newStatus === 'LATE' && (
+                    {/* Late Minutes Input (only if marking LATE) - using selectedStatus */}
+                    {selectedStatus === 'LATE' && (
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Late Minutes <span className="text-red-600">*</span>
@@ -360,7 +373,7 @@ const EnhancedManualUpdateModal: React.FC<ManualUpdateModalProps> = ({
                                     Adjusting...
                                 </span>
                             ) : (
-                                `Confirm – Mark as ${newStatus}`
+                                `Confirm – Mark as ${selectedStatus}`
                             )}
                         </button>
                     </div>

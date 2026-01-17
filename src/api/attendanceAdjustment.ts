@@ -12,7 +12,7 @@
  * ============================================================================
  */
 
-import axios from 'axios';
+import api from '../api';
 
 const API_BASE = '/api/attendance';
 
@@ -110,7 +110,7 @@ export const adjustAttendance = async (
     sessionId: string,
     payload: AdjustAttendancePayload
 ): Promise<AdjustAttendanceResponse> => {
-    const response = await axios.post<AdjustAttendanceResponse>(
+    const response = await api.post<AdjustAttendanceResponse>(
         `${API_BASE}/session/${sessionId}/adjust`,
         payload
     );
@@ -128,7 +128,7 @@ export const getDetailedSessionAttendance = async (
     sessionId: string,
     includeHistory: boolean = false
 ): Promise<any> => {
-    const response = await axios.get(
+    const response = await api.get(
         `${API_BASE}/session/${sessionId}/detailed`,
         {
             params: { includeHistory }
@@ -148,7 +148,7 @@ export const getSessionAuditTrail = async (
     sessionId: string,
     targetDate?: string
 ): Promise<AttendanceAuditEntry[]> => {
-    const response = await axios.get(
+    const response = await api.get(
         `${API_BASE}/session/${sessionId}/audit`,
         {
             params: { targetDate }
@@ -170,7 +170,7 @@ export const getUserModificationHistory = async (
     userId: string,
     targetDate?: string
 ): Promise<AttendanceModification[]> => {
-    const response = await axios.get(
+    const response = await api.get(
         `${API_BASE}/session/${sessionId}/user/${userId}/history`,
         {
             params: { targetDate }
