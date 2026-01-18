@@ -435,14 +435,14 @@ const AttendanceReport: React.FC = () => {
   return (
     <div className="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden">
       <div className="layout-container flex h-full grow flex-col">
-        <div className="px-4 sm:px-6 lg:px-8 py-8 lg:py-12 flex flex-1 justify-center">
+        <div className="px-3 sm:px-6 lg:px-8 py-4 sm:py-8 lg:py-12 flex flex-1 justify-center">
           <div className="layout-content-container flex flex-col w-full max-w-7xl flex-1">
-            {/* Page Header */}
-            <div className="flex min-w-72 flex-col gap-3 mb-8">
-              <p className="text-[#181511] dark:text-white text-3xl sm:text-4xl font-black leading-tight tracking-[-0.033em]">
+            {/* Page Header - Compact on mobile */}
+            <div className="flex min-w-72 flex-col gap-1 sm:gap-3 mb-4 sm:mb-8">
+              <p className="text-[#181511] dark:text-white text-2xl sm:text-3xl lg:text-4xl font-black leading-tight tracking-[-0.033em]">
                 Attendance Report
               </p>
-              <p className="text-[#8a7b60] dark:text-gray-400 text-base font-normal leading-normal">
+              <p className="text-[#8a7b60] dark:text-gray-400 text-sm sm:text-base font-normal leading-normal">
                 View class-wise attendance analytics, statistics, and detailed session logs.
               </p>
             </div>
@@ -455,18 +455,18 @@ const AttendanceReport: React.FC = () => {
               </div>
             )}
 
-            {/* Filter Section */}
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-[#e6e2db] dark:border-slate-700 p-6 sm:p-8 mb-8">
-              <h2 className="text-[#181511] dark:text-white text-xl font-bold leading-tight tracking-[-0.015em] mb-5 flex items-center">
-                <span className="material-symbols-outlined text-[#f04129] mr-2">filter_alt</span>
-                Select Class & Date Range
+            {/* Filter Section - More compact on mobile */}
+            <div className="bg-white dark:bg-slate-800 rounded-lg sm:rounded-xl shadow-sm border border-[#e6e2db] dark:border-slate-700 p-3 sm:p-6 lg:p-8 mb-4 sm:mb-8">
+              <h2 className="text-[#181511] dark:text-white text-base sm:text-xl font-bold leading-tight tracking-[-0.015em] mb-3 sm:mb-5 flex items-center">
+                <span className="material-symbols-outlined text-[#f04129] mr-1 sm:mr-2 text-lg sm:text-2xl">filter_alt</span>
+                <span className="text-sm sm:text-xl">Select Class & Date Range</span>
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 sm:gap-4 items-end">
                 <label className="flex flex-col flex-1">
-                  <p className="text-[#181511] dark:text-gray-200 text-sm font-medium leading-normal pb-2">Class/Batch</p>
+                  <p className="text-[#181511] dark:text-gray-200 text-xs sm:text-sm font-medium leading-normal pb-1 sm:pb-2">Class/Batch</p>
                   <div className="relative">
                     <select
-                      className="form-select appearance-none flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-none focus:ring-2 focus:ring-primary border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 focus:border-primary/50 dark:focus:border-primary/50 h-12 p-3 text-base font-normal leading-normal"
+                      className="form-select appearance-none flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-none focus:ring-2 focus:ring-primary border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 focus:border-primary/50 dark:focus:border-primary/50 h-10 sm:h-12 px-2 sm:px-3 py-2 sm:py-3 text-sm sm:text-base font-normal leading-normal"
                       value={selectedClass}
                       onChange={(e) => {
                         setSelectedClass(e.target.value);
@@ -490,7 +490,7 @@ const AttendanceReport: React.FC = () => {
                 </label>
 
                 <label className="flex flex-col flex-1">
-                  <p className="text-[#181511] dark:text-gray-200 text-sm font-medium leading-normal pb-2">Start Date</p>
+                  <p className="text-[#181511] dark:text-gray-200 text-xs sm:text-sm font-medium leading-normal pb-1 sm:pb-2">Start Date</p>
                   <input
                     type="date"
                     value={startDate}
@@ -500,13 +500,13 @@ const AttendanceReport: React.FC = () => {
                       setSessionLogs([]);
                       setError('');
                     }}
-                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-none focus:ring-2 focus:ring-primary border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 focus:border-primary/50 dark:focus:border-primary/50 h-12 p-3 text-base font-normal leading-normal"
+                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-none focus:ring-2 focus:ring-primary border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 focus:border-primary/50 dark:focus:border-primary/50 h-10 sm:h-12 px-2 sm:px-3 py-2 sm:py-3 text-sm sm:text-base font-normal leading-normal"
                     disabled={isLoading}
                   />
                 </label>
 
                 <label className="flex flex-col flex-1">
-                  <p className="text-[#181511] dark:text-gray-200 text-sm font-medium leading-normal pb-2">End Date</p>
+                  <p className="text-[#181511] dark:text-gray-200 text-xs sm:text-sm font-medium leading-normal pb-1 sm:pb-2">End Date</p>
                   <input
                     type="date"
                     value={endDate}
@@ -516,13 +516,13 @@ const AttendanceReport: React.FC = () => {
                       setSessionLogs([]);
                       setError('');
                     }}
-                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-none focus:ring-2 focus:ring-primary border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 focus:border-primary/50 dark:focus:border-primary/50 h-12 p-3 text-base font-normal leading-normal"
+                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-none focus:ring-2 focus:ring-primary border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 focus:border-primary/50 dark:focus:border-primary/50 h-10 sm:h-12 px-2 sm:px-3 py-2 sm:py-3 text-sm sm:text-base font-normal leading-normal"
                     disabled={isLoading}
                   />
                 </label>
 
                 <button
-                  className="flex w-full min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-gradient-to-r from-orange-500 to-[#f04129] text-white gap-2 text-base font-bold leading-normal tracking-[0.015em] hover:from-orange-600 hover:to-[#d63a25] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                  className="flex w-full min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 sm:h-12 px-4 sm:px-5 bg-gradient-to-r from-orange-500 to-[#f04129] text-white gap-1 sm:gap-2 text-sm sm:text-base font-bold leading-normal tracking-[0.015em] hover:from-orange-600 hover:to-[#d63a25] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
                   onClick={handleViewReport}
                   disabled={isLoading || !selectedClass || !startDate || !endDate}
                 >
@@ -544,9 +544,9 @@ const AttendanceReport: React.FC = () => {
               </div>
             </div>
 
-            {/* Tab Switcher */}
+            {/* Tab Switcher - Compact on mobile */}
             {(analyticsData || sessionLogs.length > 0) && (
-              <div className="mb-6 flex gap-2 border-b border-[#e6e2db] dark:border-slate-700">
+              <div className="mb-4 sm:mb-6 flex gap-1 sm:gap-2 border-b border-[#e6e2db] dark:border-slate-700">
                 <button
                   onClick={() => {
                     setActiveTab('analytics');
@@ -859,62 +859,74 @@ const AttendanceReport: React.FC = () => {
                       </table>
                     </div>
 
-                    {/* Mobile Cards (block sm:hidden) */}
-                    <div className="block sm:hidden space-y-4">
+                    {/* Mobile Cards - Compact with colored stat boxes */}
+                    <div className="block sm:hidden space-y-2.5">
                       {sessionLogs.map((log) => (
-                        <div key={`mobile_${log._id}_${log.dateStr || log.date}`} className="bg-white dark:bg-slate-800 rounded-lg border border-[#e6e2db] dark:border-slate-700 p-4 shadow-sm">
-                          {/* Header */}
-                          <div className="flex justify-between items-start mb-3">
-                            <div>
-                              <p className="text-xs text-[#8a7b60] dark:text-gray-400 mb-1">
+                        <div key={`mobile_${log._id}_${log.dateStr || log.date}`} className="bg-white dark:bg-slate-800 rounded-lg border border-[#e6e2db] dark:border-slate-700 p-2.5 shadow-sm">
+                          {/* Header Row - Date, Status, and Menu */}
+                          <div className="flex items-center justify-between gap-2 mb-1.5">
+                            {/* Left: Date and Status */}
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <p className="text-[10px] text-[#8a7b60] dark:text-gray-400">
                                 {formatDate(log.date)}
                               </p>
-                              <p className="font-semibold text-[#181511] dark:text-white line-clamp-1">
-                                {log.name}
+                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold whitespace-nowrap ${log.status === 'Completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
+                                log.status === 'Cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300' :
+                                  log.status === 'Today' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' :
+                                    'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                }`}>
+                                {log.status}
+                              </span>
+                            </div>
+
+                            {/* Right: Action Menu */}
+                            <div className="flex-shrink-0">
+                              <ActionMenu
+                                onManage={() => {
+                                  setViewingSessionId(log._id);
+                                  setViewingSessionDate(log.date);
+                                }}
+                                onView={() => {
+                                  setViewingSessionId(log._id);
+                                  setViewingSessionDate(log.date);
+                                }}
+                                onPdf={() => downloadSessionPDF(log._id, log.name, log.dateStr || log.date)}
+                                onCsv={() => downloadSessionCSV(log._id, log.name, log.dateStr || log.date)}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Session Name */}
+                          <p className="font-semibold text-sm text-[#181511] dark:text-white line-clamp-1 mb-2 px-0.5">
+                            {log.name}
+                          </p>
+
+                          {/* Stats - Colored boxes in grid */}
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {/* Present */}
+                            <div className="bg-green-50 dark:bg-green-900/20 rounded px-1.5 py-1 text-center">
+                              <p className="text-[9px] text-green-700 dark:text-green-400 font-medium">Present</p>
+                              <p className="font-semibold text-xs text-green-800 dark:text-green-300 mt-0.5">
+                                {log.presentCount}<span className="text-[9px] opacity-70">/{log.totalAssigned || log.totalUsers}</span>
                               </p>
                             </div>
-                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-semibold ${log.status === 'Completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
-                              log.status === 'Cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300' :
-                                log.status === 'Today' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' :
-                                  'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                              }`}>
-                              {log.status}
-                            </span>
-                          </div>
 
-                          {/* Stats Grid */}
-                          <div className="grid grid-cols-3 gap-2 bg-gray-50 dark:bg-slate-900/50 rounded-lg p-3 text-center mb-4">
-                            <div>
-                              <p className="text-[10px] text-[#8a7b60] dark:text-gray-400 uppercase tracking-wide">Present</p>
-                              <p className="font-semibold text-[#181511] dark:text-white text-sm mt-0.5">{log.presentCount} <span className="text-xs font-normal text-gray-400">/ {log.totalAssigned || log.totalUsers}</span></p>
+                            {/* Late */}
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded px-1.5 py-1 text-center">
+                              <p className="text-[9px] text-yellow-700 dark:text-yellow-400 font-medium">Late</p>
+                              <p className="font-semibold text-xs text-yellow-800 dark:text-yellow-300 mt-0.5">
+                                {log.lateCount}
+                              </p>
                             </div>
-                            <div>
-                              <p className="text-[10px] text-[#8a7b60] dark:text-gray-400 uppercase tracking-wide">Late</p>
-                              <p className={`font-semibold text-sm mt-0.5 ${log.lateCount > 0 ? "text-yellow-600 dark:text-yellow-400" : "text-[#181511] dark:text-white"}`}>{log.lateCount}</p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] text-[#8a7b60] dark:text-gray-400 uppercase tracking-wide">Rate</p>
-                              <p className={`font-semibold text-sm mt-0.5 ${log.attendancePercentage < 50 ? "text-red-600" : "text-green-600"}`}>{log.attendancePercentage}%</p>
+
+                            {/* Rate */}
+                            <div className={`${log.attendancePercentage < 50 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-blue-50 dark:bg-blue-900/20'} rounded px-1.5 py-1 text-center`}>
+                              <p className={`text-[9px] font-medium ${log.attendancePercentage < 50 ? 'text-red-700 dark:text-red-400' : 'text-blue-700 dark:text-blue-400'}`}>Rate</p>
+                              <p className={`font-semibold text-xs mt-0.5 ${log.attendancePercentage < 50 ? 'text-red-800 dark:text-red-300' : 'text-blue-800 dark:text-blue-300'}`}>
+                                {log.attendancePercentage}%
+                              </p>
                             </div>
                           </div>
-
-                          {/* Actions */}
-                          <div className="mt-4 flex justify-end">
-                            <ActionMenu
-                              onManage={() => {
-                                setViewingSessionId(log._id);
-                                setViewingSessionDate(log.date);
-                              }}
-                              onView={() => {
-                                setViewingSessionId(log._id);
-                                setViewingSessionDate(log.date);
-                              }}
-                              onPdf={() => downloadSessionPDF(log._id, log.name, log.dateStr || log.date)}
-                              onCsv={() => downloadSessionCSV(log._id, log.name, log.dateStr || log.date)}
-                            />
-                          </div>
-
-                          {/* Mobile expanded details removed - use SessionAttendanceView via "View Details" */}
                         </div>
                       ))}
                     </div>

@@ -312,40 +312,40 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 sm:p-4">
+            <div className="bg-white dark:bg-slate-800 sm:rounded-lg shadow-xl w-full max-w-7xl h-full sm:max-h-[90vh] overflow-hidden flex flex-col">
                 {/* Header */}
-                <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-700">
+                <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-slate-700">
                     <div className="flex items-center justify-between">
-                        <div>
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                        <div className="flex-1 min-w-0">
+                            <h2 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
                                 Session Attendance
                             </h2>
                             {sessionDetails && (
-                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1 truncate">
                                     {sessionDetails.sessionName} • {new Date(sessionDetails.sessionDate).toLocaleDateString('en-IN')}
                                 </p>
                             )}
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3">
                             {/* ✅ REFRESH BUTTON: Manual data reload */}
                             <button
                                 onClick={() => fetchAttendance()}
                                 disabled={loading}
-                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+                                className="px-2 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium flex items-center gap-1 sm:gap-2 transition-colors"
                                 title="Refresh attendance data"
                             >
                                 <span className="material-symbols-outlined text-lg">
                                     {loading ? 'sync' : 'refresh'}
                                 </span>
-                                {loading ? 'Refreshing...' : 'Refresh'}
+                                <span className="hidden sm:inline">{loading ? 'Refreshing...' : 'Refresh'}</span>
                             </button>
 
-                            {/* ✅ NEW: Audit Trail Button (Permission-gated) */}
+                            {/* ✅ NEW: Audit Trail Button (Permission-gated) - Hidden on mobile */}
                             {canEdit && (
                                 <button
                                     onClick={() => setIsAuditViewerOpen(true)}
-                                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium flex items-center gap-2"
+                                    className="hidden sm:flex px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium items-center gap-2"
                                 >
                                     <span className="material-symbols-outlined text-lg">history</span>
                                     View Audit Trail
@@ -362,30 +362,30 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                         </div>
                     </div>
 
-                    {/* Summary Stats */}
-                    <div className="grid grid-cols-4 gap-4 mt-4">
-                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-                            <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Total</p>
-                            <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{summary.total}</p>
+                    {/* Summary Stats - 2x2 on mobile, 4 columns on desktop */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mt-3 sm:mt-4">
+                        <div className="bg-blue-50 dark:bg-blue-900/20 p-2 sm:p-3 rounded-lg">
+                            <p className="text-[10px] sm:text-xs text-blue-600 dark:text-blue-400 font-medium">Total</p>
+                            <p className="text-xl sm:text-2xl font-bold text-blue-700 dark:text-blue-300">{summary.total}</p>
                         </div>
-                        <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
-                            <p className="text-xs text-green-600 dark:text-green-400 font-medium">Present</p>
-                            <p className="text-2xl font-bold text-green-700 dark:text-green-300">{summary.present}</p>
+                        <div className="bg-green-50 dark:bg-green-900/20 p-2 sm:p-3 rounded-lg">
+                            <p className="text-[10px] sm:text-xs text-green-600 dark:text-green-400 font-medium">Present</p>
+                            <p className="text-xl sm:text-2xl font-bold text-green-700 dark:text-green-300">{summary.present}</p>
                         </div>
-                        <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg">
-                            <p className="text-xs text-yellow-600 dark:text-yellow-400 font-medium">Late</p>
-                            <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-300">{summary.late}</p>
+                        <div className="bg-yellow-50 dark:bg-yellow-900/20 p-2 sm:p-3 rounded-lg">
+                            <p className="text-[10px] sm:text-xs text-yellow-600 dark:text-yellow-400 font-medium">Late</p>
+                            <p className="text-xl sm:text-2xl font-bold text-yellow-700 dark:text-yellow-300">{summary.late}</p>
                         </div>
-                        <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
-                            <p className="text-xs text-red-600 dark:text-red-400 font-medium">Absent</p>
-                            <p className="text-2xl font-bold text-red-700 dark:text-red-300">{summary.absent}</p>
+                        <div className="bg-red-50 dark:bg-red-900/20 p-2 sm:p-3 rounded-lg">
+                            <p className="text-[10px] sm:text-xs text-red-600 dark:text-red-400 font-medium">Absent</p>
+                            <p className="text-xl sm:text-2xl font-bold text-red-700 dark:text-red-300">{summary.absent}</p>
                         </div>
                     </div>
                 </div>
 
-                {/* Filters */}
-                <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900">
-                    <div className="flex gap-4 items-center">
+                {/* Filters - Stack vertically on mobile */}
+                <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900">
+                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center">
                         {/* Search */}
                         <div className="flex-1">
                             <div className="relative">
@@ -409,7 +409,7 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                                 setStatusFilter(e.target.value as any);
                                 setCurrentPage(1);
                             }}
-                            className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f04129]"
+                            className="w-full sm:w-auto px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f04129]"
                         >
                             <option value="ALL">All Status</option>
                             <option value="PRESENT">Present</option>
@@ -419,8 +419,8 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                     </div>
                 </div>
 
-                {/* Table */}
-                <div className="flex-1 overflow-auto p-6">
+                {/* User List - Table on desktop, Cards on mobile */}
+                <div className="flex-1 overflow-auto p-3 sm:p-6">
                     {loading ? (
                         <div className="flex items-center justify-center h-64">
                             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f04129]"></div>
@@ -440,106 +440,179 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                             </div>
                         </div>
                     ) : (
-                        <table className="w-full">
-                            <thead className="bg-gray-50 dark:bg-slate-900 sticky top-0">
-                                <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                        Status
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                        Name
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                        Email
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                        Check-in Time
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                        Info
-                                    </th>
-                                    {/* ✅ NEW: Actions column for admin */}
-                                    {canEdit && (
-                                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                            Actions
+                        <>
+                            {/* Desktop Table - hidden on mobile */}
+                            <table className="w-full hidden sm:table">
+                                <thead className="bg-gray-50 dark:bg-slate-900 sticky top-0">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                            Status
                                         </th>
-                                    )}
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
-                                {users.map((user) => (
-                                    <tr key={user.userId} className="hover:bg-gray-50 dark:hover:bg-slate-700">
-                                        <td className="px-4 py-4 whitespace-nowrap">
-                                            <AttendanceCheckbox
-                                                user={user}
-                                                canEdit={canEdit}
-                                                onChange={handleCheckboxChange}
-                                            />
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <div className="flex items-center gap-2">
-                                                <div>
-                                                    <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                                        {user.name}
-                                                    </div>
-                                                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                        {user.role}
-                                                    </div>
-                                                </div>
-                                                {/* ✅ NEW: Manual Edit Badge */}
-                                                {user.modificationHistory && user.modificationHistory.length > 0 && (
-                                                    <ManualEditBadge
-                                                        isModified={true}
-                                                        modifiedBy={user.modificationHistory[user.modificationHistory.length - 1]?.modifiedBy}
-                                                        modifiedAt={user.modificationHistory[user.modificationHistory.length - 1]?.modifiedAt}
-                                                        modificationCount={user.modificationHistory.length}
-                                                        onViewHistory={() => {
-                                                            setIsAuditViewerOpen(true);
-                                                        }}
-                                                    />
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                                            {user.email}
-                                        </td>
-                                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                                            {formatDateTime(user.checkInTime)}
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <div className="flex flex-col gap-1">
-                                                {user.isLate && (
-                                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-                                                        Late by {user.lateByMinutes} min
-                                                    </span>
-                                                )}
-                                                {user.isManuallyModified && user.updatedBy && (
-                                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                                                        Modified by {user.updatedBy.name}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        {/* ✅ NEW: Adjust Attendance Button (Permission-gated) */}
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                            Name
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                            Email
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                            Check-in Time
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                            Info
+                                        </th>
+                                        {/* ✅ NEW: Actions column for admin */}
                                         {canEdit && (
-                                            <td className="px-4 py-4 text-right">
-                                                <button
-                                                    data-testid="adjust-button"
-                                                    onClick={() => {
-                                                        setSelectedUserForAdjust(user);
-                                                        setNewStatusForModal(user.status === 'ABSENT' ? 'PRESENT' : 'ABSENT');
-                                                        setIsAdjustModalOpen(true);
-                                                    }}
-                                                    className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded text-sm font-medium transition-colors"
-                                                >
-                                                    Adjust
-                                                </button>
-                                            </td>
+                                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                Actions
+                                            </th>
                                         )}
                                     </tr>
+                                </thead>
+                                <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
+                                    {users.map((user) => (
+                                        <tr key={user.userId} className="hover:bg-gray-50 dark:hover:bg-slate-700">
+                                            <td className="px-4 py-4 whitespace-nowrap">
+                                                <AttendanceCheckbox
+                                                    user={user}
+                                                    canEdit={canEdit}
+                                                    onChange={handleCheckboxChange}
+                                                />
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div>
+                                                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                                            {user.name}
+                                                        </div>
+                                                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                            {user.role}
+                                                        </div>
+                                                    </div>
+                                                    {/* ✅ NEW: Manual Edit Badge */}
+                                                    {user.modificationHistory && user.modificationHistory.length > 0 && (
+                                                        <ManualEditBadge
+                                                            isModified={true}
+                                                            modifiedBy={user.modificationHistory[user.modificationHistory.length - 1]?.modifiedBy}
+                                                            modifiedAt={user.modificationHistory[user.modificationHistory.length - 1]?.modifiedAt}
+                                                            modificationCount={user.modificationHistory.length}
+                                                            onViewHistory={() => {
+                                                                setIsAuditViewerOpen(true);
+                                                            }}
+                                                        />
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                                {user.email}
+                                            </td>
+                                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                                {formatDateTime(user.checkInTime)}
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <div className="flex flex-col gap-1">
+                                                    {user.isLate && (
+                                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                                            Late by {user.lateByMinutes} min
+                                                        </span>
+                                                    )}
+                                                    {user.isManuallyModified && user.updatedBy && (
+                                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                                                            Modified by {user.updatedBy.name}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            {/* ✅ NEW: Adjust Attendance Button (Permission-gated) */}
+                                            {canEdit && (
+                                                <td className="px-4 py-4 text-right">
+                                                    <button
+                                                        data-testid="adjust-button"
+                                                        onClick={() => {
+                                                            setSelectedUserForAdjust(user);
+                                                            setNewStatusForModal(user.status === 'ABSENT' ? 'PRESENT' : 'ABSENT');
+                                                            setIsAdjustModalOpen(true);
+                                                        }}
+                                                        className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded text-sm font-medium transition-colors">
+                                                        Adjust
+                                                    </button>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+
+                            {/* Mobile Cards - shown on mobile only */}
+                            <div className="block sm:hidden space-y-3">
+                                {users.map((user) => (
+                                    <div
+                                        key={user.userId}
+                                        className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-4 shadow-sm"
+                                    >
+                                        {/* Header - Name and Status */}
+                                        <div className="flex items-start justify-between mb-3">
+                                            <div className="flex items-start gap-3 flex-1 min-w-0">
+                                                <div className="pt-1">
+                                                    <AttendanceCheckbox
+                                                        user={user}
+                                                        canEdit={canEdit}
+                                                        onChange={handleCheckboxChange}
+                                                    />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                                                        {user.name}
+                                                    </h3>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                                        {user.email}
+                                                    </p>
+                                                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                                                        {user.role}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Info Badges */}
+                                        <div className="flex flex-wrap gap-2 mb-3">
+                                            {user.isLate && (
+                                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                                    Late by {user.lateByMinutes} min
+                                                </span>
+                                            )}
+                                            {user.modificationHistory && user.modificationHistory.length > 0 && (
+                                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                                                    Modified {user.modificationHistory.length}x
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* Check-in Time */}
+                                        {user.checkInTime && (
+                                            <div className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                                                <span className="font-medium">Check-in: </span>
+                                                {formatDateTime(user.checkInTime)}
+                                            </div>
+                                        )}
+
+                                        {/* Action Button - Full width on mobile */}
+                                        {canEdit && (
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedUserForAdjust(user);
+                                                    setNewStatusForModal(user.status === 'ABSENT' ? 'PRESENT' : 'ABSENT');
+                                                    setIsAdjustModalOpen(true);
+                                                }}
+                                                className="w-full h-11 bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <span className="material-symbols-outlined text-lg">edit</span>
+                                                Adjust Attendance
+                                            </button>
+                                        )}
+                                    </div>
                                 ))}
-                            </tbody>
-                        </table>
+                            </div>
+                        </>
                     )}
                 </div>
 

@@ -155,22 +155,22 @@ const EnhancedManualUpdateModal: React.FC<ManualUpdateModalProps> = ({
             : 'bg-green-600 hover:bg-green-700 text-white';
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[60] p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-                {/* Header */}
-                <div className={`px-6 py-4 border-b border-gray-200 dark:border-slate-700 bg-orange-50 dark:bg-orange-900/30`}>
-                    <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-3xl text-orange-600 dark:text-orange-400">
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-end sm:items-center justify-center z-[60] sm:p-4">
+            <div className="bg-white dark:bg-slate-800 w-full sm:rounded-lg shadow-2xl sm:max-w-lg sm:max-h-[90vh] h-full sm:h-auto rounded-t-2xl sm:rounded-b-lg overflow-hidden flex flex-col">
+                {/* Header - Smaller on mobile */}
+                <div className={`px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-slate-700 bg-orange-50 dark:bg-orange-900/30`}>
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        <span className="material-symbols-outlined text-2xl sm:text-3xl text-orange-600 dark:text-orange-400">
                             lock
                         </span>
-                        <h3 className="text-xl font-bold text-orange-900 dark:text-orange-100">
-                            🔐 Adjust Attendance (Admin Only)
+                        <h3 className="text-base sm:text-xl font-bold text-orange-900 dark:text-orange-100">
+                            🔐 Adjust Attendance (Admin)
                         </h3>
                     </div>
                 </div>
 
-                {/* Content */}
-                <div className="px-6 py-4 space-y-4">
+                {/* Content - Scrollable */}
+                <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
                     {/* Session Info */}
                     {(sessionName || sessionDate) && (
                         <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-lg">
@@ -350,13 +350,13 @@ const EnhancedManualUpdateModal: React.FC<ManualUpdateModalProps> = ({
                     </div>
                 </div>
 
-                {/* Footer */}
-                <div className="px-6 py-4 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900">
-                    <div className="flex gap-3 justify-end">
+                {/* Footer - Sticky at bottom on mobile */}
+                <div className="sticky bottom-0 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:justify-end">
                         <button
                             onClick={handleCancel}
                             disabled={isSubmitting}
-                            className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                            className="h-11 px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
                         >
                             Cancel
                         </button>
@@ -364,7 +364,7 @@ const EnhancedManualUpdateModal: React.FC<ManualUpdateModalProps> = ({
                             onClick={handleConfirm}
                             disabled={!canSubmit}
                             className={`
-                                px-6 py-2 rounded-lg font-bold transition-all
+                                h-11 px-6 py-2 rounded-lg font-bold transition-all
                                 ${canSubmit
                                     ? `${confirmButtonClass} shadow-lg hover:shadow-xl`
                                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
@@ -372,7 +372,7 @@ const EnhancedManualUpdateModal: React.FC<ManualUpdateModalProps> = ({
                             `}
                         >
                             {isSubmitting ? (
-                                <span className="flex items-center gap-2">
+                                <span className="flex items-center justify-center gap-2">
                                     <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                         <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
@@ -380,7 +380,7 @@ const EnhancedManualUpdateModal: React.FC<ManualUpdateModalProps> = ({
                                     Adjusting...
                                 </span>
                             ) : (
-                                `Confirm – Mark as ${selectedStatus}`
+                                <span className="truncate">{`Confirm – Mark as ${selectedStatus}`}</span>
                             )}
                         </button>
                     </div>
