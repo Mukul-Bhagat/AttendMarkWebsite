@@ -30,30 +30,7 @@ interface SessionLog {
   endTime?: string;
 }
 
-interface SessionAttendanceRecord {
-  _id: string;
-  checkInTime: string;
-  locationVerified: boolean;
-  isLate: boolean;
-  lateByMinutes?: number;
-  attendanceStatus?: 'On Leave'; // Optional field for On Leave status
-  userId: {
-    _id: string;
-    email: string;
-    profile: {
-      firstName: string;
-      lastName: string;
-    };
-  } | null;
-  approvedBy?: {
-    _id: string;
-    email: string;
-    profile: {
-      firstName: string;
-      lastName: string;
-    };
-  } | null; // Approver information for On Leave status
-}
+// SessionAttendanceRecord - REMOVED (unused, replaced by SessionAttendanceView component)
 
 const AttendanceReport: React.FC = () => {
   // Force Mark removed - use "Manage" button in SessionAttendanceView
@@ -65,7 +42,6 @@ const AttendanceReport: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'analytics' | 'logs'>('analytics');
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
   const [sessionLogs, setSessionLogs] = useState<SessionLog[]>([]);
-  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingFilters, setIsLoadingFilters] = useState(true);
   const [error, setError] = useState('');
@@ -895,86 +871,7 @@ const AttendanceReport: React.FC = () => {
                                   </div>
                                 </td>
                               </tr>
-                              {/* Expanded Row - Attendance Details */}
-                              {expandedSessionId === `${log._id}_${log.dateStr || log.date}` && (
-                                <tr>
-                                  <td colSpan={6} className="px-6 py-4 bg-gray-50 dark:bg-slate-900/50">
-                                    {isLoadingDetails[`${log._id}_${log.dateStr || log.date}`] ? (
-                                      <div className="flex items-center justify-center py-4">
-                                        <svg className="animate-spin h-5 w-5 text-[#f04129]" fill="none" viewBox="0 0 24 24">
-                                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                          <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
-                                        </svg>
-                                      </div>
-                                    ) : sessionAttendanceDetails[`${log._id}_${log.dateStr || log.date}`] && sessionAttendanceDetails[`${log._id}_${log.dateStr || log.date}`].length > 0 ? (
-                                      <div className="space-y-2">
-                                        <h4 className="text-sm font-semibold text-[#181511] dark:text-white mb-3">Attendance List:</h4>
-                                        <div className="overflow-x-auto">
-                                          <table className="min-w-full text-sm">
-                                            <thead>
-                                              <tr className="border-b border-[#e6e2db] dark:border-slate-700">
-                                                <th className="px-4 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-400">User Name</th>
-                                                <th className="px-4 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-400">Email</th>
-                                                <th className="px-4 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-400">Check-in Time</th>
-                                                <th className="px-4 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-400">Status</th>
-                                                <th className="px-4 py-2 text-left text-xs font-medium text-[#8a7b60] dark:text-gray-400">Approved By</th>
-                                              </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-[#e6e2db] dark:divide-slate-700">
-                                              {sessionAttendanceDetails[`${log._id}_${log.dateStr || log.date}`].map((record) => (
-                                                <tr key={record._id}>
-                                                  <td className="px-4 py-2 text-[#181511] dark:text-white">
-                                                    {record.userId
-                                                      ? `${record.userId.profile.firstName} ${record.userId.profile.lastName}`
-                                                      : 'User (deleted)'}
-                                                  </td>
-                                                  <td className="px-4 py-2 text-[#8a7b60] dark:text-gray-400">
-                                                    {record.userId ? record.userId.email : 'N/A'}
-                                                  </td>
-                                                  <td className="px-4 py-2 text-[#8a7b60] dark:text-gray-400">
-                                                    {formatDateTime(record.checkInTime)}
-                                                  </td>
-                                                  <td className="px-4 py-2">
-                                                    {record.attendanceStatus === 'On Leave' ? (
-                                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
-                                                        🏖️ On Leave
-                                                      </span>
-                                                    ) : record.isLate ? (
-                                                      <span
-                                                        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300"
-                                                        title={record.lateByMinutes
-                                                          ? `Late by ${record.lateByMinutes} ${record.lateByMinutes === 1 ? 'minute' : 'minutes'}`
-                                                          : 'Late'}
-                                                      >
-                                                        Late{record.lateByMinutes ? ` (${record.lateByMinutes}m)` : ''}
-                                                      </span>
-                                                    ) : record.locationVerified ? (
-                                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
-                                                        Verified
-                                                      </span>
-                                                    ) : (
-                                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300">
-                                                        Not Verified
-                                                      </span>
-                                                    )}
-                                                  </td>
-                                                  <td className="px-4 py-2 text-[#8a7b60] dark:text-gray-400">
-                                                    {record.attendanceStatus === 'On Leave' && record.approvedBy
-                                                      ? `${record.approvedBy.profile.firstName} ${record.approvedBy.profile.lastName}`
-                                                      : '-'}
-                                                  </td>
-                                                </tr>
-                                              ))}
-                                            </tbody>
-                                          </table>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <p className="text-sm text-[#8a7b60] dark:text-gray-400">No attendance records found for this session.</p>
-                                    )}
-                                  </td>
-                                </tr>
-                              )}
+                              {/* Expanded details removed - use SessionAttendanceView component via "View Details" action */}
                             </React.Fragment>
                           ))}
                         </tbody>
@@ -1036,48 +933,7 @@ const AttendanceReport: React.FC = () => {
                             />
                           </div>
 
-                          {/* Mobile Expanded View */}
-                          {expandedSessionId === `${log._id}_${log.dateStr || log.date}` && (
-                            <div className="mt-3 pt-3 border-t border-[#e6e2db] dark:border-slate-700">
-                              {isLoadingDetails[`${log._id}_${log.dateStr || log.date}`] ? (
-                                <div className="flex justify-center py-4">
-                                  <svg className="animate-spin h-5 w-5 text-[#f04129]" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
-                                  </svg>
-                                </div>
-                              ) : (
-                                <div className="space-y-3">
-                                  <p className="text-xs font-semibold text-[#181511] dark:text-white uppercase tracking-wide">Attendance List</p>
-                                  {sessionAttendanceDetails[`${log._id}_${log.dateStr || log.date}`] && sessionAttendanceDetails[`${log._id}_${log.dateStr || log.date}`].length > 0 ? (
-                                    <div className="space-y-2">
-                                      {sessionAttendanceDetails[`${log._id}_${log.dateStr || log.date}`].map(record => (
-                                        <div key={record._id} className="flex items-center justify-between text-xs p-2 rounded bg-gray-50 dark:bg-slate-900/50">
-                                          <div className="flex flex-col">
-                                            <span className="font-medium text-[#181511] dark:text-white">
-                                              {record.userId ? `${record.userId.profile.firstName} ${record.userId.profile.lastName}` : 'User (Deleted)'}
-                                            </span>
-                                            <span className="text-[10px] text-gray-500">{formatDateTime(record.checkInTime)}</span>
-                                          </div>
-                                          <div>
-                                            {record.attendanceStatus === 'On Leave' ? (
-                                              <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Leave</span>
-                                            ) : record.isLate ? (
-                                              <span className="px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">Late</span>
-                                            ) : (
-                                              <span className="px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">Verified</span>
-                                            )}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className="text-xs text-center text-gray-500 py-2">No records found.</p>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )}
+                          {/* Mobile expanded details removed - use SessionAttendanceView via "View Details" */}
                         </div>
                       ))}
                     </div>
