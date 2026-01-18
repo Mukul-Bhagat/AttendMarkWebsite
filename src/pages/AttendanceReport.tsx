@@ -384,7 +384,22 @@ const AttendanceReport: React.FC = () => {
     }
   };
 
-  // formatDateTime and formatDate - REMOVED (unused, replaced by SessionAttendanceView component)
+  // Format date helper (used in PDF generation)
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return dateString;
+      }
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    } catch {
+      return dateString;
+    }
+  };
 
   // Prepare pie chart data
   const pieData = analyticsData
