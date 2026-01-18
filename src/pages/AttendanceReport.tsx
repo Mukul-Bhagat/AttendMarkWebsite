@@ -222,32 +222,31 @@ const AttendanceReport: React.FC = () => {
     }
   }, [selectedClass, startDate, endDate, classes.length, searchParams, activeTab]);
 
-  // Fetch attendance details for a specific session
-  // Fetch attendance details for a specific session
-  const fetchSessionAttendanceDetails = async (sessionId: string, date: string) => {
-    // Generate Unique Key: SessionID + Date
-    // This prevents "Jan 6" data showing for "Jan 8" row
-    const key = `${sessionId}_${date}`;
+  // Fetch attendance details for a specific session (UNUSED - kept for future use)
+  // const fetchSessionAttendanceDetails = async (sessionId: string, date: string) => {
+  // Generate Unique Key: SessionID + Date
+  // This prevents "Jan 6" data showing for "Jan 8" row
+  const key = `${sessionId}_${date}`;
 
-    if (sessionAttendanceDetails[key]) {
-      // Already loaded, just toggle
-      setExpandedSessionId(expandedSessionId === key ? null : key);
-      return;
-    }
+  if (sessionAttendanceDetails[key]) {
+    // Already loaded, just toggle
+    setExpandedSessionId(expandedSessionId === key ? null : key);
+    return;
+  }
 
-    setIsLoadingDetails({ ...isLoadingDetails, [key]: true });
-    try {
-      // FIX: Pass date to backend to get ONLY that day's attendance
-      const { data } = await api.get(`/api/attendance/session/${sessionId}?date=${date}`);
-      setSessionAttendanceDetails({ ...sessionAttendanceDetails, [key]: data || [] });
-      setExpandedSessionId(key);
-    } catch (err: any) {
-      console.error('Failed to fetch session attendance details:', err);
-      setError('Failed to load attendance details for this session.');
-    } finally {
-      setIsLoadingDetails({ ...isLoadingDetails, [key]: false });
-    }
-  };
+  //   setIsLoadingDetails({ ...isLoadingDetails, [key]: true });
+  //   try {
+  //     // FIX: Pass date to backend to get ONLY that day's attendance
+  //     const { data } = await api.get(`/api/attendance/session/${sessionId}?date=${date}`);
+  //     setSessionAttendanceDetails({ ...sessionAttendanceDetails, [key]: data || [] });
+  //     setExpandedSessionId(key);
+  //   } catch (err: any) {
+  //     console.error('Failed to fetch session attendance details:', err);
+  //     setError('Failed to load attendance details for this session.');
+  //   } finally {
+  //     setIsLoadingDetails({ ...isLoadingDetails, [key]: false });
+  //   }
+  // };
 
   // Download CSV for a specific session
   const downloadSessionCSV = async (sessionId: string, sessionName: string, date: string) => {

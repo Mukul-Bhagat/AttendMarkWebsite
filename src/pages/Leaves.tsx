@@ -238,8 +238,8 @@ const Leaves: React.FC = () => {
     if (!Array.isArray(leaveRequests)) return dates;
 
     leaveRequests.forEach(leave => {
-      // Filter for Pending/Approved
-      if (leave.status !== 'Upcoming' && leave.status !== 'Pending' && leave.status !== 'Approved') return;
+      // Filter for Pending/Approved only (status can only be 'Pending' | 'Approved' | 'Rejected')
+      if (leave.status !== 'Pending' && leave.status !== 'Approved') return;
 
       if (leave.dates && leave.dates.length > 0) {
         leave.dates.forEach(d => dates.push(new Date(d)));

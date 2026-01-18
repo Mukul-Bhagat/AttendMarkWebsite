@@ -149,13 +149,6 @@ const EnhancedManualUpdateModal: React.FC<ManualUpdateModalProps> = ({
         onCancel();
     };
 
-    // Determine action color (using selectedStatus)
-    const actionColor = {
-        PRESENT: 'green',
-        ABSENT: 'red',
-        LATE: 'yellow'
-    }[selectedStatus];
-
     const confirmButtonClass =
         selectedStatus === 'LATE'
             ? 'bg-yellow-500 hover:bg-yellow-600 text-black'

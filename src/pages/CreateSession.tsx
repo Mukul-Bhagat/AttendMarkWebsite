@@ -59,7 +59,7 @@ const CreateSession: React.FC = () => {
   const [assignedUsers, setAssignedUsers] = useState<IUser[]>([]); // Legacy: for Physical/Remote single mode
   const [physicalUsers, setPhysicalUsers] = useState<IUser[]>([]); // For Hybrid: Physical attendees
   const [remoteUsers, setRemoteUsers] = useState<IUser[]>([]); // For Hybrid: Remote attendees
-  const [sessionAdmins, setSessionAdmins] = useState<IAuthUser[]>([]);
+  const [sessionAdmins, setSessionAdmins] = useState<IUser[]>([]);
   const [showUserModal, setShowUserModal] = useState(false);
   const [userModalContext, setUserModalContext] = useState<'PHYSICAL' | 'REMOTE' | 'ALL'>('ALL');
   const [selectedCoordinates, setSelectedCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
