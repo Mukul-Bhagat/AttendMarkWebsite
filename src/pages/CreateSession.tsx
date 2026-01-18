@@ -22,19 +22,19 @@ const CreateSession: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { isSuperAdmin } = useAuth();
-  
+
   // Check if we're creating a class (from /classes/create) or adding to existing class
   const isCreatingClass = location.pathname.includes('/classes/create');
   const urlParams = new URLSearchParams(location.search);
   const existingClassId = urlParams.get('classId');
-  
+
   // State for existing class details (when adding session to existing class)
   const [existingClassName, setExistingClassName] = useState('');
   const [isLoadingClass, setIsLoadingClass] = useState(!!existingClassId);
-  
+
   // Determine if we're in "Add Single Session" mode (existingClassId present)
   const isAddingToExistingClass = !!existingClassId;
-  
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -122,7 +122,7 @@ const CreateSession: React.FC = () => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     if (error) setError('');
-    
+
     // When sessionType changes, clear user lists if switching to/from Hybrid
     if (name === 'sessionType') {
       if (value === 'HYBRID') {
@@ -165,31 +165,31 @@ const CreateSession: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
+
     // Validate weekly days
     if (formData.frequency === 'Weekly' && formData.weeklyDays.length === 0) {
       setError('Please select at least one day for weekly classes/batches');
       return;
     }
-    
+
     // Validate custom dates for Random frequency
     if (formData.frequency === 'Random' && selectedDates.length === 0) {
       setError('Please select at least one date for custom date sessions');
       return;
     }
-    
+
     // Validate end date is after start date
     if (formData.endDate && formData.startDate && formData.endDate < formData.startDate) {
       setError('End date must be after start date');
       return;
     }
-    
+
     // Validate end time is after start time
     if (formData.startTime && formData.endTime && formData.startTime >= formData.endTime) {
       setError('End time must be after start time');
       return;
     }
-    
+
     // Validate location for PHYSICAL or HYBRID sessions
     if (formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID') {
       if (!selectedCoordinates || !selectedCoordinates.latitude || !selectedCoordinates.longitude) {
@@ -250,7 +250,7 @@ const CreateSession: React.FC = () => {
           setIsSubmitting(false);
           return;
         }
-        
+
         locationObj = {
           type: 'COORDS',
           geolocation: {
@@ -282,11 +282,13 @@ const CreateSession: React.FC = () => {
           assignedUsers: combinedAssignedUsers,
           weeklyDays: formData.frequency === 'Weekly' ? formData.weeklyDays : undefined,
           customDates: formData.frequency === 'Random' ? selectedDates.map(d => d.toISOString()) : undefined,
-          sessionAdmin: isSuperAdmin && formData.sessionAdmin ? formData.sessionAdmin : undefined,
+          sessionAdmin: isSuperAdmin && formData.sessionAdmin && formData.sessionAdmin !== '' && formData.sessionAdmin !== 'none'
+            ? formData.sessionAdmin  // Send only ID
+            : null,  // Send null when no admin selected
         };
 
         const { data } = await api.post('/api/classes', classBatchData);
-        
+
         // Navigate based on number of sessions created
         if (data.sessionsCreated === 1 && data.sessions && data.sessions.length > 0) {
           navigate(`/sessions/${data.sessions[0]._id}`);
@@ -299,26 +301,28 @@ const CreateSession: React.FC = () => {
         // Existing session creation flow (backward compatibility)
         // Force 'OneTime' frequency when adding to existing class
         const effectiveFrequency = isAddingToExistingClass ? 'OneTime' : formData.frequency;
-        
+
         const sessionData = {
           ...formData,
           frequency: effectiveFrequency, // Enforce OneTime for existing class
           assignedUsers: combinedAssignedUsers,
           endDate: effectiveFrequency === 'OneTime' ? undefined : (formData.endDate || undefined),
           weeklyDays: effectiveFrequency === 'Weekly' ? formData.weeklyDays : undefined,
-          virtualLocation: formData.sessionType === 'REMOTE' || formData.sessionType === 'HYBRID' 
-            ? formData.virtualLocation 
+          virtualLocation: formData.sessionType === 'REMOTE' || formData.sessionType === 'HYBRID'
+            ? formData.virtualLocation
             : undefined,
           location: locationObj,
           radius: (formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID') && formData.radius
             ? formData.radius
             : undefined,
-          sessionAdmin: isSuperAdmin && formData.sessionAdmin ? formData.sessionAdmin : undefined,
+          sessionAdmin: isSuperAdmin && formData.sessionAdmin && formData.sessionAdmin !== '' && formData.sessionAdmin !== 'none'
+            ? formData.sessionAdmin  // Send only ID
+            : null,  // Send null when no admin selected
           classBatchId: existingClassId || undefined, // Link to existing class if provided
         };
 
         await api.post('/api/sessions', sessionData);
-        
+
         if (existingClassId) {
           navigate(`/classes/${existingClassId}/sessions`);
         } else {
@@ -358,8 +362,8 @@ const CreateSession: React.FC = () => {
       <div className="mx-auto flex w-full max-w-4xl flex-col">
         <div className="mb-8">
           <p className="text-3xl font-black leading-tight tracking-[-0.033em] text-[#181511] dark:text-white sm:text-4xl">
-            {isAddingToExistingClass 
-              ? `Add Single Session to "${existingClassName || 'Loading...'}"` 
+            {isAddingToExistingClass
+              ? `Add Single Session to "${existingClassName || 'Loading...'}"`
               : (isCreatingClass ? 'Create New Class/Batch' : 'Create New Session')
             }
           </p>
@@ -406,9 +410,8 @@ const CreateSession: React.FC = () => {
                 </p>
                 <input
                   ref={nameInputRef}
-                  className={`form-input flex w-full resize-none overflow-hidden rounded-lg border border-[#e6e2db] bg-white p-3 text-base font-normal leading-normal text-[#181511] placeholder:text-[#8a7b60] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-400 dark:focus:border-primary/80 ${
-                    isAddingToExistingClass ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed opacity-75' : ''
-                  }`}
+                  className={`form-input flex w-full resize-none overflow-hidden rounded-lg border border-[#e6e2db] bg-white p-3 text-base font-normal leading-normal text-[#181511] placeholder:text-[#8a7b60] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-400 dark:focus:border-primary/80 ${isAddingToExistingClass ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed opacity-75' : ''
+                    }`}
                   name="name"
                   type="text"
                   value={formData.name}
@@ -513,7 +516,7 @@ const CreateSession: React.FC = () => {
                       />
                     </label>
                   </div>
-                  
+
                   {/* Custom Date Picker */}
                   <div>
                     <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">
@@ -604,9 +607,8 @@ const CreateSession: React.FC = () => {
                 </p>
                 <div className="relative">
                   <select
-                    className={`form-select w-full appearance-none rounded-lg border border-[#e6e2db] bg-white p-3 text-[#181511] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 ${
-                      isAddingToExistingClass ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed opacity-75' : ''
-                    }`}
+                    className={`form-select w-full appearance-none rounded-lg border border-[#e6e2db] bg-white p-3 text-[#181511] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 ${isAddingToExistingClass ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed opacity-75' : ''
+                      }`}
                     name="frequency"
                     value={isAddingToExistingClass ? 'OneTime' : formData.frequency}
                     onChange={(e) => {
@@ -649,11 +651,10 @@ const CreateSession: React.FC = () => {
                           key={day}
                           type="button"
                           onClick={() => handleDayToggle(day)}
-                          className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition-colors duration-200 ${
-                            isSelected
-                              ? 'bg-gradient-to-r from-orange-500 to-[#f04129] text-white'
-                              : 'bg-[#f5f3f0] text-[#181511] hover:bg-[#e6e2db] dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600'
-                          }`}
+                          className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition-colors duration-200 ${isSelected
+                            ? 'bg-gradient-to-r from-orange-500 to-[#f04129] text-white'
+                            : 'bg-[#f5f3f0] text-[#181511] hover:bg-[#e6e2db] dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600'
+                            }`}
                         >
                           {dayLabels[index]}
                         </button>
@@ -683,11 +684,10 @@ const CreateSession: React.FC = () => {
                   } as React.ChangeEvent<HTMLInputElement>;
                   handleChange(syntheticEvent);
                 }}
-                className={`relative flex flex-col items-center justify-center rounded-xl border-2 p-6 text-center shadow-md transition-all duration-200 ${
-                  formData.sessionType === 'PHYSICAL'
-                    ? 'border-[#f04129] dark:border-[#f04129]'
-                    : 'border-[#e6e2db] hover:border-[#d6d0c6] dark:border-slate-700 dark:hover:border-slate-600'
-                }`}
+                className={`relative flex flex-col items-center justify-center rounded-xl border-2 p-6 text-center shadow-md transition-all duration-200 ${formData.sessionType === 'PHYSICAL'
+                  ? 'border-[#f04129] dark:border-[#f04129]'
+                  : 'border-[#e6e2db] hover:border-[#d6d0c6] dark:border-slate-700 dark:hover:border-slate-600'
+                  }`}
               >
                 {formData.sessionType === 'PHYSICAL' && (
                   <span className="material-symbols-outlined absolute right-3 top-3 text-xl text-[#f04129]">check_circle</span>
@@ -703,11 +703,10 @@ const CreateSession: React.FC = () => {
                   } as React.ChangeEvent<HTMLInputElement>;
                   handleChange(syntheticEvent);
                 }}
-                className={`relative flex flex-col items-center justify-center rounded-xl border-2 p-6 text-center shadow-md transition-all duration-200 ${
-                  formData.sessionType === 'REMOTE'
-                    ? 'border-[#f04129] dark:border-[#f04129]'
-                    : 'border-[#e6e2db] hover:border-[#d6d0c6] dark:border-slate-700 dark:hover:border-slate-600'
-                }`}
+                className={`relative flex flex-col items-center justify-center rounded-xl border-2 p-6 text-center shadow-md transition-all duration-200 ${formData.sessionType === 'REMOTE'
+                  ? 'border-[#f04129] dark:border-[#f04129]'
+                  : 'border-[#e6e2db] hover:border-[#d6d0c6] dark:border-slate-700 dark:hover:border-slate-600'
+                  }`}
               >
                 {formData.sessionType === 'REMOTE' && (
                   <span className="material-symbols-outlined absolute right-3 top-3 text-xl text-[#f04129]">check_circle</span>
@@ -723,11 +722,10 @@ const CreateSession: React.FC = () => {
                   } as React.ChangeEvent<HTMLInputElement>;
                   handleChange(syntheticEvent);
                 }}
-                className={`relative flex flex-col items-center justify-center rounded-xl border-2 p-6 text-center shadow-md transition-all duration-200 ${
-                  formData.sessionType === 'HYBRID'
-                    ? 'border-[#f04129] dark:border-[#f04129]'
-                    : 'border-[#e6e2db] hover:border-[#d6d0c6] dark:border-slate-700 dark:hover:border-slate-600'
-                }`}
+                className={`relative flex flex-col items-center justify-center rounded-xl border-2 p-6 text-center shadow-md transition-all duration-200 ${formData.sessionType === 'HYBRID'
+                  ? 'border-[#f04129] dark:border-[#f04129]'
+                  : 'border-[#e6e2db] hover:border-[#d6d0c6] dark:border-slate-700 dark:hover:border-slate-600'
+                  }`}
               >
                 {formData.sessionType === 'HYBRID' && (
                   <span className="material-symbols-outlined absolute right-3 top-3 text-xl text-[#f04129]">check_circle</span>
@@ -981,7 +979,7 @@ const CreateSession: React.FC = () => {
                 <h2 className="text-xl font-bold leading-tight tracking-[-0.015em] text-[#181511] dark:text-white">Administration</h2>
               </div>
               <label className="flex flex-col">
-                <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Session Admin</p>
+                <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Session Admin (Optional)</p>
                 <div className="relative">
                   <select
                     className="form-select w-full appearance-none rounded-lg border border-[#e6e2db] bg-white p-3 text-[#181511] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
@@ -989,15 +987,18 @@ const CreateSession: React.FC = () => {
                     value={formData.sessionAdmin}
                     onChange={handleChange}
                   >
-                    <option value="">Select Admin</option>
+                    <option value="">No Admin (Default)</option>
                     {sessionAdmins.map((admin) => (
-                      <option key={admin.id} value={admin.id}>
+                      <option key={admin._id} value={admin._id}>
                         {admin.profile.firstName} {admin.profile.lastName} ({admin.email})
                       </option>
                     ))}
                   </select>
                   <span className="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">unfold_more</span>
                 </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Leave as "No Admin" to not assign a specific session administrator.
+                </p>
               </label>
             </div>
           )}
@@ -1026,50 +1027,50 @@ const CreateSession: React.FC = () => {
               className="flex items-center justify-center rounded-lg bg-gradient-to-r from-orange-500 to-[#f04129] px-8 py-3 font-semibold text-white transition-all duration-200 hover:from-orange-600 hover:to-[#d63a25] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span className="material-symbols-outlined mr-2 text-xl">add_circle</span>
-              {isSubmitting 
-                ? (isAddingToExistingClass ? 'Adding Session...' : 'Creating Session...') 
+              {isSubmitting
+                ? (isAddingToExistingClass ? 'Adding Session...' : 'Creating Session...')
                 : (isAddingToExistingClass ? 'Add Session' : 'Create Session')
               }
             </button>
           </div>
         </form>
 
-          {showUserModal && (
-            <AddUsersModal
-              onClose={() => setShowUserModal(false)}
-              onSave={handleSaveUsers}
-              initialSelectedUsers={
-                userModalContext === 'PHYSICAL'
-                  ? physicalUsers
-                  : userModalContext === 'REMOTE'
-                    ? remoteUsers
-                    : assignedUsers
-              }
-              context={
-                userModalContext === 'PHYSICAL'
-                  ? 'Add Physical Attendees'
-                  : userModalContext === 'REMOTE'
-                    ? 'Add Remote Attendees'
-                    : 'Add Users to Session'
-              }
-            />
-          )}
-
-          {/* Google Maps Picker Modal */}
-          <GoogleMapPicker
-            isOpen={showMapPicker}
-            onClose={() => setShowMapPicker(false)}
-            onConfirm={(data) => {
-              setSelectedCoordinates({ latitude: data.latitude, longitude: data.longitude });
-              setFormData(prev => ({ ...prev, radius: data.radius }));
-              setShowMapPicker(false);
-            }}
-            initialCoordinates={selectedCoordinates}
-            initialRadius={formData.radius}
-            apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}
+        {showUserModal && (
+          <AddUsersModal
+            onClose={() => setShowUserModal(false)}
+            onSave={handleSaveUsers}
+            initialSelectedUsers={
+              userModalContext === 'PHYSICAL'
+                ? physicalUsers
+                : userModalContext === 'REMOTE'
+                  ? remoteUsers
+                  : assignedUsers
+            }
+            context={
+              userModalContext === 'PHYSICAL'
+                ? 'Add Physical Attendees'
+                : userModalContext === 'REMOTE'
+                  ? 'Add Remote Attendees'
+                  : 'Add Users to Session'
+            }
           />
-        </div>
+        )}
+
+        {/* Google Maps Picker Modal */}
+        <GoogleMapPicker
+          isOpen={showMapPicker}
+          onClose={() => setShowMapPicker(false)}
+          onConfirm={(data) => {
+            setSelectedCoordinates({ latitude: data.latitude, longitude: data.longitude });
+            setFormData(prev => ({ ...prev, radius: data.radius }));
+            setShowMapPicker(false);
+          }}
+          initialCoordinates={selectedCoordinates}
+          initialRadius={formData.radius}
+          apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}
+        />
       </div>
+    </div>
   );
 };
 

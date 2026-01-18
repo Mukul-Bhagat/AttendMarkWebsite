@@ -37,6 +37,11 @@ interface ILeaveRequest {
   organizationPrefix: string;
   createdAt: string;
   updatedAt?: string;
+  balance?: {
+    quota: { pl: number; cl: number; sl: number };
+    used: { Personal: number; Casual: number; Sick: number; Extra: number };
+    remaining: { Personal: number; Casual: number; Sick: number };
+  };
 }
 
 interface IUser {
@@ -55,6 +60,14 @@ interface IQuota {
   yearlyQuotaSL: number;
 }
 
+interface IActiveLeave {
+  _id: string;
+  userName: string;
+  leaveType: string;
+  startDate: string;
+  endDate: string;
+}
+
 const Leaves: React.FC = () => {
   const { user, isSuperAdmin, isCompanyAdmin, isManager, isSessionAdmin } = useAuth();
   const [leaveRequests, setLeaveRequests] = useState<ILeaveRequest[]>([]);
@@ -62,6 +75,7 @@ const Leaves: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [quota, setQuota] = useState<IQuota>({ yearlyQuotaPL: 12, yearlyQuotaCL: 12, yearlyQuotaSL: 10 });
+  const [activeLeaves, setActiveLeaves] = useState<IActiveLeave[]>([]);
   const [staffUsers, setStaffUsers] = useState<IUser[]>([]);
 
   // Toast notification state
@@ -140,6 +154,10 @@ const Leaves: React.FC = () => {
         try {
           const { data: orgLeaves } = await api.get('/api/leaves/organization?status=Pending');
           setPendingRequests(normalizeLeaves(orgLeaves));
+
+          // Fetch active leaves today
+          const { data: activeToday } = await api.get('/api/leaves/active-today');
+          setActiveLeaves(Array.isArray(activeToday) ? activeToday : []);
         } catch (err) {
           console.error('Failed to fetch pending requests:', err);
           setPendingRequests([]);
@@ -213,6 +231,29 @@ const Leaves: React.FC = () => {
       })
       .reduce((sum, leave) => sum + leave.daysCount, 0);
   };
+
+  // Calculate disabled dates (already applied leaves)
+  const disabledDates = React.useMemo(() => {
+    const dates: Date[] = [];
+    if (!Array.isArray(leaveRequests)) return dates;
+
+    leaveRequests.forEach(leave => {
+      // Filter for Pending/Approved
+      if (leave.status !== 'Upcoming' && leave.status !== 'Pending' && leave.status !== 'Approved') return;
+
+      if (leave.dates && leave.dates.length > 0) {
+        leave.dates.forEach(d => dates.push(new Date(d)));
+      } else if (leave.startDate && leave.endDate) {
+        let current = new Date(leave.startDate);
+        const end = new Date(leave.endDate);
+        while (current <= end) {
+          dates.push(new Date(current));
+          current.setDate(current.getDate() + 1);
+        }
+      }
+    });
+    return dates;
+  }, [leaveRequests]);
 
   const usedPL = getUsedLeaves('Personal');
   const usedCL = getUsedLeaves('Casual');
@@ -388,36 +429,43 @@ const Leaves: React.FC = () => {
   };
 
   // Format date range
+  // Format date range
   const formatDateRange = (start: string, end: string, dates?: string[]) => {
-    // If dates array exists and has multiple non-consecutive dates, show count
+    let startTime = new Date(start).getTime();
+    let endTime = new Date(end).getTime();
+    let isConsecutive = true;
+    let count = 0;
+
     if (dates && dates.length > 0) {
-      const sortedDates = dates.sort();
-      const startDate = formatDate(sortedDates[0]);
-      const endDate = formatDate(sortedDates[sortedDates.length - 1]);
+      const sorted = dates.map(d => new Date(d)).sort((a, b) => a.getTime() - b.getTime());
+      startTime = sorted[0].getTime();
+      endTime = sorted[sorted.length - 1].getTime();
+      count = sorted.length;
 
-      // Check if dates are consecutive
-      const isConsecutive = dates.length === 1 ||
-        (new Date(sortedDates[sortedDates.length - 1]).getTime() - new Date(sortedDates[0]).getTime()) ===
-        ((dates.length - 1) * 24 * 60 * 60 * 1000);
-
-      if (isConsecutive) {
-        // Consecutive dates - show range
-        if (startDate === endDate) {
-          return startDate;
-        }
-        return `${startDate} - ${endDate}`;
-      } else {
-        // Non-consecutive dates - show range with count
-        return `${startDate} - ${endDate} (${dates.length} days)`;
-      }
+      // Check consecutive
+      const diffDays = Math.round((endTime - startTime) / (1000 * 60 * 60 * 24)) + 1;
+      isConsecutive = diffDays === count;
     }
 
-    // Fallback to start/end date range
-    const startDate = formatDate(start);
-    const endDate = formatDate(end);
+    const startDate = new Date(startTime).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+    const endDate = new Date(endTime).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+
     if (startDate === endDate) {
       return startDate;
     }
+
+    if (!isConsecutive && count > 0) {
+      return `${startDate} - ${endDate} (${count} days)`;
+    }
+
     return `${startDate} - ${endDate}`;
   };
 
@@ -796,6 +844,35 @@ const Leaves: React.FC = () => {
         </div>
       </div>
 
+      {/* Currently on Leave Section - Only for Admins/Staff */}
+      {isAdminOrStaff && activeLeaves.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="material-symbols-outlined text-[#f04129]">beach_access</span>
+            <h2 className="text-xl font-bold text-text-primary-light dark:text-text-primary-dark">
+              Currently on Leave
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {activeLeaves.map(leave => (
+              <div key={leave._id} className="bg-surface-light dark:bg-surface-dark p-4 rounded-xl border border-border-light dark:border-border-dark flex items-center gap-3 shadow-sm hover:shadow-md transition-shadow">
+                <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-sm">
+                  {leave.userName.charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-text-primary-light dark:text-text-primary-dark truncate" title={leave.userName}>
+                    {leave.userName}
+                  </p>
+                  <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark truncate">
+                    {leave.leaveType} • <span className="text-green-600 dark:text-green-400 font-medium">Active Today</span>
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Pending Requests Section - Only for Admins/Staff */}
       {isAdminOrStaff && (
         <div className="w-full rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm mb-6">
@@ -1079,7 +1156,10 @@ const Leaves: React.FC = () => {
                           mode="multiple"
                           selected={selectedDates}
                           onSelect={(dates) => setSelectedDates(dates || [])}
-                          disabled={{ before: new Date() }}
+                          disabled={[{ before: new Date() }, ...disabledDates]}
+                          modifiers={{ used: disabledDates }}
+                          modifiersClassNames={{ used: 'rdp-day_used' }}
+                          title="Disabled dates include past dates and already applied leaves"
                           numberOfMonths={1}
                           pagedNavigation
                           showOutsideDays
@@ -1459,6 +1539,50 @@ const Leaves: React.FC = () => {
                 </div>
               </div>
 
+              {/* Leave Balance Context (Admins Only) */}
+              {isAdminOrStaff && selectedLeave.balance && (
+                <div className="pt-4 border-t border-border-light dark:border-border-dark">
+                  <h3 className="text-xs font-semibold text-text-secondary-light dark:text-text-secondary-dark mb-2">
+                    Leave Balance Context
+                  </h3>
+                  <div className="bg-gray-50 dark:bg-background-dark rounded-lg p-3 text-xs">
+                    <div className="grid grid-cols-4 gap-2 font-medium text-text-secondary-light dark:text-text-secondary-dark mb-1 border-b border-border-light dark:border-border-dark pb-1">
+                      <div>Type</div>
+                      <div>Remaining</div>
+                      <div>Used</div>
+                      <div>Total</div>
+                    </div>
+                    {/* Personal */}
+                    <div className={`grid grid-cols-4 gap-2 py-1 ${selectedLeave.leaveType === 'Personal' ? 'bg-blue-50 dark:bg-blue-900/20 -mx-1 px-1 rounded' : ''}`}>
+                      <div className="font-medium text-text-primary-light dark:text-text-primary-dark">Personal</div>
+                      <div className={selectedLeave.balance.remaining.Personal < 0 ? 'text-red-500 font-bold' : ''}>
+                        {selectedLeave.balance.remaining.Personal}
+                      </div>
+                      <div>{selectedLeave.balance.used.Personal}</div>
+                      <div>{selectedLeave.balance.quota.pl}</div>
+                    </div>
+                    {/* Casual */}
+                    <div className={`grid grid-cols-4 gap-2 py-1 ${selectedLeave.leaveType === 'Casual' ? 'bg-blue-50 dark:bg-blue-900/20 -mx-1 px-1 rounded' : ''}`}>
+                      <div className="font-medium text-text-primary-light dark:text-text-primary-dark">Casual</div>
+                      <div className={selectedLeave.balance.remaining.Casual < 0 ? 'text-red-500 font-bold' : ''}>
+                        {selectedLeave.balance.remaining.Casual}
+                      </div>
+                      <div>{selectedLeave.balance.used.Casual}</div>
+                      <div>{selectedLeave.balance.quota.cl}</div>
+                    </div>
+                    {/* Sick */}
+                    <div className={`grid grid-cols-4 gap-2 py-1 ${selectedLeave.leaveType === 'Sick' ? 'bg-blue-50 dark:bg-blue-900/20 -mx-1 px-1 rounded' : ''}`}>
+                      <div className="font-medium text-text-primary-light dark:text-text-primary-dark">Sick</div>
+                      <div className={selectedLeave.balance.remaining.Sick < 0 ? 'text-red-500 font-bold' : ''}>
+                        {selectedLeave.balance.remaining.Sick}
+                      </div>
+                      <div>{selectedLeave.balance.used.Sick}</div>
+                      <div>{selectedLeave.balance.quota.sl}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Reason */}
               <div className="pt-2 border-t border-border-light dark:border-border-dark">
                 <h3 className="text-xs font-semibold text-text-secondary-light dark:text-text-secondary-dark mb-1">
@@ -1530,20 +1654,48 @@ const Leaves: React.FC = () => {
               </div>
 
               {/* Attachment */}
+              {/* Attachment */}
               {selectedLeave.attachment && (
                 <div>
-                  <h3 className="text-xs font-semibold text-text-secondary-light dark:text-text-secondary-dark mb-1">
+                  <h3 className="text-xs font-semibold text-text-secondary-light dark:text-text-secondary-dark mb-2">
                     Attached Document
                   </h3>
-                  <a
-                    href={`${import.meta.env.VITE_API_URL || ''}${selectedLeave.attachment}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 h-9 rounded-lg border-2 border-red-600 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-sm"
-                  >
-                    <span className="material-symbols-outlined text-red-600 text-lg">attach_file</span>
-                    View Document
-                  </a>
+                  {(() => {
+                    const url = `${import.meta.env.VITE_API_URL || ''}${selectedLeave.attachment}`;
+                    // Simple extension check
+                    const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(selectedLeave.attachment);
+                    const isPDF = /\.pdf$/i.test(selectedLeave.attachment);
+
+                    if (isImage) {
+                      return (
+                        <div className="flex flex-col gap-2">
+                          <img
+                            src={url}
+                            alt="Attachment"
+                            className="max-w-full h-auto max-h-64 object-contain rounded-lg border border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-900"
+                          />
+                          <a href={url} download target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline self-start flex items-center gap-1">
+                            <span className="material-symbols-outlined text-sm">download</span>
+                            Download Image
+                          </a>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 h-9 rounded-lg border-2 border-red-600 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-sm"
+                      >
+                        <span className="material-symbols-outlined text-red-600 text-lg">
+                          {isPDF ? 'picture_as_pdf' : 'attach_file'}
+                        </span>
+                        {isPDF ? 'Open PDF Document' : 'View Document'}
+                      </a>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -1617,17 +1769,20 @@ const Leaves: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+      )
+      }
 
       {/* Toast Notification */}
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
-    </div>
+      {
+        toast && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )
+      }
+    </div >
   );
 };
 

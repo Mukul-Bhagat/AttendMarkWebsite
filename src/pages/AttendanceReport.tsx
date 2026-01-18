@@ -5,6 +5,7 @@ import { IClassBatch } from '../types';
 import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import jsPDF from 'jspdf';
 import SessionAttendanceView from '../components/attendance/SessionAttendanceView';
+import ActionMenu from '../components/ActionMenu';
 
 interface AnalyticsData {
   timeline: Array<{ date: string; percentage: number; lateCount?: number }>;
@@ -251,8 +252,15 @@ const AttendanceReport: React.FC = () => {
   // Download CSV for a specific session
   const downloadSessionCSV = async (sessionId: string, sessionName: string, date: string) => {
     try {
-      const { data } = await api.get(`/api/attendance/session/${sessionId}?date=${date}`);
-      const records: SessionAttendanceRecord[] = data || [];
+      // Use the dedicated export endpoint which returns fresh attendance data including manual corrections
+      const { data } = await api.get(`/api/attendance/session/${sessionId}/export`, {
+        params: {
+          date: date, // Make sure to pass the date for potential handling of recurring sessions
+          format: 'CSV'
+        }
+      });
+
+      const records = data.exportData || [];
 
       if (records.length === 0) {
         alert('No attendance records found for this session.');
@@ -260,39 +268,28 @@ const AttendanceReport: React.FC = () => {
       }
 
       // CSV Headers
-      const headers = ['User Name', 'Email', 'Check-in Time', 'Status', 'Approved By'];
+      const headers = ['User Name', 'Email', 'Role', 'Check-in Time', 'Status', 'Is Late', 'Late By (min)', 'Location Verified', 'Updated By', 'Update Reason'];
 
       // CSV Rows
-      const rows = records.map(record => {
-        let status = 'Not Verified';
-        if (record.attendanceStatus === 'On Leave') {
-          status = 'On Leave';
-        } else if (record.isLate) {
-          status = 'Late';
-        } else if (record.locationVerified) {
-          status = 'Verified';
-        }
-
-        // Get approver name for On Leave status
-        const approverName = record.attendanceStatus === 'On Leave' && record.approvedBy
-          ? `${record.approvedBy.profile.firstName} ${record.approvedBy.profile.lastName}`
-          : '';
-
+      const rows = records.map((record: any) => {
         return [
-          record.userId
-            ? `${record.userId.profile.firstName} ${record.userId.profile.lastName}`
-            : 'User (deleted)',
-          record.userId ? record.userId.email : 'N/A',
-          formatDateTime(record.checkInTime),
-          status,
-          approverName,
+          record.name || 'N/A',
+          record.email || 'N/A',
+          record.role || 'N/A',
+          record.checkInTime || 'N/A',
+          record.status || 'ABSENT',
+          record.isLate || 'No',
+          record.lateByMinutes || 0,
+          record.locationVerified || 'No',
+          record.updatedBy || '',
+          record.updateReason || ''
         ];
       });
 
       // Combine headers and rows
       const csvContent = [
         headers.join(','),
-        ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+        ...rows.map((row: any[]) => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
       ].join('\n');
 
       // Create blob and download
@@ -300,7 +297,7 @@ const AttendanceReport: React.FC = () => {
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);
-      link.setAttribute('download', `${sessionName.replace(/[^a-z0-9]/gi, '_')}_Attendance_${new Date().toISOString().split('T')[0]}.csv`);
+      link.setAttribute('download', `${sessionName.replace(/[^a-z0-9]/gi, '_')}_Attendance_${date}.csv`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
@@ -315,8 +312,15 @@ const AttendanceReport: React.FC = () => {
   // Download PDF for a specific session
   const downloadSessionPDF = async (sessionId: string, sessionName: string, date: string) => {
     try {
-      const { data } = await api.get(`/api/attendance/session/${sessionId}?date=${date}`);
-      const records: SessionAttendanceRecord[] = data || [];
+      // Use the dedicated export endpoint which returns fresh attendance data including manual corrections
+      const { data } = await api.get(`/api/attendance/session/${sessionId}/export`, {
+        params: {
+          date: date, // Make sure to pass the date for potential handling of recurring sessions
+          format: 'PDF'
+        }
+      });
+
+      const records = data.exportData || [];
 
       if (records.length === 0) {
         alert('No attendance records found for this session.');
@@ -339,23 +343,26 @@ const AttendanceReport: React.FC = () => {
       // Subtitle
       pdf.setFontSize(12);
       pdf.setFont('helvetica', 'normal');
-      pdf.text(`Attendance Report - Generated on ${new Date().toLocaleDateString()}`, margin, yPos);
+      pdf.text(`Attendance Report - ${formatDate(date)}`, margin, yPos);
       yPos += 10;
 
       // Summary
-      const onLeaveCount = records.filter(r => r.attendanceStatus === 'On Leave').length;
-      const verifiedCount = records.filter(r => r.locationVerified && !r.isLate && r.attendanceStatus !== 'On Leave').length;
-      const lateCount = records.filter(r => r.isLate && r.attendanceStatus !== 'On Leave').length;
-      const notVerifiedCount = records.filter(r => !r.locationVerified && r.attendanceStatus !== 'On Leave').length;
+      const summary = data.summary || {
+        total: records.length,
+        present: records.filter((r: any) => r.status === 'PRESENT').length,
+        absent: records.filter((r: any) => r.status === 'ABSENT').length,
+        late: records.filter((r: any) => r.status === 'LATE').length
+      };
+
       pdf.setFontSize(10);
-      pdf.text(`Total Records: ${records.length} | Verified: ${verifiedCount} | Late: ${lateCount} | Not Verified: ${notVerifiedCount} | On Leave: ${onLeaveCount}`, margin, yPos);
+      pdf.text(`Total: ${summary.total} | Present: ${summary.present} | Late: ${summary.late} | Absent: ${summary.absent}`, margin, yPos);
       yPos += 15;
 
       // Table Headers
       pdf.setFontSize(10);
       pdf.setFont('helvetica', 'bold');
-      const colWidths = [50, 50, 45, 30, 40];
-      const headers = ['User Name', 'Email', 'Check-in Time', 'Status', 'Approved By'];
+      const colWidths = [50, 60, 40, 30]; // Adjusted widths
+      const headers = ['Name', 'Email', 'Check-in Time', 'Status'];
       let xPos = margin;
 
       headers.forEach((header, index) => {
@@ -373,27 +380,13 @@ const AttendanceReport: React.FC = () => {
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(9);
 
-      records.forEach((record, index) => {
-        const userName = record.userId
-          ? `${record.userId.profile.firstName} ${record.userId.profile.lastName}`
-          : 'User (deleted)';
-        const email = record.userId ? record.userId.email : 'N/A';
-        const checkInTime = formatDateTime(record.checkInTime);
-        let status = 'Not Verified';
-        if (record.attendanceStatus === 'On Leave') {
-          status = 'On Leave';
-        } else if (record.isLate) {
-          status = 'Late';
-        } else if (record.locationVerified) {
-          status = 'Verified';
-        }
-
-        // Get approver name for On Leave status
-        const approverName = record.attendanceStatus === 'On Leave' && record.approvedBy
-          ? `${record.approvedBy.profile.firstName} ${record.approvedBy.profile.lastName}`
-          : '';
-
-        const rowData = [userName, email, checkInTime, status, approverName];
+      records.forEach((record: any, index: number) => {
+        const rowData = [
+          record.name || 'N/A',
+          record.email || 'N/A',
+          record.checkInTime || 'N/A',
+          record.status || 'ABSENT'
+        ];
 
         // Split all cells and find max lines
         const splitCells = rowData.map((cell, cellIndex) =>
@@ -408,7 +401,7 @@ const AttendanceReport: React.FC = () => {
           yPos = startY;
         }
 
-        // Draw each cell, handling multi-line text
+        // Draw each cell
         xPos = margin;
         splitCells.forEach((cellText, cellIndex) => {
           const cellYStart = yPos;
@@ -422,7 +415,7 @@ const AttendanceReport: React.FC = () => {
           xPos += colWidths[cellIndex];
         });
 
-        // Move yPos down by the height of the tallest cell
+        // Move yPos down
         yPos += maxLines * lineHeight + 2;
 
         // Draw line between rows
@@ -434,7 +427,7 @@ const AttendanceReport: React.FC = () => {
       });
 
       // Save PDF
-      pdf.save(`${sessionName.replace(/[^a-z0-9]/gi, '_')}_Attendance_${new Date().toISOString().split('T')[0]}.pdf`);
+      pdf.save(`${sessionName.replace(/[^a-z0-9]/gi, '_')}_Attendance_${date}.pdf`);
     } catch (err: any) {
       console.error('Failed to download PDF:', err);
       setError('Failed to download PDF. Please try again.');
@@ -890,19 +883,13 @@ const AttendanceReport: React.FC = () => {
                                   <span className="text-[#8a7b60] dark:text-gray-400">/{log.totalAssigned || log.totalUsers}</span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                  {log.status === 'Completed' ? (
-                                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
-                                      Completed
-                                    </span>
-                                  ) : log.status === 'Today' ? (
-                                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
-                                      Today
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                                      Upcoming
-                                    </span>
-                                  )}
+                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${log.status === 'Completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
+                                    log.status === 'Cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300' :
+                                      log.status === 'Today' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' :
+                                        'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                    }`}>
+                                    {log.status}
+                                  </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm hidden md:table-cell">
                                   {log.lateCount > 0 ? (
@@ -914,43 +901,23 @@ const AttendanceReport: React.FC = () => {
                                   )}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    {/* NEW: Manage Attendance Button */}
-                                    <button
-                                      onClick={() => {
+                                  <div className="flex justify-end">
+                                    <ActionMenu
+                                      onManage={() => {
                                         setViewingSessionId(log._id);
                                         setViewingSessionDate(log.date);
                                       }}
-                                      className="inline-flex items-center px-3 py-1.5 text-xs font-medium bg-[#f04129] hover:bg-[#d63a25] text-white rounded transition-colors"
-                                      title="Manage attendance (view all users, make corrections)"
-                                    >
-                                      <span className="material-symbols-outlined text-base mr-1">manage_accounts</span>
-                                      Manage
-                                    </button>
-                                    <button
-                                      onClick={() => fetchSessionAttendanceDetails(log._id, log.dateStr || log.date)}
-                                      className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-[#f04129] hover:text-[#d63a25] dark:text-[#f04129] dark:hover:text-[#ff6b5a] transition-colors"
-                                      title="View attendance list"
-                                    >
-                                      <span className="material-symbols-outlined text-base mr-1">visibility</span>
-                                      View
-                                    </button>
-                                    <button
-                                      onClick={() => downloadSessionPDF(log._id, log.name, log.dateStr || log.date)}
-                                      className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-[#f04129] hover:text-[#d63a25] dark:text-[#f04129] dark:hover:text-[#ff6b5a] transition-colors"
-                                      title="Download PDF"
-                                    >
-                                      <span className="material-symbols-outlined text-base mr-1">picture_as_pdf</span>
-                                      PDF
-                                    </button>
-                                    <button
-                                      onClick={() => downloadSessionCSV(log._id, log.name, log.dateStr || log.date)}
-                                      className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-[#f04129] hover:text-[#d63a25] dark:text-[#f04129] dark:hover:text-[#ff6b5a] transition-colors"
-                                      title="Download CSV"
-                                    >
-                                      <span className="material-symbols-outlined text-base mr-1">file_download</span>
-                                      CSV
-                                    </button>
+                                      onView={() => {
+                                        // "View Details" just opens the exact same modal/overlay as per legacy requirement
+                                        // or could be used to fetch inline details as before.
+                                        // Based on prompt "View Details... Must navigate correctly" vs "Reuse existing...",
+                                        // we stick to opening the SessionAttendanceView as that IS the detailed view.
+                                        setViewingSessionId(log._id);
+                                        setViewingSessionDate(log.date);
+                                      }}
+                                      onPdf={() => downloadSessionPDF(log._id, log.name, log.dateStr || log.date)}
+                                      onCsv={() => downloadSessionCSV(log._id, log.name, log.dateStr || log.date)}
+                                    />
                                   </div>
                                 </td>
                               </tr>
@@ -1054,19 +1021,13 @@ const AttendanceReport: React.FC = () => {
                                 {log.name}
                               </p>
                             </div>
-                            {log.status === 'Completed' ? (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-semibold bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
-                                Completed
-                              </span>
-                            ) : log.status === 'Today' ? (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
-                                Today
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                                Upcoming
-                              </span>
-                            )}
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-semibold ${log.status === 'Completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
+                              log.status === 'Cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300' :
+                                log.status === 'Today' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' :
+                                  'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                              }`}>
+                              {log.status}
+                            </span>
                           </div>
 
                           {/* Stats Grid */}
@@ -1086,44 +1047,19 @@ const AttendanceReport: React.FC = () => {
                           </div>
 
                           {/* Actions */}
-                          <div className="flex flex-col gap-2">
-                            <button
-                              onClick={() => {
+                          <div className="mt-4 flex justify-end">
+                            <ActionMenu
+                              onManage={() => {
                                 setViewingSessionId(log._id);
                                 setViewingSessionDate(log.date);
                               }}
-                              className="w-full inline-flex justify-center items-center px-3 py-2 text-sm font-medium bg-[#f04129] hover:bg-[#d63a25] text-white rounded-lg transition-colors"
-                            >
-                              <span className="material-symbols-outlined text-sm mr-2">manage_accounts</span>
-                              Manage Attendance
-                            </button>
-
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => fetchSessionAttendanceDetails(log._id, log.dateStr || log.date)}
-                                className={`flex-1 inline-flex justify-center items-center px-2 py-1.5 text-xs font-medium border border-[#e6e2db] dark:border-slate-600 rounded-lg transition-colors ${expandedSessionId === `${log._id}_${log.dateStr || log.date}`
-                                  ? 'bg-[#f04129]/10 text-[#f04129] border-[#f04129]'
-                                  : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'
-                                  }`}
-                              >
-                                <span className="material-symbols-outlined text-sm mr-1">visibility</span>
-                                {expandedSessionId === `${log._id}_${log.dateStr || log.date}` ? 'Close' : 'View'}
-                              </button>
-                              <button
-                                onClick={() => downloadSessionPDF(log._id, log.name, log.dateStr || log.date)}
-                                className="flex-1 inline-flex justify-center items-center px-2 py-1.5 text-xs font-medium border border-[#e6e2db] dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-                              >
-                                <span className="material-symbols-outlined text-sm mr-1">picture_as_pdf</span>
-                                PDF
-                              </button>
-                              <button
-                                onClick={() => downloadSessionCSV(log._id, log.name, log.dateStr || log.date)}
-                                className="flex-1 inline-flex justify-center items-center px-2 py-1.5 text-xs font-medium border border-[#e6e2db] dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-                              >
-                                <span className="material-symbols-outlined text-sm mr-1">file_download</span>
-                                CSV
-                              </button>
-                            </div>
+                              onView={() => {
+                                setViewingSessionId(log._id);
+                                setViewingSessionDate(log.date);
+                              }}
+                              onPdf={() => downloadSessionPDF(log._id, log.name, log.dateStr || log.date)}
+                              onCsv={() => downloadSessionCSV(log._id, log.name, log.dateStr || log.date)}
+                            />
                           </div>
 
                           {/* Mobile Expanded View */}

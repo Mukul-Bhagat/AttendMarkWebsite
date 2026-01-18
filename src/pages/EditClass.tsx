@@ -248,147 +248,53 @@ const EditClass: React.FC = () => {
     }
   };
 
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (formData.frequency === 'Weekly' && formData.weeklyDays.length === 0) {
-      setError('Please select at least one day for weekly classes/batches');
-      return;
-    }
-
-    if (formData.frequency === 'Random' && selectedDates.length === 0) {
-      setError('Please select at least one date for custom date sessions');
-      return;
-    }
-
+    // Basic validations
     if (formData.endDate && formData.startDate && formData.endDate < formData.startDate) {
       setError('End date must be after start date');
       return;
     }
 
-    if (formData.startTime && formData.endTime && formData.startTime >= formData.endTime) {
-      setError('End time must be after start time');
-      return;
-    }
-
-    // Validate location for PHYSICAL or HYBRID sessions
-    if (formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID') {
-      if (!selectedCoordinates || !selectedCoordinates.latitude || !selectedCoordinates.longitude) {
-        setError('Please select a location on the map for Physical or Hybrid classes/batches.');
-        return;
-      }
-    }
-
     setIsSubmitting(true);
 
     try {
-      // Combine users based on sessionType
-      let combinedAssignedUsers: Array<{
-        userId: string;
-        email: string;
-        firstName: string;
-        lastName: string;
-        mode: 'PHYSICAL' | 'REMOTE';
-      }> = [];
-
-      if (formData.sessionType === 'HYBRID') {
-        combinedAssignedUsers = [
-          ...physicalUsers.map(u => ({
-            userId: u._id,
-            email: u.email,
-            firstName: u.profile.firstName,
-            lastName: u.profile.lastName,
-            mode: 'PHYSICAL' as const,
-          })),
-          ...remoteUsers.map(u => ({
-            userId: u._id,
-            email: u.email,
-            firstName: u.profile.firstName,
-            lastName: u.profile.lastName,
-            mode: 'REMOTE' as const,
-          })),
-        ];
-      } else {
-        const mode = formData.sessionType === 'PHYSICAL' ? 'PHYSICAL' : 'REMOTE';
-        combinedAssignedUsers = assignedUsers.map(u => ({
-          userId: u._id,
-          email: u.email,
-          firstName: u.profile.firstName,
-          lastName: u.profile.lastName,
-          mode: mode as 'PHYSICAL' | 'REMOTE',
-        }));
-      }
-
-      // Build location object
-      let locationObj = undefined;
-      if (formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID') {
-        if (selectedCoordinates) {
-          locationObj = {
-            type: 'COORDS',
-            geolocation: {
-              latitude: selectedCoordinates.latitude,
-              longitude: selectedCoordinates.longitude,
-            },
-          };
-        }
-      }
-
+      // IMPORTANT: For class updates, we ONLY send class metadata
+      // Session updates should be handled separately (not in this flow)
       const updateData: any = {
         name: formData.name.trim(),
         description: formData.description.trim() || undefined,
         defaultTime: formData.startTime || undefined,
-
-        // Session update fields for bulk update - ALWAYS include updateSessions flag
-        updateSessions: true,
-        // ALWAYS include these critical fields
-        frequency: formData.frequency,
-        startDate: formData.frequency === 'Random' ? undefined : (formData.startDate || undefined),
-        endDate: formData.frequency === 'Random' ? undefined : (formData.endDate || undefined),
-        startTime: formData.startTime || '',
-        endTime: formData.endTime || '',
-        locationType: formData.locationType,
-        sessionType: formData.sessionType,
-        // Always include location (even if undefined for REMOTE) so backend can clear it
-        location: locationObj,
-        // Always include assignedUsers (even if empty array)
-        assignedUsers: combinedAssignedUsers,
-        // Custom dates for Random frequency
-        customDates: formData.frequency === 'Random' ? selectedDates.map(d => d.toISOString()) : undefined,
+        startDate: formData.startDate || undefined,
+        endDate: formData.endDate || undefined,
       };
 
-      // Conditionally add location-related fields
-      if (formData.sessionType === 'REMOTE' || formData.sessionType === 'HYBRID') {
-        updateData.virtualLocation = formData.virtualLocation || undefined;
-      } else {
-        updateData.virtualLocation = undefined; // Explicitly clear for PHYSICAL
+      // Only include sessionAdmin if user is SuperAdmin
+      if (isSuperAdmin && formData.sessionAdmin) {
+        updateData.sessionAdmin = formData.sessionAdmin;
       }
 
-      if (formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID') {
-        updateData.radius = formData.radius || undefined;
-      } else {
-        updateData.radius = undefined; // Explicitly clear for REMOTE
-      }
+      console.log('[EDIT_CLASS] Sending update:', updateData);
 
-      if (formData.frequency === 'Weekly') {
-        updateData.weeklyDays = formData.weeklyDays || undefined;
-      } else {
-        updateData.weeklyDays = undefined; // Explicitly clear for non-weekly
-      }
+      const response = await api.put(`/api/classes/${id}`, updateData);
 
-      if (isSuperAdmin) {
-        updateData.sessionAdmin = formData.sessionAdmin || undefined;
-      }
-
-      await api.put(`/api/classes/${id}`, updateData);
+      console.log('[EDIT_CLASS] Update successful:', response.data);
       navigate('/classes');
     } catch (err: any) {
+      console.error('[EDIT_CLASS] Update failed:', err);
+
       if (err.response && err.response.data) {
-        if (err.response.data.errors && Array.isArray(err.response.data.errors)) {
-          const errorMessages = err.response.data.errors.map((e: any) => e.msg).join(', ');
+        // Handle new error format from backend
+        if (err.response.data.message) {
+          setError(err.response.data.message);
+        } else if (err.response.data.errors && Array.isArray(err.response.data.errors)) {
+          const errorMessages = err.response.data.errors.map((e: any) => e.msg || e.message).join(', ');
           setError(errorMessages);
         } else {
-          setError(err.response.data.msg || 'Failed to update class');
+          setError('Failed to update class');
         }
       } else {
         setError('Failed to update class. Please try again.');
@@ -397,6 +303,7 @@ const EditClass: React.FC = () => {
       setIsSubmitting(false);
     }
   };
+
 
   const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
@@ -650,8 +557,8 @@ const EditClass: React.FC = () => {
                           type="button"
                           onClick={() => handleDayToggle(day)}
                           className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition-colors duration-200 ${isSelected
-                              ? 'bg-gradient-to-r from-orange-500 to-[#f04129] text-white'
-                              : 'bg-[#f5f3f0] text-[#181511] hover:bg-[#e6e2db] dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600'
+                            ? 'bg-gradient-to-r from-orange-500 to-[#f04129] text-white'
+                            : 'bg-[#f5f3f0] text-[#181511] hover:bg-[#e6e2db] dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600'
                             }`}
                         >
                           {dayLabels[index]}
@@ -680,8 +587,8 @@ const EditClass: React.FC = () => {
                   handleChange(syntheticEvent);
                 }}
                 className={`relative flex flex-col items-center justify-center rounded-xl border-2 p-6 text-center shadow-md transition-all duration-200 ${formData.sessionType === 'PHYSICAL'
-                    ? 'border-[#f04129] dark:border-[#f04129]'
-                    : 'border-[#e6e2db] hover:border-[#d6d0c6] dark:border-slate-700 dark:hover:border-slate-600'
+                  ? 'border-[#f04129] dark:border-[#f04129]'
+                  : 'border-[#e6e2db] hover:border-[#d6d0c6] dark:border-slate-700 dark:hover:border-slate-600'
                   }`}
               >
                 {formData.sessionType === 'PHYSICAL' && (
@@ -699,8 +606,8 @@ const EditClass: React.FC = () => {
                   handleChange(syntheticEvent);
                 }}
                 className={`relative flex flex-col items-center justify-center rounded-xl border-2 p-6 text-center shadow-md transition-all duration-200 ${formData.sessionType === 'REMOTE'
-                    ? 'border-[#f04129] dark:border-[#f04129]'
-                    : 'border-[#e6e2db] hover:border-[#d6d0c6] dark:border-slate-700 dark:hover:border-slate-600'
+                  ? 'border-[#f04129] dark:border-[#f04129]'
+                  : 'border-[#e6e2db] hover:border-[#d6d0c6] dark:border-slate-700 dark:hover:border-slate-600'
                   }`}
               >
                 {formData.sessionType === 'REMOTE' && (
@@ -718,8 +625,8 @@ const EditClass: React.FC = () => {
                   handleChange(syntheticEvent);
                 }}
                 className={`relative flex flex-col items-center justify-center rounded-xl border-2 p-6 text-center shadow-md transition-all duration-200 ${formData.sessionType === 'HYBRID'
-                    ? 'border-[#f04129] dark:border-[#f04129]'
-                    : 'border-[#e6e2db] hover:border-[#d6d0c6] dark:border-slate-700 dark:hover:border-slate-600'
+                  ? 'border-[#f04129] dark:border-[#f04129]'
+                  : 'border-[#e6e2db] hover:border-[#d6d0c6] dark:border-slate-700 dark:hover:border-slate-600'
                   }`}
               >
                 {formData.sessionType === 'HYBRID' && (

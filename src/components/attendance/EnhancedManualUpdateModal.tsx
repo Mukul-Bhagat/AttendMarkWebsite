@@ -97,7 +97,16 @@ const EnhancedManualUpdateModal: React.FC<ManualUpdateModalProps> = ({
     const isNoOp = user.status === selectedStatus;
 
     // Validate form (using selectedStatus)
-    const canSubmit = !isSubmitting && isReasonValid && !isNoOp && (selectedStatus !== 'LATE' || lateMinutes > 0);
+    // Validation Logic
+    const isLateValid =
+        selectedStatus !== 'LATE' ||
+        (lateMinutes !== undefined && lateMinutes > 0);
+
+    const canConfirm =
+        reason.trim().length >= 10 &&
+        isLateValid;
+
+    const canSubmit = !isSubmitting && !isNoOp && canConfirm;
 
     const handleConfirm = async () => {
         // Final frontend validation
@@ -146,6 +155,11 @@ const EnhancedManualUpdateModal: React.FC<ManualUpdateModalProps> = ({
         ABSENT: 'red',
         LATE: 'yellow'
     }[selectedStatus];
+
+    const confirmButtonClass =
+        selectedStatus === 'LATE'
+            ? 'bg-yellow-500 hover:bg-yellow-600 text-black'
+            : 'bg-green-600 hover:bg-green-700 text-white';
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[60] p-4">
@@ -253,7 +267,7 @@ const EnhancedManualUpdateModal: React.FC<ManualUpdateModalProps> = ({
                                 min="1"
                                 max="180"
                                 value={lateMinutes}
-                                onChange={(e) => setLateMinutes(parseInt(e.target.value) || 0)}
+                                onChange={(e) => setLateMinutes(Number(e.target.value))}
                                 className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                                 disabled={isSubmitting}
                             />
@@ -359,7 +373,7 @@ const EnhancedManualUpdateModal: React.FC<ManualUpdateModalProps> = ({
                             className={`
                                 px-6 py-2 rounded-lg font-bold transition-all
                                 ${canSubmit
-                                    ? `bg-${actionColor}-600 hover:bg-${actionColor}-700 text-white shadow-lg hover:shadow-xl`
+                                    ? `${confirmButtonClass} shadow-lg hover:shadow-xl`
                                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                 }
                             `}
