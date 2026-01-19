@@ -5,12 +5,13 @@ import LoadingSpinner from './LoadingSpinner';
 import ProfileMenu from './ProfileMenu';
 import Toast from './Toast';
 import { useAutoBackup } from '../hooks/useAutoBackup';
+import NotificationBell from './NotificationBell';
 
 const Layout: React.FC = () => {
   const { user, isSuperAdmin, isCompanyAdmin, isManager, isSessionAdmin, isPlatformOwner, isLoading } = useAuth();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  
+
   // Initialize auto-backup hook (runs silently in background for COMPANY_ADMIN only)
   const { toast, closeToast } = useAutoBackup();
 
@@ -90,10 +91,9 @@ const Layout: React.FC = () => {
       to={to}
       end={end}
       className={({ isActive }) =>
-        `flex items-center py-2 px-6 text-sm font-medium border-l-4 transition-colors duration-200 ${
-          isActive
-            ? 'bg-red-50 dark:bg-[#f04129]/10 text-[#f04129] dark:text-[#f04129] border-[#f04129] [&_.material-symbols-outlined]:text-[#f04129]'
-            : 'text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-surface-dark/50 hover:text-text-primary-light dark:hover:text-text-primary-dark border-transparent'
+        `flex items-center py-2 px-6 text-sm font-medium border-l-4 transition-colors duration-200 ${isActive
+          ? 'bg-red-50 dark:bg-[#f04129]/10 text-[#f04129] dark:text-[#f04129] border-[#f04129] [&_.material-symbols-outlined]:text-[#f04129]'
+          : 'text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-surface-dark/50 hover:text-text-primary-light dark:hover:text-text-primary-dark border-transparent'
         }`
       }
       onClick={() => setIsMobileMenuOpen(false)}
@@ -109,22 +109,22 @@ const Layout: React.FC = () => {
       <aside className="hidden md:flex flex-col h-screen sticky top-0 w-64 bg-surface-light dark:bg-surface-dark border-r border-border-light dark:border-border-dark shadow-sm">
         {/* Logo Header */}
         <div className="py-4 border-b border-border-light dark:border-border-dark flex items-center justify-center flex-shrink-0">
-          <img 
-            src="/assets/attendmarklogo.png" 
-            alt="AttendMark Logo" 
+          <img
+            src="/assets/attendmarklogo.png"
+            alt="AttendMark Logo"
             className="block dark:hidden"
-            style={{ 
-              width: '140px', 
+            style={{
+              width: '140px',
               height: 'auto',
               objectFit: 'contain'
             }}
           />
-          <img 
-            src="/assets/atendmarkwhitelogo.png" 
-            alt="AttendMark Logo" 
+          <img
+            src="/assets/atendmarkwhitelogo.png"
+            alt="AttendMark Logo"
             className="hidden dark:block"
-            style={{ 
-              width: '140px', 
+            style={{
+              width: '140px',
               height: 'auto',
               objectFit: 'contain'
             }}
@@ -142,6 +142,9 @@ const Layout: React.FC = () => {
                 </li>
                 <li>
                   <NavLinkItem to="/platform/audit-logs" icon="history">Audit Logs</NavLinkItem>
+                </li>
+                <li>
+                  <NavLinkItem to="/admin/notifications" icon="notifications">Notifications</NavLinkItem>
                 </li>
               </>
             ) : (
@@ -222,6 +225,9 @@ const Layout: React.FC = () => {
                         <li>
                           <NavLinkItem to="/platform/audit-logs" icon="history">Audit Logs</NavLinkItem>
                         </li>
+                        <li>
+                          <NavLinkItem to="/admin/notifications" icon="notifications">Notifications</NavLinkItem>
+                        </li>
                       </>
                     )}
                   </>
@@ -254,32 +260,32 @@ const Layout: React.FC = () => {
               </div>
             </div>
           </div>
-          
+
           {/* Powered By AI ALLY Logo - Close to User Card */}
           <div className="px-4 pb-4">
-            <a 
-              href="https://aially.in" 
-              target="_blank" 
+            <a
+              href="https://aially.in"
+              target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
             >
               <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark font-medium">Powered By</p>
-              <img 
-                src="/assets/image01.png" 
-                alt="AI ALLY Logo" 
+              <img
+                src="/assets/image01.png"
+                alt="AI ALLY Logo"
                 className="block dark:hidden"
-                style={{ 
-                  height: '20px', 
+                style={{
+                  height: '20px',
                   width: 'auto',
                   objectFit: 'contain'
                 }}
               />
-              <img 
-                src="/assets/aiallywhite.png" 
-                alt="AI ALLY Logo" 
+              <img
+                src="/assets/aiallywhite.png"
+                alt="AI ALLY Logo"
                 className="hidden dark:block"
-                style={{ 
-                  height: '20px', 
+                style={{
+                  height: '20px',
                   width: 'auto',
                   objectFit: 'contain'
                 }}
@@ -299,28 +305,27 @@ const Layout: React.FC = () => {
 
       {/* Mobile Sidebar Drawer */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-surface-light dark:bg-surface-dark border-r border-border-light dark:border-border-dark shadow-lg transform transition-transform duration-300 ease-in-out md:hidden flex flex-col h-screen ${
-          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-surface-light dark:bg-surface-dark border-r border-border-light dark:border-border-dark shadow-lg transform transition-transform duration-300 ease-in-out md:hidden flex flex-col h-screen ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
       >
         <div className="py-4 border-b border-border-light dark:border-border-dark flex items-center justify-between flex-shrink-0 px-4">
           <div className="flex items-center justify-center flex-1">
-            <img 
-              src="/assets/attendmarklogo.png" 
-              alt="AttendMark Logo" 
+            <img
+              src="/assets/attendmarklogo.png"
+              alt="AttendMark Logo"
               className="block dark:hidden"
-              style={{ 
-                width: '140px', 
+              style={{
+                width: '140px',
                 height: 'auto',
                 objectFit: 'contain'
               }}
             />
-            <img 
-              src="/assets/atendmarkwhitelogo.png" 
-              alt="AttendMark Logo" 
+            <img
+              src="/assets/atendmarkwhitelogo.png"
+              alt="AttendMark Logo"
               className="hidden dark:block"
-              style={{ 
-                width: '140px', 
+              style={{
+                width: '140px',
                 height: 'auto',
                 objectFit: 'contain'
               }}
@@ -345,6 +350,9 @@ const Layout: React.FC = () => {
                 </li>
                 <li>
                   <NavLinkItem to="/platform/audit-logs" icon="history">Audit Logs</NavLinkItem>
+                </li>
+                <li>
+                  <NavLinkItem to="/admin/notifications" icon="notifications">Notifications</NavLinkItem>
                 </li>
               </>
             ) : (
@@ -419,6 +427,9 @@ const Layout: React.FC = () => {
                         <li>
                           <NavLinkItem to="/platform/audit-logs" icon="history">Audit Logs</NavLinkItem>
                         </li>
+                        <li>
+                          <NavLinkItem to="/admin/notifications" icon="notifications">Notifications</NavLinkItem>
+                        </li>
                       </>
                     )}
                   </>
@@ -451,32 +462,32 @@ const Layout: React.FC = () => {
               </div>
             </div>
           </div>
-          
+
           {/* Powered By AI ALLY Logo - Close to User Card */}
           <div className="px-4 pb-4">
-            <a 
-              href="https://aially.in" 
-              target="_blank" 
+            <a
+              href="https://aially.in"
+              target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
             >
               <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark font-medium">Powered By</p>
-              <img 
-                src="/assets/image01.png" 
-                alt="AI ALLY Logo" 
+              <img
+                src="/assets/image01.png"
+                alt="AI ALLY Logo"
                 className="block dark:hidden"
-                style={{ 
-                  height: '20px', 
+                style={{
+                  height: '20px',
                   width: 'auto',
                   objectFit: 'contain'
                 }}
               />
-              <img 
-                src="/assets/aiallywhite.png" 
-                alt="AI ALLY Logo" 
+              <img
+                src="/assets/aiallywhite.png"
+                alt="AI ALLY Logo"
                 className="hidden dark:block"
-                style={{ 
-                  height: '20px', 
+                style={{
+                  height: '20px',
                   width: 'auto',
                   objectFit: 'contain'
                 }}
@@ -497,18 +508,20 @@ const Layout: React.FC = () => {
           </button>
           {/* Logo - Absolutely Centered */}
           <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
-            <img 
-              src="/assets/attendmarklogo.png" 
-              alt="AttendMark Logo" 
+            <img
+              src="/assets/attendmarklogo.png"
+              alt="AttendMark Logo"
               className="h-10 w-auto object-contain block dark:hidden"
             />
-            <img 
-              src="/assets/atendmarkwhitelogo.png" 
-              alt="AttendMark Logo" 
+            <img
+              src="/assets/atendmarkwhitelogo.png"
+              alt="AttendMark Logo"
               className="h-10 w-auto object-contain hidden dark:block"
             />
           </div>
-          <div className="flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* 🔔 Notification Bell - Mobile */}
+            <NotificationBell />
             <ProfileMenu
               userInitials={getUserInitials()}
               userName={getUserName()}
@@ -522,6 +535,8 @@ const Layout: React.FC = () => {
         <header className="hidden md:flex sticky top-0 bg-surface-light dark:bg-surface-dark p-4 border-b border-border-light dark:border-border-dark z-30 items-center justify-between shadow-sm">
           <h1 className="text-2xl font-bold text-text-primary-light dark:text-text-primary-dark">{getPageTitle()}</h1>
           <div className="flex items-center space-x-4">
+            {/* 🔔 Notification Bell - ALWAYS VISIBLE FOR ALL ROLES */}
+            <NotificationBell />
             <ProfileMenu
               userInitials={getUserInitials()}
               userName={getUserName()}

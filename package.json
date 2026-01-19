@@ -19,6 +19,7 @@
     "@types/papaparse": "^5.5.0",
     "axios": "^1.6.0",
     "date-fns": "^4.1.0",
+    "firebase": "^12.8.0",
     "geolib": "^3.3.4",
     "html5-qrcode": "^2.3.8",
     "idb": "^8.0.3",

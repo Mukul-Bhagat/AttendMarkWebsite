@@ -22,6 +22,7 @@ import Leaves from './pages/Leaves';
 import QuickScanHandler from './pages/QuickScanHandler';
 import PlatformDashboard from './pages/PlatformDashboard';
 import PlatformAuditLogs from './pages/PlatformAuditLogs';
+import AdminNotifications from './pages/AdminNotifications';
 import DataBackup from './pages/DataBackup';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
@@ -37,51 +38,51 @@ function App() {
     <div>
       {/* Force Password Reset Modal - Blocks entire app if mustResetPassword is true */}
       {showForceReset && <ForceResetPassword />}
-      
+
       <Routes>
         {/* Public Routes - Redirect to dashboard if already logged in */}
-        <Route 
-          path="/landing" 
+        <Route
+          path="/landing"
           element={
             <PublicRoute>
               <LandingPage />
             </PublicRoute>
-          } 
+          }
         />
-        <Route 
-          path="/register" 
+        <Route
+          path="/register"
           element={
             <PublicRoute>
               <RegisterSuperAdmin />
             </PublicRoute>
-          } 
+          }
         />
-        <Route 
-          path="/login" 
+        <Route
+          path="/login"
           element={
             <PublicRoute>
               <LoginPage />
             </PublicRoute>
-          } 
+          }
         />
-        <Route 
-          path="/forgot-password" 
+        <Route
+          path="/forgot-password"
           element={
             <PublicRoute>
               <ForgotPassword />
             </PublicRoute>
-          } 
+          }
         />
-        <Route 
-          path="/reset-password/:collectionPrefix/:token" 
+        <Route
+          path="/reset-password/:collectionPrefix/:token"
           element={
             <PublicRoute>
               <ResetPassword />
             </PublicRoute>
-          } 
+          }
         />
-        <Route 
-          path="/" 
+        <Route
+          path="/"
           element={
             isLoading ? (
               <div className="flex items-center justify-center min-h-screen">
@@ -102,14 +103,15 @@ function App() {
             ) : (
               <Navigate to="/login" replace />
             )
-          } 
+          }
         />
-        
+
         {/* Platform Owner Routes */}
         <Route element={<ProtectedRoute allowedRoles={['PLATFORM_OWNER']} />}>
           <Route element={<Layout />}>
             <Route path="/platform/dashboard" element={<PlatformDashboard />} />
             <Route path="/platform/audit-logs" element={<PlatformAuditLogs />} />
+            <Route path="/admin/notifications" element={<AdminNotifications />} />
           </Route>
         </Route>
 
@@ -127,7 +129,7 @@ function App() {
           {/* Deep Link Attendance - No Layout wrapper (full page) */}
           <Route path="/scan/:sessionId" element={<QuickScanHandler />} />
         </Route>
-        
+
         {/* Classes routes - Accessible to all authenticated users (including EndUsers) */}
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
@@ -135,16 +137,16 @@ function App() {
             <Route path="/classes/:classId/sessions" element={<Sessions />} />
           </Route>
         </Route>
-        
+
         {/* Classes edit route - Only for Admins and Platform Owner */}
-        <Route 
+        <Route
           element={<ProtectedRoute allowedRoles={['SuperAdmin', 'CompanyAdmin', 'Manager', 'SessionAdmin', 'PLATFORM_OWNER']} />}
         >
           <Route element={<Layout />}>
             <Route path="/classes/edit/:id" element={<EditClass />} />
           </Route>
         </Route>
-        
+
         {/* Sessions routes - Accessible to all authenticated users (including EndUsers) */}
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
@@ -153,27 +155,27 @@ function App() {
             <Route path="/sessions/:id" element={<SessionDetails />} />
           </Route>
         </Route>
-        
+
         {/* Sessions edit route - Only for Admins and Platform Owner */}
-        <Route 
+        <Route
           element={<ProtectedRoute allowedRoles={['SuperAdmin', 'CompanyAdmin', 'Manager', 'SessionAdmin', 'PLATFORM_OWNER']} />}
         >
           <Route element={<Layout />}>
             <Route path="/sessions/edit/:id" element={<EditSession />} />
           </Route>
         </Route>
-        
+
         {/* Routes restricted to Manager, SuperAdmin, and Platform Owner */}
-        <Route 
+        <Route
           element={<ProtectedRoute allowedRoles={['Manager', 'SuperAdmin', 'PLATFORM_OWNER']} />}
         >
           <Route element={<Layout />}>
             <Route path="/reports" element={<AttendanceReport />} />
           </Route>
         </Route>
-        
+
         {/* Routes restricted to SuperAdmin, CompanyAdmin, Manager, SessionAdmin, and Platform Owner */}
-        <Route 
+        <Route
           element={<ProtectedRoute allowedRoles={['SuperAdmin', 'CompanyAdmin', 'Manager', 'SessionAdmin', 'PLATFORM_OWNER']} />}
         >
           <Route element={<Layout />}>
@@ -181,27 +183,27 @@ function App() {
             <Route path="/sessions/create" element={<CreateSession />} />
           </Route>
         </Route>
-        
+
         {/* Routes restricted to SuperAdmin and Platform Owner */}
-        <Route 
+        <Route
           element={<ProtectedRoute allowedRoles={['SuperAdmin', 'PLATFORM_OWNER']} />}
         >
           <Route element={<Layout />}>
             <Route path="/manage-staff" element={<ManageStaff />} />
           </Route>
         </Route>
-        
+
         {/* Routes restricted to SuperAdmin, CompanyAdmin, and Platform Owner */}
-        <Route 
+        <Route
           element={<ProtectedRoute allowedRoles={['SuperAdmin', 'CompanyAdmin', 'PLATFORM_OWNER']} />}
         >
           <Route element={<Layout />}>
             <Route path="/manage-users" element={<ManageUsers />} />
           </Route>
         </Route>
-        
+
         {/* Data Backup - Only for CompanyAdmin and Platform Owner */}
-        <Route 
+        <Route
           element={<ProtectedRoute allowedRoles={['CompanyAdmin', 'PLATFORM_OWNER']} />}
         >
           <Route element={<Layout />}>
