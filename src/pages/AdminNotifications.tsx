@@ -55,7 +55,13 @@ const AdminNotifications: React.FC = () => {
                 const data = response.data?.organizations || response.data;
                 // CRASH PREVENTION: Ensure we always have an array
                 if (Array.isArray(data)) {
-                    setOrganizations(data);
+                    // Transform API response to match Organization interface
+                    const transformedOrgs: Organization[] = data.map((org: any) => ({
+                        id: org.id || org._id?.toString() || '',
+                        name: org.name || '',
+                        collectionPrefix: org.collectionPrefix || org.organizationPrefix || ''
+                    }));
+                    setOrganizations(transformedOrgs);
                 } else {
                     console.warn('Organizations API returned non-array:', data);
                     setOrganizations([]);
@@ -299,18 +305,18 @@ const AdminNotifications: React.FC = () => {
                                     ) : (
                                         organizations.map((org) => (
                                             <label
-                                                key={org._id}
+                                                key={org.id}
                                                 className="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer border-b border-gray-100 dark:border-slate-700 last:border-0"
                                             >
                                                 <input
                                                     type="checkbox"
-                                                    checked={selectedOrgs.includes(org._id)}
-                                                    onChange={() => toggleOrg(org._id)}
+                                                    checked={selectedOrgs.includes(org.id)}
+                                                    onChange={() => toggleOrg(org.id)}
                                                     className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
                                                 />
                                                 <div className="flex-1">
                                                     <div className="font-medium text-gray-900 dark:text-white">{org.name}</div>
-                                                    <div className="text-xs text-gray-500 dark:text-gray-400">@{org.organizationPrefix}</div>
+                                                    <div className="text-xs text-gray-500 dark:text-gray-400">@{org.collectionPrefix}</div>
                                                 </div>
                                             </label>
                                         ))
