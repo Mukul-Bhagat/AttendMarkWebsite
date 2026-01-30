@@ -3,6 +3,7 @@ import api from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import Papa from 'papaparse';
 import EditUserModal from '../components/EditUserModal';
+import ResetDeviceModal from '../components/ResetDeviceModal';
 
 type EndUser = {
   _id?: string;
@@ -69,6 +70,10 @@ const ManageUsers: React.FC = () => {
   // Edit user modal state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<EndUser | null>(null);
+
+  // Reset device modal state (for Company Admin / SuperAdmin)
+  const [resetDeviceModalOpen, setResetDeviceModalOpen] = useState(false);
+  const [resetDeviceTarget, setResetDeviceTarget] = useState<{ userId: string; userName: string } | null>(null);
 
   // Fetch existing EndUsers
   const fetchUsers = async () => {
@@ -172,21 +177,30 @@ const ManageUsers: React.FC = () => {
     }
   };
 
-  // Handle device reset
-  const handleResetDevice = async (userId: string) => {
-    if (!window.confirm('This will reset the device ID and send a new 6-digit password to the user\'s email. Continue?')) {
-      return;
-    }
-
-    setResettingDevice(userId);
+  // Open reset device modal (Company Admin / SuperAdmin)
+  const openResetDeviceModal = (userId: string, userName: string) => {
+    setResetDeviceTarget({ userId, userName });
+    setResetDeviceModalOpen(true);
     setError('');
     setMessage('');
+  };
 
+  // Handle device reset submit from modal (generate or assign password)
+  const handleResetDeviceSubmit = async (
+    payload: { type: 'generate' } | { type: 'assign'; newPassword: string }
+  ) => {
+    if (!resetDeviceTarget) return;
+    const { userId } = resetDeviceTarget;
+    setResettingDevice(userId);
+    setError('');
     try {
-      await api.put(`/api/users/${userId}/reset-device`);
-
-      setMessage('Device reset successfully! A new password has been generated and emailed to the user.');
-      // Refresh the list to show updated device status
+      if (payload.type === 'generate') {
+        await api.put(`/api/users/${userId}/reset-device`);
+        setMessage('Device reset successfully! A new password has been generated and emailed to the user.');
+      } else {
+        await api.put(`/api/users/${userId}/reset-device`, { newPassword: payload.newPassword });
+        setMessage('Device reset successfully! The custom password has been set and emailed to the user.');
+      }
       await fetchUsers();
     } catch (err: any) {
       if (err.response?.status === 403) {
@@ -194,6 +208,7 @@ const ManageUsers: React.FC = () => {
       } else {
         setError(err.response?.data?.msg || 'Failed to reset device. Please try again.');
       }
+      throw err;
     } finally {
       setResettingDevice(null);
     }
@@ -780,11 +795,11 @@ const ManageUsers: React.FC = () => {
                                                   <button
                                                     onClick={() => {
                                                       setOpenMenuId(null);
-                                                      // Platform Owner uses reset-device-only, others use reset-device
+                                                      // Platform Owner uses reset-device-only, others open reset-device modal
                                                       if (isPlatformOwner) {
                                                         handleResetDeviceOnly(userId);
                                                       } else {
-                                                        handleResetDevice(userId);
+                                                        openResetDeviceModal(userId, userName);
                                                       }
                                                     }}
                                                     disabled={isResetting}
@@ -1222,6 +1237,19 @@ const ManageUsers: React.FC = () => {
           setIsEditModalOpen(false);
           setSelectedUserForEdit(null);
         }}
+      />
+
+      {/* Reset Device Modal (Company Admin / SuperAdmin) */}
+      <ResetDeviceModal
+        isOpen={resetDeviceModalOpen}
+        onClose={() => {
+          setResetDeviceModalOpen(false);
+          setResetDeviceTarget(null);
+        }}
+        targetName={resetDeviceTarget?.userName ?? ''}
+        targetLabel="user"
+        onSubmit={handleResetDeviceSubmit}
+        isSubmitting={resettingDevice !== null}
       />
     </div>
   );
