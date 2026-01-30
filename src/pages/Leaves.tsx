@@ -313,9 +313,8 @@ const Leaves: React.FC = () => {
       setIsSubmitting(true);
 
       // Convert selected dates to local calendar date strings (YYYY-MM-DD) so IST/UTC does not shift the day
-      const datesArray = selectedDates
-        .sort((a, b) => a.getTime() - b.getTime())
-        .map(date => {
+      const sorted = [...selectedDates].sort((a, b) => a.getTime() - b.getTime());
+      const datesArray = sorted.map(date => {
           const d = new Date(date);
           d.setHours(0, 0, 0, 0);
           const y = d.getFullYear();
@@ -414,25 +413,28 @@ const Leaves: React.FC = () => {
     }));
   };
 
-  // Format date for display
+  // Format leave calendar date for display: use UTC date parts so "2026-02-09T00:00:00.000Z" shows as Feb 9 in all timezones (avoids west-of-UTC showing previous day).
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) {
         return dateString;
       }
-      return date.toLocaleDateString('en-US', {
+      const y = date.getUTCFullYear();
+      const m = date.getUTCMonth();
+      const d = date.getUTCDate();
+      return new Date(Date.UTC(y, m, d)).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
+        timeZone: 'UTC',
       });
     } catch {
       return dateString;
     }
   };
 
-  // Format date range
-  // Format date range
+  // Format date range (use UTC date parts so calendar dates display correctly in all timezones)
   const formatDateRange = (start: string, end: string, dates?: string[]) => {
     let startTime = new Date(start).getTime();
     let endTime = new Date(end).getTime();
@@ -450,16 +452,8 @@ const Leaves: React.FC = () => {
       isConsecutive = diffDays === count;
     }
 
-    const startDate = new Date(startTime).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-    const endDate = new Date(endTime).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+    const startDate = formatDate(new Date(startTime).toISOString());
+    const endDate = formatDate(new Date(endTime).toISOString());
 
     if (startDate === endDate) {
       return startDate;
