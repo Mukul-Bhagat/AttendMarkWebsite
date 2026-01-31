@@ -96,7 +96,7 @@ const AttendanceReport: React.FC = () => {
     setStartDate(thirtyDaysAgo.toISOString().split('T')[0]);
   }, []);
 
-  // Fetch analytics when "View Report" is clicked
+  // Fetch both analytics and logs when "View Report" is clicked
   const handleViewReport = async () => {
     if (!selectedClass || !startDate || !endDate) {
       setError('Please select a class and date range.');
@@ -109,34 +109,54 @@ const AttendanceReport: React.FC = () => {
     setSessionLogs([]);
 
     try {
-      if (activeTab === 'analytics') {
-        const { data } = await api.get('/api/reports/analytics', {
+      // ✅ UNIFIED LOADING: Fetch BOTH analytics and logs in parallel
+      const [analyticsResult, logsResult] = await Promise.allSettled([
+        api.get('/api/reports/analytics', {
           params: {
             classBatchId: selectedClass,
             startDate,
             endDate,
           },
-        });
-        setAnalyticsData(data);
-      } else if (activeTab === 'logs') {
-        const { data } = await api.get('/api/reports/logs', {
+        }),
+        api.get('/api/reports/logs', {
           params: {
             classBatchId: selectedClass,
             startDate,
             endDate,
           },
-        });
-        setSessionLogs(data || []);
+        })
+      ]);
+
+      // Handle analytics result
+      if (analyticsResult.status === 'fulfilled') {
+        setAnalyticsData(analyticsResult.value.data);
+        console.log('[VIEW_REPORT] Analytics loaded successfully');
+      } else {
+        console.error('[VIEW_REPORT] Analytics failed:', analyticsResult.reason);
+      }
+
+      // Handle logs result
+      if (logsResult.status === 'fulfilled') {
+        setSessionLogs(logsResult.value.data || []);
+        console.log('[VIEW_REPORT] Logs loaded successfully');
+      } else {
+        console.error('[VIEW_REPORT] Logs failed:', logsResult.reason);
+      }
+
+      // Set error if both failed
+      if (analyticsResult.status === 'rejected' && logsResult.status === 'rejected') {
+        const err: any = analyticsResult.reason;
+        if (err.response?.status === 403) {
+          setError('You are not authorized to view reports.');
+        } else if (err.response?.status === 400) {
+          setError(err.response.data.msg || 'Invalid request. Please check your selections.');
+        } else {
+          setError(err.response?.data?.msg || 'Failed to fetch data. Please try again.');
+        }
       }
     } catch (err: any) {
-      if (err.response?.status === 403) {
-        setError('You are not authorized to view reports.');
-      } else if (err.response?.status === 400) {
-        setError(err.response.data.msg || 'Invalid request. Please check your selections.');
-      } else {
-        setError(err.response?.data?.msg || 'Failed to fetch data. Please try again.');
-      }
-      console.error(err);
+      console.error('[VIEW_REPORT] Unexpected error:', err);
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -157,34 +177,45 @@ const AttendanceReport: React.FC = () => {
 
         const fetchData = async () => {
           try {
-            if (activeTab === 'analytics') {
-              const { data } = await api.get('/api/reports/analytics', {
+            // ✅ Fetch BOTH analytics and logs in parallel (same as handleViewReport)
+            const [analyticsResult, logsResult] = await Promise.allSettled([
+              api.get('/api/reports/analytics', {
                 params: {
                   classBatchId: selectedClass,
                   startDate,
                   endDate,
                 },
-              });
-              setAnalyticsData(data);
-            } else if (activeTab === 'logs') {
-              const { data } = await api.get('/api/reports/logs', {
+              }),
+              api.get('/api/reports/logs', {
                 params: {
                   classBatchId: selectedClass,
                   startDate,
                   endDate,
                 },
-              });
-              setSessionLogs(data || []);
+              })
+            ]);
+
+            if (analyticsResult.status === 'fulfilled') {
+              setAnalyticsData(analyticsResult.value.data);
+            }
+            if (logsResult.status === 'fulfilled') {
+              setSessionLogs(logsResult.value.data || []);
+            }
+
+            // Set error if both failed
+            if (analyticsResult.status === 'rejected' && logsResult.status === 'rejected') {
+              const err: any = analyticsResult.reason;
+              if (err.response?.status === 403) {
+                setError('You are not authorized to view reports.');
+              } else if (err.response?.status === 400) {
+                setError(err.response.data.msg || 'Invalid request. Please check your selections.');
+              } else {
+                setError(err.response?.data?.msg || 'Failed to fetch data. Please try again.');
+              }
             }
           } catch (err: any) {
-            if (err.response?.status === 403) {
-              setError('You are not authorized to view reports.');
-            } else if (err.response?.status === 400) {
-              setError(err.response.data.msg || 'Invalid request. Please check your selections.');
-            } else {
-              setError(err.response?.data?.msg || 'Failed to fetch data. Please try again.');
-            }
-            console.error(err);
+            console.error('[AUTO_FETCH] Unexpected error:', err);
+            setError('An unexpected error occurred. Please try again.');
           } finally {
             setIsLoading(false);
           }
@@ -194,7 +225,22 @@ const AttendanceReport: React.FC = () => {
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [selectedClass, startDate, endDate, classes.length, searchParams, activeTab]);
+  }, [selectedClass, startDate, endDate, classes.length, searchParams]);
+
+  // Debug logging for attendance logs data
+  useEffect(() => {
+    if (sessionLogs.length > 0) {
+      console.log('[ATTENDANCE_LOGS_DEBUG] Received session logs:', sessionLogs.map(log => ({
+        name: log.name,
+        date: log.date,
+        totalAssigned: log.totalAssigned,
+        presentCount: log.presentCount,
+        absentCount: log.absentCount,
+        display: `${log.presentCount}/${log.totalAssigned}`,
+        status: log.status
+      })));
+    }
+  }, [sessionLogs]);
 
   // fetchSessionAttendanceDetails - REMOVED (unused)
   // This functionality has been replaced by SessionAttendanceView component
@@ -548,12 +594,7 @@ const AttendanceReport: React.FC = () => {
             {(analyticsData || sessionLogs.length > 0) && (
               <div className="mb-4 sm:mb-6 flex gap-1 sm:gap-2 border-b border-[#e6e2db] dark:border-slate-700">
                 <button
-                  onClick={() => {
-                    setActiveTab('analytics');
-                    if (selectedClass && startDate && endDate) {
-                      handleViewReport();
-                    }
-                  }}
+                  onClick={() => setActiveTab('analytics')}
                   className={`px-6 py-3 text-sm font-semibold transition-colors ${activeTab === 'analytics'
                     ? 'bg-white dark:bg-slate-800 text-[#f04129] border-b-2 border-[#f04129]'
                     : 'text-gray-500 dark:text-gray-400 hover:text-[#181511] dark:hover:text-white'
@@ -563,12 +604,7 @@ const AttendanceReport: React.FC = () => {
                   Analytics
                 </button>
                 <button
-                  onClick={() => {
-                    setActiveTab('logs');
-                    if (selectedClass && startDate && endDate) {
-                      handleViewReport();
-                    }
-                  }}
+                  onClick={() => setActiveTab('logs')}
                   className={`px-6 py-3 text-sm font-semibold transition-colors ${activeTab === 'logs'
                     ? 'bg-white dark:bg-slate-800 text-[#f04129] border-b-2 border-[#f04129]'
                     : 'text-gray-500 dark:text-gray-400 hover:text-[#181511] dark:hover:text-white'
