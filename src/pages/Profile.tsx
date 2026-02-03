@@ -40,6 +40,7 @@ const Profile: React.FC = () => {
 
   // Organization Settings State
   const [organizationSettings, setOrganizationSettings] = useState({
+    defaultGracePeriod: 60,
     lateAttendanceLimit: 30,
     isStrictAttendance: false,
     yearlyQuotaPL: 12,
@@ -88,6 +89,7 @@ const Profile: React.FC = () => {
         try {
           const { data } = await api.get('/api/organization/settings');
           setOrganizationSettings({
+            defaultGracePeriod: data.defaultGracePeriod || 60,
             lateAttendanceLimit: data.lateAttendanceLimit || 30,
             isStrictAttendance: data.isStrictAttendance || false,
             yearlyQuotaPL: data.yearlyQuotaPL || 12,
@@ -113,6 +115,7 @@ const Profile: React.FC = () => {
 
     try {
       await api.put('/api/organization/settings', {
+        defaultGracePeriod: organizationSettings.defaultGracePeriod,
         lateAttendanceLimit: organizationSettings.lateAttendanceLimit,
         isStrictAttendance: organizationSettings.isStrictAttendance,
         yearlyQuotaPL: organizationSettings.yearlyQuotaPL,
@@ -328,8 +331,8 @@ const Profile: React.FC = () => {
       {message && (
         <div
           className={`mb-6 p-4 rounded-xl border ${message.type === 'success'
-              ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800'
-              : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800'
+            ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800'
+            : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800'
             }`}
         >
           {message.text}
@@ -437,8 +440,8 @@ const Profile: React.FC = () => {
               <button
                 onClick={() => setActiveTab('personal')}
                 className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${activeTab === 'personal'
-                    ? 'text-[#f04129] border-b-2 border-[#f04129]'
-                    : 'text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark'
+                  ? 'text-[#f04129] border-b-2 border-[#f04129]'
+                  : 'text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark'
                   }`}
               >
                 Personal Details
@@ -446,8 +449,8 @@ const Profile: React.FC = () => {
               <button
                 onClick={() => setActiveTab('preferences')}
                 className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${activeTab === 'preferences'
-                    ? 'text-[#f04129] border-b-2 border-[#f04129]'
-                    : 'text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark'
+                  ? 'text-[#f04129] border-b-2 border-[#f04129]'
+                  : 'text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark'
                   }`}
               >
                 Preferences
@@ -456,8 +459,8 @@ const Profile: React.FC = () => {
                 <button
                   onClick={() => setActiveTab('organization')}
                   className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${activeTab === 'organization'
-                      ? 'text-[#f04129] border-b-2 border-[#f04129]'
-                      : 'text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark'
+                    ? 'text-[#f04129] border-b-2 border-[#f04129]'
+                    : 'text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark'
                     }`}
                 >
                   Organization Settings
@@ -669,22 +672,23 @@ const Profile: React.FC = () => {
                     <>
                       <div>
                         <label className="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2">
-                          Attendance Grace Period (Minutes)
+                          Default Grace Period (Minutes)
                         </label>
                         <input
                           type="number"
                           min="0"
+                          max="180"
                           step="1"
-                          value={organizationSettings.lateAttendanceLimit}
+                          value={organizationSettings.defaultGracePeriod}
                           onChange={(e) => setOrganizationSettings({
                             ...organizationSettings,
-                            lateAttendanceLimit: parseInt(e.target.value) || 0,
+                            defaultGracePeriod: Math.min(180, Math.max(0, parseInt(e.target.value) || 0)),
                           })}
                           className="w-full px-4 py-2 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-slate-900 text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-[#f04129]"
                           required
                         />
                         <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-2">
-                          Users can mark attendance up to this many minutes after the class starts. Any attendance marked after the start time will be flagged as 'Late'.
+                          Organization-wide default grace period for late attendance (0-180 minutes). Classes and individual users can override this setting.
                         </p>
                       </div>
 
