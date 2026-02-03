@@ -4,9 +4,11 @@ import api from '../api';
 import { useNavigate } from 'react-router-dom';
 
 interface Organization {
-    id: string; // API returns 'id', not '_id'
+    _id: string; // Used in component
+    id?: string;
     name: string;
-    collectionPrefix: string; // API returns 'collectionPrefix', not 'organizationPrefix'
+    organizationPrefix?: string; // Used in component
+    collectionPrefix?: string;
 }
 
 interface SentNotification {

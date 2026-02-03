@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import { ISession } from '../types';
-import { nowIST, formatIST, sessionTimeToIST, istDayStart, istDayEnd } from '../utils/time';
+import { nowIST, formatIST, sessionTimeToIST, istDayStart } from '../utils/time';
 
 const Dashboard: React.FC = () => {
   const { user, isEndUser, isPlatformOwner } = useAuth();

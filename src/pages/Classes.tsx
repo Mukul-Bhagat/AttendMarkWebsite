@@ -4,7 +4,7 @@ import api from '../api';
 import { IClassBatch } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { Eye, Calendar, Users, Edit, Trash2 } from 'lucide-react';
-import { nowIST, formatIST, sessionTimeToIST, istDayStart, istDayEnd } from '../utils/time';
+import { nowIST, formatIST, sessionTimeToIST, istDayEnd } from '../utils/time';
 
 const Classes: React.FC = () => {
   const navigate = useNavigate();
@@ -83,21 +83,7 @@ const Classes: React.FC = () => {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
-        return dateString;
-      }
-      return formatIST(date.getTime(), {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
-    } catch {
-      return dateString;
-    }
-  };
+
 
 
   // Check if a class is past (all sessions have ended)

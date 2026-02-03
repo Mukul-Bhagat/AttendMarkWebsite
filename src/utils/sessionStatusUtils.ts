@@ -12,6 +12,7 @@ import {
     sessionTimeToIST,
     isSameISTDay,
     formatIST,
+    istDayStart,
     type ISTTimestamp
 } from './time';
 
@@ -289,11 +290,11 @@ export function isSessionCancelled(
 /**
  * Check if two dates are the same IST day
  * 
- * Accepts Date objects or ISO strings, converts to timestamps
+ * Accepts Date objects, ISO strings, or numeric timestamps
  */
-export function isSameDay(d1: Date | string, d2: Date | string): boolean {
-    const t1 = typeof d1 === 'string' ? istDayStart(d1) : istDayStart(d1.toISOString());
-    const t2 = typeof d2 === 'string' ? istDayStart(d2) : istDayStart(d2.toISOString());
+export function isSameDay(d1: Date | string | number, d2: Date | string | number): boolean {
+    const t1 = typeof d1 === 'number' ? d1 : (typeof d1 === 'string' ? istDayStart(d1) : istDayStart(d1.toISOString()));
+    const t2 = typeof d2 === 'number' ? d2 : (typeof d2 === 'string' ? istDayStart(d2) : istDayStart(d2.toISOString()));
 
     return isSameISTDay(t1, t2);
 }
