@@ -1,3 +1,5 @@
+import { nowIST, istDayStart } from '../utils/time';
+
 /**
  * Attendance Permission Utilities
  * 
@@ -200,9 +202,9 @@ export const canAdjustSession = (
     }
 
     // Check session age (frontend pre-check, backend enforces)
-    const sessionDate = new Date(session.startDate);
-    const now = new Date();
-    const ageDays = (now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60 * 24);
+    const sessionStartTimestamp = istDayStart(session.startDate);
+    const nowTimestamp = nowIST();
+    const ageDays = (nowTimestamp - sessionStartTimestamp) / (1000 * 60 * 60 * 24);
 
     if (ageDays > 90) {
         return {
@@ -212,7 +214,7 @@ export const canAdjustSession = (
     }
 
     // Check if future session
-    if (sessionDate > now) {
+    if (sessionStartTimestamp > nowTimestamp) {
         return {
             allowed: false,
             reason: 'Cannot adjust attendance for future sessions'

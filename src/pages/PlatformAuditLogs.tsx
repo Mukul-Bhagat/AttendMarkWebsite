@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { formatIST } from '../utils/time';
 
 interface AuditLog {
   id: string;
@@ -81,12 +82,14 @@ const PlatformAuditLogs: React.FC = () => {
   const formatTime = (dateString: string) => {
     try {
       const date = new Date(dateString);
-      const day = date.getDate().toString().padStart(2, '0');
-      const month = date.toLocaleDateString('en-US', { month: 'short' });
-      const year = date.getFullYear();
-      const hours = date.getHours().toString().padStart(2, '0');
-      const minutes = date.getMinutes().toString().padStart(2, '0');
-      return `${day} ${month} ${year}, ${hours}:${minutes}`;
+      return formatIST(date.getTime(), {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Kolkata',
+      });
     } catch {
       return dateString;
     }

@@ -38,8 +38,6 @@ const EditClass: React.FC = () => {
     radius: 100,
     weeklyDays: [] as string[],
     sessionAdmin: '',
-    useOrganizationGracePeriod: true,
-    gracePeriod: 60,
   });
 
   // Custom dates for Random frequency
@@ -55,7 +53,6 @@ const EditClass: React.FC = () => {
   // Location State
   const [selectedCoordinates, setSelectedCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
   const [showMapPicker, setShowMapPicker] = useState(false);
-  const [orgDefaultGracePeriod, setOrgDefaultGracePeriod] = useState(60);
 
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -104,8 +101,6 @@ const EditClass: React.FC = () => {
             radius: session.radius || 100,
             weeklyDays: session.weeklyDays || [],
             sessionAdmin: session.sessionAdmin || '',
-            useOrganizationGracePeriod: classData.useOrganizationGracePeriod !== false,
-            gracePeriod: classData.gracePeriod || 60,
           });
 
           // Pre-fill Coordinates
@@ -154,8 +149,6 @@ const EditClass: React.FC = () => {
             radius: 100,
             weeklyDays: [],
             sessionAdmin: '',
-            useOrganizationGracePeriod: classData.useOrganizationGracePeriod !== false,
-            gracePeriod: classData.gracePeriod || 60,
           });
         }
       } catch (err: any) {
@@ -195,19 +188,6 @@ const EditClass: React.FC = () => {
       fetchSessionAdmins();
     }
   }, [isSuperAdmin]);
-
-  // Fetch organization default grace period
-  useEffect(() => {
-    const fetchOrgGracePeriod = async () => {
-      try {
-        const { data } = await api.get('/api/organization/settings');
-        setOrgDefaultGracePeriod(data.defaultGracePeriod || 60);
-      } catch (err) {
-        console.error('Could not fetch organization grace period:', err);
-      }
-    };
-    fetchOrgGracePeriod();
-  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -290,8 +270,6 @@ const EditClass: React.FC = () => {
         defaultTime: formData.startTime || undefined,
         startDate: formData.startDate || undefined,
         endDate: formData.endDate || undefined,
-        useOrganizationGracePeriod: formData.useOrganizationGracePeriod,
-        gracePeriod: formData.useOrganizationGracePeriod ? undefined : formData.gracePeriod,
       };
 
       // Only include sessionAdmin if user is SuperAdmin
@@ -764,77 +742,6 @@ const EditClass: React.FC = () => {
               </label>
             </div>
           )}
-
-          {/* Section 4.5: Grace Period Override */}
-          <div className="flex flex-col gap-6 rounded-xl border border-[#e6e2db] bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
-            <div className="flex items-center gap-3">
-              <span className="material-symbols-outlined text-2xl text-[#f04129]">schedule</span>
-              <h2 className="text-xl font-bold leading-tight tracking-[-0.015em] text-[#181511] dark:text-white">Late Attendance Grace Period</h2>
-            </div>
-
-            <div className="flex flex-col gap-4">
-              {/* Radio: Use Organization Default */}
-              <label className="flex items-start gap-3 cursor-pointer p-4 rounded-lg border border-[#e6e2db] dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
-                <input
-                  type="radio"
-                  name="gracePeriodType"
-                  checked={formData.useOrganizationGracePeriod}
-                  onChange={() => setFormData(prev => ({ ...prev, useOrganizationGracePeriod: true }))}
-                  className="w-4 h-4 mt-1 text-[#f04129] focus:ring-[#f04129]"
-                />
-                <div className="flex-1">
-                  <p className="font-medium text-[#181511] dark:text-white">Use Organization Default</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Currently: <span className="font-semibold">{orgDefaultGracePeriod} minutes</span>
-                  </p>
-                </div>
-              </label>
-
-              {/* Radio: Custom Grace Period */}
-              <label className="flex items-start gap-3 cursor-pointer p-4 rounded-lg border border-[#e6e2db] dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
-                <input
-                  type="radio"
-                  name="gracePeriodType"
-                  checked={!formData.useOrganizationGracePeriod}
-                  onChange={() => setFormData(prev => ({ ...prev, useOrganizationGracePeriod: false }))}
-                  className="w-4 h-4 mt-1 text-[#f04129] focus:ring-[#f04129]"
-                />
-                <div className="flex-1">
-                  <p className="font-medium text-[#181511] dark:text-white">Custom Grace Period for this Class</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Override the organization default with a custom grace period
-                  </p>
-                </div>
-              </label>
-
-              {/* Custom Input (shown only if custom selected) */}
-              {!formData.useOrganizationGracePeriod && (
-                <div className="ml-7 mt-2">
-                  <label className="flex flex-col">
-                    <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">
-                      Grace Period (Minutes)
-                    </p>
-                    <input
-                      type="number"
-                      min="0"
-                      max="180"
-                      value={formData.gracePeriod}
-                      onChange={(e) => setFormData(prev => ({
-                        ...prev,
-                        gracePeriod: Math.min(180, Math.max(0, parseInt(e.target.value) || 0))
-                      }))}
-                      className="form-input w-32 rounded-lg border border-[#e6e2db] bg-white p-3 text-base font-normal leading-normal text-[#181511] placeholder:text-[#8a7b60] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary/80"
-                      placeholder="Minutes"
-                      required
-                    />
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Must be between 0 and 180 minutes
-                    </p>
-                  </label>
-                </div>
-              )}
-            </div>
-          </div>
 
           {/* Section 5: Attendees */}
           <div className="flex flex-col gap-5 rounded-xl border border-[#e6e2db] bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">

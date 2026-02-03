@@ -76,9 +76,9 @@ const AttendanceCheckbox: React.FC<AttendanceCheckboxProps> = ({ user, canEdit, 
                     disabled={!canEdit}
                     className={`
             w-6 h-6 rounded border-2 
-            ${isChecked ? 'bg-green-500 border-green-500' : 'bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600'}
+            ${isChecked ? 'bg-green-500 border-green-500' : 'bg-surface-light dark:bg-surface-dark border-border-light dark:border-border-dark'}
             ${canEdit ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}
-            focus:outline-none focus:ring-2 focus:ring-[#f04129] focus:ring-offset-2
+            focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
             transition-all duration-200
           `}
                 />

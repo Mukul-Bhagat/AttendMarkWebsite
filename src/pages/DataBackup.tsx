@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import api from '../api';
 import { downloadBackup, restoreData, downloadStreamBackup } from '../api/backupApi';
 import { getBackups, deleteBackup as deleteBackupFromStorage } from '../utils/backupStorage';
+import { nowIST, formatIST } from '../utils/time';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 interface BackupItem {
@@ -83,8 +84,8 @@ const DataBackup: React.FC = () => {
 
   // Format date
   const formatDate = (dateKey: string): string => {
-    const date = new Date(dateKey);
-    return date.toLocaleDateString('en-US', {
+    const timestamp = new Date(dateKey).getTime();
+    return formatIST(timestamp, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -105,15 +106,15 @@ const DataBackup: React.FC = () => {
     setSuccessMessage('');
 
     try {
-      const currentDate = new Date();
-      const formattedDate = currentDate.toLocaleDateString('en-US', {
+      const currentTimestamp = nowIST();
+      const formattedDate = formatIST(currentTimestamp, {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
       });
-      
+
       // For Company Admin: Use streaming endpoint (no orgId required)
       // For Platform Owner: Use streaming endpoint with orgId
       if (isCompanyAdmin) {
@@ -133,7 +134,7 @@ const DataBackup: React.FC = () => {
       } else {
         throw new Error('Unauthorized access');
       }
-      
+
       setSuccessMessage(`Backup downloaded successfully! (Date: ${formattedDate})`);
       setShowSuccessModal(true);
     } catch (err: any) {
@@ -229,12 +230,12 @@ const DataBackup: React.FC = () => {
       // For Platform Owner, pass organizationId if available
       const organizationId = isPlatformOwner && orgId ? orgId : undefined;
       await restoreData(selectedFile, organizationId);
-      
+
       setSuccessMessage('Data restored successfully.');
       setShowSuccessModal(true);
       setSelectedFile(null);
       setRestoreBackupDate(null);
-      
+
       // Refresh page after 2 seconds to show updated data
       setTimeout(() => {
         window.location.reload();
@@ -293,7 +294,7 @@ const DataBackup: React.FC = () => {
 
     try {
       await deleteBackupFromStorage(backupId);
-      
+
       // Remove from local state
       setLocalBackups(localBackups.filter(b => b.id !== backupId));
       setSuccessMessage('Backup deleted successfully!');
@@ -414,7 +415,7 @@ const DataBackup: React.FC = () => {
                 <span className="material-symbols-outlined text-red-500 mr-2">restore</span>
                 Restore Database
               </h3>
-              
+
               {/* Warning Box */}
               <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700 rounded-lg">
                 <p className="text-sm text-red-800 dark:text-red-300 flex items-start gap-2">
@@ -427,11 +428,10 @@ const DataBackup: React.FC = () => {
 
               {/* Upload Area */}
               <div
-                className={`mb-4 p-6 border-2 border-dashed rounded-lg transition-colors ${
-                  isDragging
+                className={`mb-4 p-6 border-2 border-dashed rounded-lg transition-colors ${isDragging
                     ? 'border-primary bg-primary/5 dark:bg-primary/10'
                     : 'border-border-light dark:border-border-dark hover:border-primary/50'
-                }`}
+                  }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
@@ -444,7 +444,7 @@ const DataBackup: React.FC = () => {
                   className="hidden"
                   disabled={isRestoring}
                 />
-                
+
                 {selectedFile ? (
                   <div className="text-center">
                     <div className="flex items-center justify-center gap-2 mb-2">
@@ -639,11 +639,11 @@ const DataBackup: React.FC = () => {
                 />
                 <div className="flex gap-3">
                   <button
-                  onClick={() => {
-                    setShowRestoreConfirmModal(false);
-                    setRestoreConfirmText('');
-                    setRestoreBackupDate(null);
-                  }}
+                    onClick={() => {
+                      setShowRestoreConfirmModal(false);
+                      setRestoreConfirmText('');
+                      setRestoreBackupDate(null);
+                    }}
                     className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                   >
                     Cancel

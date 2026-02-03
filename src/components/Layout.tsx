@@ -6,6 +6,7 @@ import ProfileMenu from './ProfileMenu';
 import Toast from './Toast';
 import { useAutoBackup } from '../hooks/useAutoBackup';
 import NotificationBell from './NotificationBell';
+import RequestQueueNotification from './attendance/reporting/RequestQueueNotification';
 
 const Layout: React.FC = () => {
   const { user, isSuperAdmin, isCompanyAdmin, isManager, isSessionAdmin, isPlatformOwner, isLoading } = useAuth();
@@ -35,6 +36,7 @@ const Layout: React.FC = () => {
     if (path === '/manage-staff') return 'Manage Staff';
     if (path.startsWith('/manage-users')) return 'Manage Users';
     if (path === '/backup' || path === '/data-backup') return 'Data Backup';
+    if (path === '/email-automation') return 'Email Automation';
     return 'Dashboard';
   };
 
@@ -54,7 +56,7 @@ const Layout: React.FC = () => {
     if (user?.profilePicture) {
       // Add cache-busting parameter to ensure fresh image loads
       const apiUrl = import.meta.env.VITE_API_URL || '';
-      return `${apiUrl}${user.profilePicture}?t=${Date.now()}`;
+      return `${apiUrl}${user.profilePicture}`;
     }
     return null;
   };
@@ -189,8 +191,8 @@ const Layout: React.FC = () => {
                       </li>
                     )}
 
-                    {/* Attendance Report - for Manager, SuperAdmin, and Platform Owner */}
-                    {(isSuperAdmin || isManager || isPlatformOwner) && (
+                    {/* Attendance Report - for Manager, SuperAdmin, SessionAdmin, CompanyAdmin and Platform Owner */}
+                    {(isSuperAdmin || isManager || isPlatformOwner || isSessionAdmin || isCompanyAdmin) && (
                       <li>
                         <NavLinkItem to="/reports" icon="summarize">Attendance Report</NavLinkItem>
                       </li>
@@ -215,6 +217,7 @@ const Layout: React.FC = () => {
                         <NavLinkItem to="/backup" icon="cloud_download">Data Backup</NavLinkItem>
                       </li>
                     )}
+
 
                     {/* Platform Owner Routes - Show when not on Platform pages */}
                     {isPlatformOwner && (
@@ -394,7 +397,7 @@ const Layout: React.FC = () => {
                       </li>
                     )}
 
-                    {(isSuperAdmin || isManager || isPlatformOwner) && (
+                    {(isSuperAdmin || isManager || isPlatformOwner || isSessionAdmin || isCompanyAdmin) && (
                       <li>
                         <NavLinkItem to="/reports" icon="summarize">Attendance Report</NavLinkItem>
                       </li>
@@ -417,6 +420,7 @@ const Layout: React.FC = () => {
                         <NavLinkItem to="/backup" icon="cloud_download">Data Backup</NavLinkItem>
                       </li>
                     )}
+
 
                     {/* Platform Owner Routes - Show when not on Platform pages */}
                     {isPlatformOwner && (
@@ -559,6 +563,8 @@ const Layout: React.FC = () => {
           onClose={closeToast}
         />
       )}
+      {/* Admin Request Queue Notification */}
+      <RequestQueueNotification />
     </div>
   );
 };

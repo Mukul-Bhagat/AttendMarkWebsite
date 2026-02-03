@@ -221,6 +221,20 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userInitials, userName, userR
                 View Profile
               </button>
 
+              {/* Organization Settings - for CompanyAdmin and SuperAdmin */}
+              {(user?.role === 'CompanyAdmin' || user?.role === 'SuperAdmin') && (
+                <button
+                  onClick={() => {
+                    setIsOpen(false);
+                    navigate('/organization-settings');
+                  }}
+                  className="w-full flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <span className="material-symbols-outlined mr-3 text-lg">settings</span>
+                  Organization Settings
+                </button>
+              )}
+
               <button
                 onClick={() => {
                   setIsOpen(false);

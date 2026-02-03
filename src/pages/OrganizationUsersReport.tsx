@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
+import { nowIST, toISTDateString } from '../utils/time';
 
 // ============================================
 // TYPE DEFINITIONS
@@ -49,11 +50,10 @@ const OrganizationUsersReport: React.FC = () => {
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
     // Date range (default: last 30 days)
-    const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+    const [endDate, setEndDate] = useState(toISTDateString(nowIST()));
     const [startDate, setStartDate] = useState(() => {
-        const date = new Date();
-        date.setDate(date.getDate() - 30);
-        return date.toISOString().split('T')[0];
+        const thirtyDaysAgo = nowIST() - (30 * 24 * 60 * 60 * 1000);
+        return toISTDateString(thirtyDaysAgo);
     });
 
     // Fetch data
@@ -348,8 +348,8 @@ const OrganizationUsersReport: React.FC = () => {
                                                 <div className="flex-1 bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                                                     <div
                                                         className={`h-full ${user.attendancePercentage >= 90 ? 'bg-green-500' :
-                                                                user.attendancePercentage >= 75 ? 'bg-yellow-500' :
-                                                                    'bg-red-500'
+                                                            user.attendancePercentage >= 75 ? 'bg-yellow-500' :
+                                                                'bg-red-500'
                                                             }`}
                                                         style={{ width: `${user.attendancePercentage}%` }}
                                                     ></div>

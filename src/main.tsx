@@ -20,7 +20,7 @@ if (!storedTheme || storedTheme === 'light') {
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider> {/* Wrap the App in the provider */}
         <App />
       </AuthProvider>

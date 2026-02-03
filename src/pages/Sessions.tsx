@@ -25,7 +25,7 @@ const Sessions: React.FC = () => {
   const [showPastSessions, setShowPastSessions] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
-  const [currentViewDate, setCurrentViewDate] = useState(() => new Date(toISTDateString(nowIST()))); // Initialize to IST Today
+  const [currentViewDate, setCurrentViewDate] = useState(() => new Date(nowIST())); // Initialize to IST Today
   const [currentTime, setCurrentTime] = useState(nowIST()); // Track current IST timestamp for status calculations
   const calendarRef = useRef<HTMLDivElement>(null);
 
@@ -134,15 +134,15 @@ const Sessions: React.FC = () => {
 
   const formatTitleDate = (session: ISession) => {
     try {
-      const dateStr = session.occurrenceDate || session.startDate;
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return session.name;
-      return date.toLocaleDateString('en-GB', {
+      const timestamp = getSessionStartTimeIST(session);
+      if (isNaN(timestamp)) return session.name;
+      return new Intl.DateTimeFormat('en-GB', {
         weekday: 'short',
         day: 'numeric',
         month: 'short',
-        year: 'numeric'
-      });
+        year: 'numeric',
+        timeZone: 'Asia/Kolkata',
+      }).format(timestamp);
     } catch {
       return session.name;
     }
@@ -179,7 +179,7 @@ const Sessions: React.FC = () => {
 
     // Check if displayed date matches calculation date
     // Prefer occurrenceDate as the truth
-    const displayedDateOnly = session.occurrenceDate || (typeof session.startDate === 'string' ? session.startDate.split('T')[0] : new Date(session.startDate).toISOString().split('T')[0]);
+    const displayedDateOnly = toISTDateString(sessionStartIST);
     const calculationDate = toISTDateString(sessionStartIST);
 
     if (displayedDateOnly !== calculationDate) {
@@ -206,7 +206,7 @@ const Sessions: React.FC = () => {
     // A. Date Filter (If Selected)
     if (selectedDate) {
       const targetStr = toISTDateString(selectedDate);
-      const sDate = session.occurrenceDate || (typeof session.startDate === 'string' ? session.startDate.split('T')[0] : '');
+      const sDate = toISTDateString(getSessionStartTimeIST(session));
       if (sDate !== targetStr) return false;
     }
 
@@ -222,8 +222,8 @@ const Sessions: React.FC = () => {
   // 2. Sorting (Date + Time)
   const displayedSessions = filteredSessions.sort((a, b) => {
     // Primary: Date
-    const dateA = a.occurrenceDate || (typeof a.startDate === 'string' ? a.startDate.split('T')[0] : '');
-    const dateB = b.occurrenceDate || (typeof b.startDate === 'string' ? b.startDate.split('T')[0] : '');
+    const dateA = toISTDateString(getSessionStartTimeIST(a));
+    const dateB = toISTDateString(getSessionStartTimeIST(b));
     const dateComp = dateA.localeCompare(dateB);
     if (dateComp !== 0) return dateComp;
 

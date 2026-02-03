@@ -4,6 +4,7 @@ import api from '../api';
 import { IClassBatch } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { Eye, Calendar, Users, Edit, Trash2 } from 'lucide-react';
+import { nowIST, formatIST, sessionTimeToIST, istDayStart, istDayEnd } from '../utils/time';
 
 const Classes: React.FC = () => {
   const navigate = useNavigate();
@@ -15,7 +16,7 @@ const Classes: React.FC = () => {
   const [deleteConfirmClass, setDeleteConfirmClass] = useState<IClassBatch | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showPastClasses, setShowPastClasses] = useState(false);
-  
+
   // SuperAdmin, CompanyAdmin, Manager, SessionAdmin, and Platform Owner can create classes
   const canCreateClass = isSuperAdmin || isCompanyAdmin || isManager || isSessionAdmin || isPlatformOwner;
   // Same roles can edit and delete classes
@@ -26,7 +27,7 @@ const Classes: React.FC = () => {
       try {
         const { data } = await api.get('/api/classes');
         setClasses(data || []);
-        
+
         // Fetch session counts for each class
         const counts: { [key: string]: number } = {};
         await Promise.all(
@@ -44,7 +45,7 @@ const Classes: React.FC = () => {
         console.error('[ERROR] Failed to fetch classes:', err);
         console.error('[ERROR] Response status:', err.response?.status);
         console.error('[ERROR] Response data:', err.response?.data);
-        
+
         if (err.response?.status === 401) {
           setError('You are not authorized. Please log in again.');
         } else if (err.response?.status === 403) {
@@ -88,7 +89,7 @@ const Classes: React.FC = () => {
       if (isNaN(date.getTime())) {
         return dateString;
       }
-      return date.toLocaleDateString('en-US', {
+      return formatIST(date.getTime(), {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -98,27 +99,16 @@ const Classes: React.FC = () => {
     }
   };
 
-  const formatTime = (timeString: string) => {
-    try {
-      const [hours, minutes] = timeString.split(':');
-      const hour = parseInt(hours, 10);
-      const ampm = hour >= 12 ? 'PM' : 'AM';
-      const displayHour = hour % 12 || 12;
-      return `${displayHour}:${minutes} ${ampm}`;
-    } catch {
-      return timeString;
-    }
-  };
 
   // Check if a class is past (all sessions have ended)
   // A class is only "Past" if its very last session has finished
   const isClassPast = (classBatch: IClassBatch): boolean => {
     // Use latestSessionDate if available (calculated from all sessions)
     if (classBatch.latestSessionDate) {
-      const latestSessionDate = new Date(classBatch.latestSessionDate);
-      const now = new Date();
+      const latestSessionEnd = istDayEnd(classBatch.latestSessionDate); // Assuming latestSessionDate refers to a day.
+      const now = nowIST();
       // Class is past if latestSessionDate is before now
-      return latestSessionDate < now;
+      return latestSessionEnd < now;
     }
 
     // Fallback: If latestSessionDate is not available, use firstSession logic
@@ -127,29 +117,16 @@ const Classes: React.FC = () => {
     if (!firstSession || !firstSession.endDate) {
       // If no endDate, check startDate
       if (firstSession?.startDate) {
-        const sessionDate = new Date(firstSession.startDate);
-        if (firstSession.endTime) {
-          const [hours, minutes] = firstSession.endTime.split(':');
-          sessionDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
-        } else {
-          sessionDate.setHours(23, 59, 59, 999);
-        }
-        const now = new Date();
-        return sessionDate < now;
+        const sessionEndTimestamp = sessionTimeToIST(firstSession.startDate, firstSession.endTime);
+        const now = nowIST();
+        return sessionEndTimestamp < now;
       }
       return false;
     }
-    
-    const endDate = new Date(firstSession.endDate);
-    if (firstSession.endTime) {
-      const [hours, minutes] = firstSession.endTime.split(':');
-      endDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
-    } else {
-      endDate.setHours(23, 59, 59, 999);
-    }
-    
-    const now = new Date();
-    return endDate < now;
+
+    const endDateTimestamp = sessionTimeToIST(firstSession.endDate, firstSession.endTime);
+    const now = nowIST();
+    return endDateTimestamp < now;
   };
 
   // Format frequency for badge
@@ -264,7 +241,7 @@ const Classes: React.FC = () => {
                 <div className="flex max-w-[480px] flex-col items-center gap-2 text-center">
                   <p className="text-[#181511] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em]">No Classes/Batches Available</p>
                   <p className="text-[#181511] dark:text-slate-300 text-sm font-normal leading-normal">
-                    {isEndUser 
+                    {isEndUser
                       ? "You are not currently assigned to any classes/batches. Please contact your administrator if you believe this is an error."
                       : "There are currently no classes/batches scheduled. Get started by creating a new one."}
                   </p>
@@ -301,13 +278,12 @@ const Classes: React.FC = () => {
                 .map((classBatch) => {
                   const firstSession = classBatch.firstSession;
                   const isPast = isClassPast(classBatch);
-                  
+
                   return (
                     <div
                       key={classBatch._id}
-                      className={`flex flex-col w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 shadow-sm hover:shadow-md p-4 md:p-6 transition-shadow cursor-pointer ${
-                        isPast ? 'opacity-60' : ''
-                      }`}
+                      className={`flex flex-col w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 shadow-sm hover:shadow-md p-4 md:p-6 transition-shadow cursor-pointer ${isPast ? 'opacity-60' : ''
+                        }`}
                       onClick={() => handleViewClass(classBatch)}
                     >
                       <div className="flex items-start justify-between mb-4 gap-2">
@@ -337,7 +313,7 @@ const Classes: React.FC = () => {
                           </div>
                         )}
                       </div>
-                      
+
                       {classBatch.description && (
                         <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 pt-1 break-words whitespace-normal mb-4">
                           {classBatch.description}
@@ -362,8 +338,7 @@ const Classes: React.FC = () => {
                           <div className="flex items-center text-sm">
                             <Calendar className="w-4 h-4 mr-2 text-slate-500 dark:text-slate-400 flex-shrink-0" />
                             <span className="break-words whitespace-normal">
-                              {isPast ? 'Ended' : 'Next'}: {formatDate(firstSession.startDate)}
-                              {firstSession.startTime && ` at ${formatTime(firstSession.startTime)}`}
+                              {isPast ? 'Ended' : 'Next'}: {formatIST(sessionTimeToIST(firstSession.startDate, firstSession.startTime), { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
                             </span>
                           </div>
                         )}
@@ -397,8 +372,8 @@ const Classes: React.FC = () => {
               Delete Class
             </h3>
             <p className="text-slate-700 dark:text-slate-300 mb-6">
-              Are you sure you want to delete <strong>"{deleteConfirmClass.name}"</strong>? 
-              This will permanently delete the class and <strong>all associated sessions</strong>. 
+              Are you sure you want to delete <strong>"{deleteConfirmClass.name}"</strong>?
+              This will permanently delete the class and <strong>all associated sessions</strong>.
               This action cannot be undone.
             </p>
             <div className="flex gap-3 justify-end">

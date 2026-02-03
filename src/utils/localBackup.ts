@@ -6,6 +6,7 @@
  */
 
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { nowIST, toISTDateString } from './time';
 
 interface BackupData {
   date: string; // Format: YYYY-MM-DD
@@ -52,7 +53,7 @@ const getDB = async (): Promise<IDBPDatabase<BackupDB>> => {
  * Get today's date in YYYY-MM-DD format
  */
 const getTodayDate = (): string => {
-  return new Date().toISOString().split('T')[0];
+  return toISTDateString(nowIST());
 };
 
 /**
@@ -66,7 +67,7 @@ export const saveBackup = async (date: string = getTodayDate(), data: object): P
     const backupData: BackupData = {
       date,
       data,
-      timestamp: Date.now(),
+      timestamp: nowIST(),
     };
 
     await db.put(STORE_NAME, backupData);
@@ -101,14 +102,14 @@ export const getLastBackupDate = async (): Promise<string | null> => {
   try {
     const db = await getDB();
     const index = db.transaction(STORE_NAME).store.index('by-timestamp');
-    
+
     // Get the last backup (highest timestamp)
     const cursor = await index.openCursor(null, 'prev');
-    
+
     if (cursor) {
       return cursor.value.date;
     }
-    
+
     return null;
   } catch (error) {
     console.error('[LocalBackup] Error getting last backup date:', error);

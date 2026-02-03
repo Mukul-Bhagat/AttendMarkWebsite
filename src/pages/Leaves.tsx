@@ -6,6 +6,7 @@ import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import { X, Trash2 } from 'lucide-react';
 import jsPDF from 'jspdf';
+import { nowIST, toISTDateString, formatIST, istDayStart, istDayEnd } from '../utils/time';
 
 interface ILeaveRequest {
   _id: string;
@@ -220,7 +221,7 @@ const Leaves: React.FC = () => {
 
   // Calculate used leaves for current year
   const getUsedLeaves = (type: 'Personal' | 'Casual' | 'Sick') => {
-    const currentYear = new Date().getFullYear();
+    const currentYear = new Date(nowIST()).getFullYear();
     const leaves = Array.isArray(leaveRequests) ? leaveRequests : [];
     return leaves
       .filter(leave => {
@@ -242,13 +243,16 @@ const Leaves: React.FC = () => {
       if (leave.status !== 'Pending' && leave.status !== 'Approved') return;
 
       if (leave.dates && leave.dates.length > 0) {
-        leave.dates.forEach(d => dates.push(new Date(d)));
+        leave.dates.forEach(d => dates.push(new Date(istDayStart(d))));
       } else if (leave.startDate && leave.endDate) {
-        let current = new Date(leave.startDate);
-        const end = new Date(leave.endDate);
-        while (current <= end) {
-          dates.push(new Date(current));
-          current.setDate(current.getDate() + 1);
+        let currentTimestamp = istDayStart(leave.startDate);
+        const endTimestamp = istDayEnd(leave.endDate);
+        // 24 hours in milliseconds
+        const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+        while (currentTimestamp <= endTimestamp) {
+          dates.push(new Date(currentTimestamp));
+          currentTimestamp += ONE_DAY_MS;
         }
       }
     });
@@ -312,16 +316,10 @@ const Leaves: React.FC = () => {
     try {
       setIsSubmitting(true);
 
-      // Convert selected dates to local calendar date strings (YYYY-MM-DD) so IST/UTC does not shift the day
-      const sorted = [...selectedDates].sort((a, b) => a.getTime() - b.getTime());
-      const datesArray = sorted.map(date => {
-          const d = new Date(date);
-          d.setHours(0, 0, 0, 0);
-          const y = d.getFullYear();
-          const m = String(d.getMonth() + 1).padStart(2, '0');
-          const day = String(d.getDate()).padStart(2, '0');
-          return `${y}-${m}-${day}`;
-        });
+      // Convert selected dates to ISO strings (YYYY-MM-DD format)
+      const datesArray = selectedDates
+        .sort((a, b) => a.getTime() - b.getTime())
+        .map(date => toISTDateString(istDayStart(date.toISOString())));
 
       // Create FormData for file upload
       const formDataToSend = new FormData();
@@ -413,57 +411,63 @@ const Leaves: React.FC = () => {
     }));
   };
 
-  // Format leave calendar date for display: use UTC date parts so "2026-02-09T00:00:00.000Z" shows as Feb 9 in all timezones (avoids west-of-UTC showing previous day).
+  // Format date for display
   const formatDate = (dateString: string) => {
     try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
+      const timestamp = new Date(dateString).getTime();
+      if (isNaN(timestamp)) {
         return dateString;
       }
-      const y = date.getUTCFullYear();
-      const m = date.getUTCMonth();
-      const d = date.getUTCDate();
-      return new Date(Date.UTC(y, m, d)).toLocaleDateString('en-US', {
+      return formatIST(timestamp, {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
-        timeZone: 'UTC',
       });
     } catch {
       return dateString;
     }
   };
 
-  // Format date range (use UTC date parts so calendar dates display correctly in all timezones)
+  // Format date range
+  // Format date range
   const formatDateRange = (start: string, end: string, dates?: string[]) => {
-    let startTime = new Date(start).getTime();
-    let endTime = new Date(end).getTime();
+    let startTime = istDayStart(start);
+    let endTime = istDayEnd(end);
     let isConsecutive = true;
     let count = 0;
 
     if (dates && dates.length > 0) {
-      const sorted = dates.map(d => new Date(d)).sort((a, b) => a.getTime() - b.getTime());
-      startTime = sorted[0].getTime();
-      endTime = sorted[sorted.length - 1].getTime();
+      const sorted = dates.map(d => istDayStart(d)).sort((a, b) => a - b);
+      startTime = sorted[0];
+      endTime = sorted[sorted.length - 1];
       count = sorted.length;
 
       // Check consecutive
-      const diffDays = Math.round((endTime - startTime) / (1000 * 60 * 60 * 24)) + 1;
+      const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+      const diffDays = Math.round((endTime - startTime) / ONE_DAY_MS) + 1;
       isConsecutive = diffDays === count;
     }
 
-    const startDate = formatDate(new Date(startTime).toISOString());
-    const endDate = formatDate(new Date(endTime).toISOString());
+    const startDateFormatted = formatIST(startTime, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+    const endDateFormatted = formatIST(endTime, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
 
-    if (startDate === endDate) {
-      return startDate;
+    if (startDateFormatted === endDateFormatted) {
+      return startDateFormatted;
     }
 
     if (!isConsecutive && count > 0) {
-      return `${startDate} - ${endDate} (${count} days)`;
+      return `${startDateFormatted} - ${endDateFormatted} (${count} days)`;
     }
 
-    return `${startDate} - ${endDate}`;
+    return `${startDateFormatted} - ${endDateFormatted}`;
   };
 
   // Format dates list for tooltip
@@ -679,7 +683,7 @@ const Leaves: React.FC = () => {
     // Approval Date and Approved By (only for Approved status)
     if (leave.status === 'Approved') {
       if (leave.updatedAt) {
-        const approvedDate = new Date(leave.updatedAt).toLocaleDateString('en-US', {
+        const approvedDate = formatIST(new Date(leave.updatedAt).getTime(), {
           year: 'numeric',
           month: 'long',
           day: 'numeric',
@@ -729,7 +733,7 @@ const Leaves: React.FC = () => {
       yPos += 6;
 
       if (leave.updatedAt) {
-        const rejectedDate = new Date(leave.updatedAt).toLocaleDateString();
+        const rejectedDate = formatIST(new Date(leave.updatedAt).getTime());
         pdf.text(`Rejected On: ${rejectedDate}`, margin, yPos);
         yPos += 6;
       }
@@ -742,7 +746,7 @@ const Leaves: React.FC = () => {
     }
 
     // Save PDF
-    const fileName = `Leave_Application_${leave._id}_${new Date().toISOString().split('T')[0]}.pdf`;
+    const fileName = `Leave_Application_${leave._id}_${toISTDateString(nowIST())}.pdf`;
     pdf.save(fileName);
   };
 
@@ -1153,7 +1157,7 @@ const Leaves: React.FC = () => {
                           mode="multiple"
                           selected={selectedDates}
                           onSelect={(dates) => setSelectedDates(dates || [])}
-                          disabled={[{ before: new Date() }, ...disabledDates]}
+                          disabled={[{ before: new Date(nowIST()) }, ...disabledDates]}
                           modifiers={{ used: disabledDates }}
                           modifiersClassNames={{ used: 'rdp-day_used' }}
                           title="Disabled dates include past dates and already applied leaves"
@@ -1178,7 +1182,7 @@ const Leaves: React.FC = () => {
                             key={index}
                             className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#f04129]/10 text-[#f04129] text-xs rounded-full"
                           >
-                            {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            {formatIST(date.getTime(), { month: 'short', day: 'numeric' })}
                             <button
                               type="button"
                               onClick={() => setSelectedDates(selectedDates.filter((_, i) => i !== index))}
@@ -1606,7 +1610,7 @@ const Leaves: React.FC = () => {
                     {selectedLeave.updatedAt && (
                       <p className="text-sm text-text-primary-light dark:text-text-primary-dark">
                         <span className="font-medium">Approved On:</span>{' '}
-                        {new Date(selectedLeave.updatedAt).toLocaleDateString('en-US', {
+                        {formatIST(new Date(selectedLeave.updatedAt).getTime(), {
                           year: 'numeric',
                           month: 'short',
                           day: 'numeric',
@@ -1625,7 +1629,7 @@ const Leaves: React.FC = () => {
                     {selectedLeave.updatedAt && (
                       <p className="text-sm text-text-primary-light dark:text-text-primary-dark">
                         <span className="font-medium">Rejected On:</span>{' '}
-                        {new Date(selectedLeave.updatedAt).toLocaleDateString('en-US', {
+                        {formatIST(new Date(selectedLeave.updatedAt).getTime(), {
                           year: 'numeric',
                           month: 'short',
                           day: 'numeric',
@@ -1702,7 +1706,7 @@ const Leaves: React.FC = () => {
                   Application Date
                 </h3>
                 <p className="text-sm text-text-primary-light dark:text-text-primary-dark">
-                  {new Date(selectedLeave.createdAt).toLocaleDateString('en-US', {
+                  {formatIST(new Date(selectedLeave.createdAt).getTime(), {
                     year: 'numeric',
                     month: 'short',
                     day: 'numeric',

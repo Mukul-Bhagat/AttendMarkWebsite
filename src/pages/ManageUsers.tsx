@@ -3,8 +3,6 @@ import api from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import Papa from 'papaparse';
 import EditUserModal from '../components/EditUserModal';
-import ResetDeviceModal from '../components/ResetDeviceModal';
-import SetGracePeriodModal from '../components/SetGracePeriodModal';
 
 type EndUser = {
   _id?: string;
@@ -71,14 +69,6 @@ const ManageUsers: React.FC = () => {
   // Edit user modal state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<EndUser | null>(null);
-
-  // Reset device modal state (for Company Admin / SuperAdmin)
-  const [resetDeviceModalOpen, setResetDeviceModalOpen] = useState(false);
-  const [resetDeviceTarget, setResetDeviceTarget] = useState<{ userId: string; userName: string } | null>(null);
-
-  // Grace period modal state
-  const [gracePeriodModalOpen, setGracePeriodModalOpen] = useState(false);
-  const [selectedUserForGracePeriod, setSelectedUserForGracePeriod] = useState<EndUser | null>(null);
 
   // Fetch existing EndUsers
   const fetchUsers = async () => {
@@ -182,30 +172,21 @@ const ManageUsers: React.FC = () => {
     }
   };
 
-  // Open reset device modal (Company Admin / SuperAdmin)
-  const openResetDeviceModal = (userId: string, userName: string) => {
-    setResetDeviceTarget({ userId, userName });
-    setResetDeviceModalOpen(true);
-    setError('');
-    setMessage('');
-  };
+  // Handle device reset
+  const handleResetDevice = async (userId: string) => {
+    if (!window.confirm('This will reset the device ID and send a new 6-digit password to the user\'s email. Continue?')) {
+      return;
+    }
 
-  // Handle device reset submit from modal (generate or assign password)
-  const handleResetDeviceSubmit = async (
-    payload: { type: 'generate' } | { type: 'assign'; newPassword: string }
-  ) => {
-    if (!resetDeviceTarget) return;
-    const { userId } = resetDeviceTarget;
     setResettingDevice(userId);
     setError('');
+    setMessage('');
+
     try {
-      if (payload.type === 'generate') {
-        await api.put(`/api/users/${userId}/reset-device`);
-        setMessage('Device reset successfully! A new password has been generated and emailed to the user.');
-      } else {
-        await api.put(`/api/users/${userId}/reset-device`, { newPassword: payload.newPassword });
-        setMessage('Device reset successfully! The custom password has been set and emailed to the user.');
-      }
+      await api.put(`/api/users/${userId}/reset-device`);
+
+      setMessage('Device reset successfully! A new password has been generated and emailed to the user.');
+      // Refresh the list to show updated device status
       await fetchUsers();
     } catch (err: any) {
       if (err.response?.status === 403) {
@@ -213,7 +194,6 @@ const ManageUsers: React.FC = () => {
       } else {
         setError(err.response?.data?.msg || 'Failed to reset device. Please try again.');
       }
-      throw err;
     } finally {
       setResettingDevice(null);
     }
@@ -761,7 +741,21 @@ const ManageUsers: React.FC = () => {
                                         {openMenuId === userId && (
                                           <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 z-50">
                                             <ul className="py-1">
-                                              {/* 1. Edit Profile */}
+                                              {/* 1. View Attendance */}
+                                              <li>
+                                                <button
+                                                  onClick={() => {
+                                                    setOpenMenuId(null);
+                                                    window.open(`/admin/attendance/users/${userId}`, '_blank');
+                                                  }}
+                                                  className="w-full text-left px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                                                >
+                                                  <span className="material-symbols-outlined text-lg">history</span>
+                                                  <span>View Attendance</span>
+                                                </button>
+                                              </li>
+
+                                              {/* 2. Edit Profile */}
                                               {(isSuperAdmin || isCompanyAdmin) && (
                                                 <li>
                                                   <button
@@ -794,34 +788,17 @@ const ManageUsers: React.FC = () => {
                                                 </li>
                                               )}
 
-                                              {/* 2.5. Set Grace Period */}
-                                              {(isSuperAdmin || isCompanyAdmin) && (
-                                                <li>
-                                                  <button
-                                                    onClick={() => {
-                                                      setOpenMenuId(null);
-                                                      setSelectedUserForGracePeriod(user);
-                                                      setGracePeriodModalOpen(true);
-                                                    }}
-                                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2"
-                                                  >
-                                                    <span className="material-symbols-outlined text-lg">schedule</span>
-                                                    <span>Set Grace Period</span>
-                                                  </button>
-                                                </li>
-                                              )}
-
                                               {/* 3. Reset Device ID: Show for SuperAdmin, CompanyAdmin, or Platform Owner */}
                                               {canResetDevice && (
                                                 <li>
                                                   <button
                                                     onClick={() => {
                                                       setOpenMenuId(null);
-                                                      // Platform Owner uses reset-device-only, others open reset-device modal
+                                                      // Platform Owner uses reset-device-only, others use reset-device
                                                       if (isPlatformOwner) {
                                                         handleResetDeviceOnly(userId);
                                                       } else {
-                                                        openResetDeviceModal(userId, userName);
+                                                        handleResetDevice(userId);
                                                       }
                                                     }}
                                                     disabled={isResetting}
@@ -1259,29 +1236,6 @@ const ManageUsers: React.FC = () => {
           setIsEditModalOpen(false);
           setSelectedUserForEdit(null);
         }}
-      />
-
-      {/* Reset Device Modal (Company Admin / SuperAdmin) */}
-      <ResetDeviceModal
-        isOpen={resetDeviceModalOpen}
-        onClose={() => {
-          setResetDeviceModalOpen(false);
-          setResetDeviceTarget(null);
-        }}
-        targetName={resetDeviceTarget?.userName ?? ''}
-        targetLabel="user"
-        onSubmit={handleResetDeviceSubmit}
-        isSubmitting={resettingDevice !== null}
-      />
-
-      {/* Set Grace Period Modal */}
-      <SetGracePeriodModal
-        isOpen={gracePeriodModalOpen}
-        onClose={() => {
-          setGracePeriodModalOpen(false);
-          setSelectedUserForGracePeriod(null);
-        }}
-        user={selectedUserForGracePeriod}
       />
     </div>
   );

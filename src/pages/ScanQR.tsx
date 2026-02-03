@@ -157,7 +157,7 @@ const ScanQR: React.FC = () => {
         // 1. Strict Day Check using IST utils
         // Prefer occurrenceDate -> startDate
         const dateToCheck = session.occurrenceDate || session.startDate;
-        if (!isSameDay(dateToCheck, new Date(now))) return false;
+        if (!isSameDay(dateToCheck, now)) return false;
 
         return true;
       } catch (err) {
@@ -357,7 +357,7 @@ const ScanQR: React.FC = () => {
           return;
         }
 
-        const timestamp = Date.now(); // Timestamp in milliseconds (number)
+        const timestamp = nowIST(); // Timestamp in milliseconds (number)
 
         // 4. Get the unique device ID and user agent
         const deviceId = getOrCreateDeviceId();

@@ -86,6 +86,7 @@ export interface IMyAttendanceRecord {
   _id: string;
   userId: string;
   sessionId: ISession | null; // Full session object or null if session was deleted
+  classBatchId?: { _id: string; name: string } | null; // Reference to ClassBatch
   checkInTime: string; // ISO date string
   locationVerified: boolean;
   isLate: boolean; // Whether this attendance was marked late

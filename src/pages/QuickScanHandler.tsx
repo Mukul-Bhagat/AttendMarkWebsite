@@ -4,6 +4,7 @@ import api from '../api';
 import { getOrCreateDeviceId } from '../utils/deviceId';
 import { useAuth } from '../contexts/AuthContext';
 import { FullScreenAnimation } from '../components/FullScreenAnimation';
+import { nowIST } from '../utils/time';
 
 type Status = 'loading' | 'success' | 'error';
 
@@ -65,7 +66,7 @@ const QuickScanHandler: React.FC = () => {
               const { latitude, longitude } = position.coords;
               const accuracy = position.coords.accuracy;
 
-              const timestamp = Date.now();
+              const timestamp = nowIST();
               const deviceId = getOrCreateDeviceId();
               const userAgent = navigator.userAgent;
               const token = searchParams.get('token');

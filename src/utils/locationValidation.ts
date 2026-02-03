@@ -12,6 +12,8 @@
  * All functions are FREE and don't use any paid APIs.
  */
 
+import { nowIST, sessionTimeToIST, formatIST } from './time';
+
 export interface GeolocationOptions {
   /**
    * Enable high accuracy GPS
@@ -179,7 +181,7 @@ export function getUserLocation(
         // Convert GeolocationPositionError to user-friendly, actionable error messages
         let errorMessage = 'Unable to retrieve your location.';
         let errorCode = 'UNKNOWN_ERROR';
-        
+
         switch (error.code) {
           case error.PERMISSION_DENIED:
             errorMessage = 'Location permission denied. Please enable location access in your browser settings and try again.';
@@ -266,9 +268,9 @@ export function calculateDistance(
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(toRad(lat1)) *
-      Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos(toRad(lat2)) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
@@ -377,7 +379,7 @@ export async function validateAttendance(
   // Stricter default: 30 meters for high accuracy requirement
   const maxAccuracy = options.maxAccuracy ?? 30; // Default: 30 meters (stricter)
   const accuracyCheckPassed = maxAccuracy === null || accuracy <= maxAccuracy;
-  
+
   if (!accuracyCheckPassed) {
     throw new Error(
       `GPS accuracy is too low (${Math.round(accuracy)}m). ` +
@@ -390,20 +392,20 @@ export async function validateAttendance(
   // Attendance allowed only within session time window
   let timeWindowCheckPassed: boolean | undefined = undefined;
   if (sessionLocation.timeWindow) {
-    const currentTime = options.currentTime ?? Date.now();
+    const currentTime = options.currentTime ?? nowIST();
     const { startTime, endTime, earlyArrivalMinutes = 0 } = sessionLocation.timeWindow;
-    
+
     // Parse times (handle both ISO strings and timestamps)
-    const startTimestamp = typeof startTime === 'string' 
-      ? new Date(startTime).getTime() 
+    const startTimestamp = typeof startTime === 'string'
+      ? sessionTimeToIST(startTime.split('T')[0], startTime.split('T')[1]?.substring(0, 5) || '00:00')
       : startTime;
-    const endTimestamp = endTime 
-      ? (typeof endTime === 'string' ? new Date(endTime).getTime() : endTime)
+    const endTimestamp = endTime
+      ? (typeof endTime === 'string' ? sessionTimeToIST(endTime.split('T')[0], endTime.split('T')[1]?.substring(0, 5) || '23:59') : endTime)
       : null;
-    
+
     // Calculate effective start time (with early arrival allowance)
     const effectiveStartTime = startTimestamp - (earlyArrivalMinutes * 60 * 1000);
-    
+
     // Check if current time is within window
     if (currentTime < effectiveStartTime) {
       const minutesEarly = Math.ceil((effectiveStartTime - currentTime) / (60 * 1000));
@@ -412,14 +414,14 @@ export async function validateAttendance(
         `Session starts in ${minutesEarly} minute${minutesEarly !== 1 ? 's' : ''}.`
       );
     }
-    
+
     if (endTimestamp && currentTime > endTimestamp) {
       throw new Error(
         `Attendance window has closed. ` +
-        `Session ended at ${new Date(endTimestamp).toLocaleTimeString()}.`
+        `Session ended at ${formatIST(endTimestamp, { timeStyle: 'short' })}.`
       );
     }
-    
+
     timeWindowCheckPassed = true;
   }
 
@@ -454,7 +456,7 @@ export async function validateAttendance(
       latitude: userLat,
       longitude: userLng,
     },
-    timestamp: Date.now(),
+    timestamp: nowIST(),
     validationDetails: {
       accuracyCheckPassed,
       distanceCheckPassed,

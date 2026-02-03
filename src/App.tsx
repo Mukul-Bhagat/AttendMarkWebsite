@@ -24,6 +24,8 @@ import PlatformDashboard from './pages/PlatformDashboard';
 import PlatformAuditLogs from './pages/PlatformAuditLogs';
 import AdminNotifications from './pages/AdminNotifications';
 import DataBackup from './pages/DataBackup';
+import EmailAutomationSettings from './pages/EmailAutomationSettings';
+import OrganizationSettings from './pages/OrganizationSettings';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
 import Layout from './components/Layout';
@@ -125,6 +127,8 @@ function App() {
             <Route path="/my-attendance" element={<MyAttendance />} />
             <Route path="/my-sessions" element={<MySessions />} />
             <Route path="/leaves" element={<Leaves />} />
+            {/* Organization Settings - For CompanyAdmin and SuperAdmin */}
+            <Route path="/organization-settings" element={<OrganizationSettings />} />
           </Route>
           {/* Deep Link Attendance - No Layout wrapper (full page) */}
           <Route path="/scan/:sessionId" element={<QuickScanHandler />} />
@@ -167,10 +171,11 @@ function App() {
 
         {/* Routes restricted to Manager, SuperAdmin, and Platform Owner */}
         <Route
-          element={<ProtectedRoute allowedRoles={['Manager', 'SuperAdmin', 'PLATFORM_OWNER']} />}
+          element={<ProtectedRoute allowedRoles={['Manager', 'SuperAdmin', 'PLATFORM_OWNER', 'SessionAdmin', 'CompanyAdmin']} />}
         >
           <Route element={<Layout />}>
             <Route path="/reports" element={<AttendanceReport />} />
+            <Route path="/admin/attendance/users/:userId" element={<MyAttendance />} />
           </Route>
         </Route>
 
@@ -209,6 +214,7 @@ function App() {
           <Route element={<Layout />}>
             <Route path="/backup" element={<DataBackup />} />
             <Route path="/data-backup" element={<DataBackup />} /> {/* Keep for backward compatibility */}
+            <Route path="/email-automation" element={<EmailAutomationSettings />} />
           </Route>
         </Route>
       </Routes>

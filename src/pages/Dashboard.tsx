@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import { ISession } from '../types';
+import { nowIST, formatIST, sessionTimeToIST, istDayStart, istDayEnd } from '../utils/time';
 
 const Dashboard: React.FC = () => {
   const { user, isEndUser, isPlatformOwner } = useAuth();
@@ -40,28 +41,21 @@ const Dashboard: React.FC = () => {
           const { data: sessions } = await api.get('/api/sessions');
           if (sessions && Array.isArray(sessions)) {
             // Filter for upcoming sessions (startDate is in the future or today)
-            const now = new Date();
+            const now = nowIST();
             const upcoming = sessions
               .filter((session: ISession) => {
-                const sessionDate = new Date(session.startDate);
-                // Set time to startTime for comparison
-                const [hours, minutes] = session.startTime.split(':');
-                sessionDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+                const sessionDate = sessionTimeToIST(session.startDate, session.startTime);
                 return sessionDate >= now;
               })
               .sort((a: ISession, b: ISession) => {
-                const dateA = new Date(a.startDate);
-                const [hoursA, minutesA] = a.startTime.split(':');
-                dateA.setHours(parseInt(hoursA), parseInt(minutesA), 0, 0);
-                const dateB = new Date(b.startDate);
-                const [hoursB, minutesB] = b.startTime.split(':');
-                dateB.setHours(parseInt(hoursB), parseInt(minutesB), 0, 0);
-                return dateA.getTime() - dateB.getTime();
+                const dateA = sessionTimeToIST(a.startDate, a.startTime);
+                const dateB = sessionTimeToIST(b.startDate, b.startTime);
+                return dateA - dateB;
               })
               .slice(0, 3); // Get top 3 upcoming sessions
-            
+
             setUpcomingSessions(upcoming);
-            
+
           }
         } catch (sessionErr) {
           console.error('Failed to fetch sessions:', sessionErr);
@@ -80,21 +74,19 @@ const Dashboard: React.FC = () => {
 
   const formatSessionDate = (dateString: string, timeString: string) => {
     try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
+      const sessionTimestamp = sessionTimeToIST(dateString, timeString);
+      if (isNaN(sessionTimestamp)) {
         return dateString;
       }
-      const [hours, minutes] = timeString.split(':');
-      const hour = parseInt(hours, 10);
-      const ampm = hour >= 12 ? 'PM' : 'AM';
-      const displayHour = hour % 12 || 12;
-      const formattedTime = `${displayHour}:${minutes} ${ampm}`;
-      
-      return date.toLocaleDateString('en-US', {
+      // formatIST handles both date and time formatting based on options
+      return formatIST(sessionTimestamp, {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
-      }) + ` at ${formattedTime}`;
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
     } catch {
       return dateString;
     }
@@ -103,11 +95,11 @@ const Dashboard: React.FC = () => {
   // Format date for leave display (MMM dd format)
   const formatLeaveDate = (dateString: string) => {
     try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
+      const timestamp = new Date(dateString).getTime();
+      if (isNaN(timestamp)) {
         return dateString;
       }
-      return date.toLocaleDateString('en-US', {
+      return formatIST(timestamp, {
         month: 'short',
         day: 'numeric',
       });
@@ -120,34 +112,38 @@ const Dashboard: React.FC = () => {
   const formatLeaveDateRange = (startDate: string, endDate: string, dates?: string[]) => {
     // If dates array exists and has multiple non-consecutive dates, show count
     if (dates && dates.length > 0) {
-      const sortedDates = dates.sort();
-      const start = formatLeaveDate(sortedDates[0]);
-      const end = formatLeaveDate(sortedDates[sortedDates.length - 1]);
-      
+      const sortedTimestamps = dates.map(d => istDayStart(d)).sort((a, b) => a - b);
+      const startTimestamp = sortedTimestamps[0];
+      const endTimestamp = sortedTimestamps[sortedTimestamps.length - 1];
+
+      const startFormatted = formatLeaveDate(new Date(startTimestamp).toISOString());
+      const endFormatted = formatLeaveDate(new Date(endTimestamp).toISOString());
+
       // Check if dates are consecutive
-      const isConsecutive = dates.length === 1 || 
-        (new Date(sortedDates[sortedDates.length - 1]).getTime() - new Date(sortedDates[0]).getTime()) === 
-        ((dates.length - 1) * 24 * 60 * 60 * 1000);
-      
+      const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+      const isConsecutive = dates.length === 1 ||
+        (endTimestamp - startTimestamp) ===
+        ((dates.length - 1) * ONE_DAY_MS);
+
       if (isConsecutive) {
         // Consecutive dates - show range
-        if (start === end) {
-          return start;
+        if (startFormatted === endFormatted) {
+          return startFormatted;
         }
-        return `${start} - ${end}`;
+        return `${startFormatted} - ${endFormatted}`;
       } else {
         // Non-consecutive dates - show range with count
-        return `${start} - ${end} (${dates.length} days)`;
+        return `${startFormatted} - ${endFormatted} (${dates.length} days)`;
       }
     }
-    
+
     // Fallback to start/end date range
-    const start = formatLeaveDate(startDate);
-    const end = formatLeaveDate(endDate);
-    if (start === end) {
-      return start;
+    const startFormatted = formatLeaveDate(startDate);
+    const endFormatted = formatLeaveDate(endDate);
+    if (startFormatted === endFormatted) {
+      return startFormatted;
     }
-    return `${start} - ${end}`;
+    return `${startFormatted} - ${endFormatted}`;
   };
 
   if (isLoading) {
@@ -270,8 +266,8 @@ const Dashboard: React.FC = () => {
                       </div>
                       <div>
                         <p className="font-semibold text-text-primary-light dark:text-text-primary-dark">
-                          {session.classBatchId && typeof session.classBatchId === 'object' 
-                            ? session.classBatchId.name 
+                          {session.classBatchId && typeof session.classBatchId === 'object'
+                            ? session.classBatchId.name
                             : session.name}
                         </p>
                         <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark">

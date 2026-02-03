@@ -292,8 +292,8 @@ export function isSessionCancelled(
  * Accepts Date objects or ISO strings, converts to timestamps
  */
 export function isSameDay(d1: Date | string, d2: Date | string): boolean {
-    const t1 = typeof d1 === 'string' ? new Date(d1).getTime() : d1.getTime();
-    const t2 = typeof d2 === 'string' ? new Date(d2).getTime() : d2.getTime();
+    const t1 = typeof d1 === 'string' ? istDayStart(d1) : istDayStart(d1.toISOString());
+    const t2 = typeof d2 === 'string' ? istDayStart(d2) : istDayStart(d2.toISOString());
 
     return isSameISTDay(t1, t2);
 }

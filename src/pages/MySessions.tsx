@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import { ISession } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { formatIST } from '../utils/time';
 
 const MySessions: React.FC = () => {
   const navigate = useNavigate();
@@ -17,10 +18,10 @@ const MySessions: React.FC = () => {
         const { data } = await api.get('/api/sessions');
         // Filter sessions to only show those assigned to the current user (for End Users)
         const allSessions = data || [];
-        const filteredSessions = user?.role === 'EndUser' 
-          ? allSessions.filter((session: ISession) => 
-              session.assignedUsers?.some(assignedUser => assignedUser.userId === user?.id)
-            )
+        const filteredSessions = user?.role === 'EndUser'
+          ? allSessions.filter((session: ISession) =>
+            session.assignedUsers?.some(assignedUser => assignedUser.userId === user?.id)
+          )
           : allSessions;
         setSessions(filteredSessions);
       } catch (err: any) {
@@ -44,7 +45,7 @@ const MySessions: React.FC = () => {
       if (isNaN(date.getTime())) {
         return dateString;
       }
-      return date.toLocaleDateString('en-US', {
+      return formatIST(date.getTime(), {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -150,8 +151,8 @@ const MySessions: React.FC = () => {
                 <div className="flex max-w-[480px] flex-col items-center gap-2 text-center">
                   <p className="text-[#181511] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em]">No Classes/Batches Available</p>
                   <p className="text-[#181511] dark:text-slate-300 text-sm font-normal leading-normal">
-                    {user?.role === 'EndUser' 
-                      ? 'You have no classes/batches assigned to you yet.' 
+                    {user?.role === 'EndUser'
+                      ? 'You have no classes/batches assigned to you yet.'
                       : 'There are currently no classes/batches scheduled.'}
                   </p>
                 </div>

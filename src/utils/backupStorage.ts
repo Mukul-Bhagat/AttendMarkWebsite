@@ -7,6 +7,7 @@
 const DB_NAME = 'AttendMarkBackups';
 const DB_VERSION = 1;
 const STORE_NAME = 'attendmark-backups';
+import { nowIST, toISTDateString } from './time';
 
 interface BackupSnapshot {
   id: string; // Composite key: `${orgId}_${dateKey}`
@@ -32,7 +33,7 @@ const openDB = (): Promise<IDBDatabase> => {
 
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
-      
+
       // Create object store if it doesn't exist
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         const objectStore = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
@@ -48,8 +49,7 @@ const openDB = (): Promise<IDBDatabase> => {
  * Get today's date key in YYYY-MM-DD format
  */
 const getTodayDateKey = (): string => {
-  const today = new Date();
-  return today.toISOString().split('T')[0];
+  return toISTDateString(nowIST());
 };
 
 /**
@@ -64,7 +64,7 @@ export const saveBackup = async (orgId: string, blob: Blob): Promise<void> => {
     const store = transaction.objectStore(STORE_NAME);
 
     const dateKey = getTodayDateKey();
-    const timestamp = Date.now();
+    const timestamp = nowIST();
     const id = `${orgId}_${dateKey}`; // Composite key
 
     const snapshot: BackupSnapshot = {

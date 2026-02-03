@@ -5,6 +5,7 @@ import { ISession } from '../types';
 import { QRCodeSVG } from 'qrcode.react';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { formatIST } from '../utils/time';
 
 const SessionDetails: React.FC = () => {
   const [session, setSession] = useState<ISession | null>(null);
@@ -241,10 +242,11 @@ const SessionDetails: React.FC = () => {
       if (isNaN(date.getTime())) {
         return dateString; // Return original if invalid
       }
-      return date.toLocaleDateString('en-US', {
+      return formatIST(date.getTime(), {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
+        timeZone: 'Asia/Kolkata',
       });
     } catch {
       return dateString; // Return original if error

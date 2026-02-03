@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api';
+import { formatIST } from '../utils/time';
 
 interface Organization {
   orgName: string;
@@ -11,8 +12,8 @@ interface Organization {
 }
 
 const Profile: React.FC = () => {
-  const { user, refetchUser, isSuperAdmin, switchOrganization } = useAuth();
-  const [activeTab, setActiveTab] = useState<'personal' | 'preferences' | 'organization'>('personal');
+  const { user, refetchUser, switchOrganization } = useAuth();
+  const [activeTab, setActiveTab] = useState<'personal' | 'preferences'>('personal');
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -38,17 +39,7 @@ const Profile: React.FC = () => {
     darkMode: localStorage.getItem('theme') === 'dark',
   });
 
-  // Organization Settings State
-  const [organizationSettings, setOrganizationSettings] = useState({
-    defaultGracePeriod: 60,
-    lateAttendanceLimit: 30,
-    isStrictAttendance: false,
-    yearlyQuotaPL: 12,
-    yearlyQuotaCL: 12,
-    yearlyQuotaSL: 10,
-  });
-  const [isLoadingSettings, setIsLoadingSettings] = useState(false);
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
 
   // Fetch user's organizations when modal opens
   useEffect(() => {
@@ -81,59 +72,7 @@ const Profile: React.FC = () => {
     }
   };
 
-  // Fetch organization settings on mount (if SuperAdmin)
-  useEffect(() => {
-    if (isSuperAdmin) {
-      const fetchOrganizationSettings = async () => {
-        setIsLoadingSettings(true);
-        try {
-          const { data } = await api.get('/api/organization/settings');
-          setOrganizationSettings({
-            defaultGracePeriod: data.defaultGracePeriod || 60,
-            lateAttendanceLimit: data.lateAttendanceLimit || 30,
-            isStrictAttendance: data.isStrictAttendance || false,
-            yearlyQuotaPL: data.yearlyQuotaPL || 12,
-            yearlyQuotaCL: data.yearlyQuotaCL || 12,
-            yearlyQuotaSL: data.yearlyQuotaSL || 10,
-          });
-        } catch (err: any) {
-          console.error('Failed to fetch organization settings:', err);
-          // Use default value if fetch fails
-        } finally {
-          setIsLoadingSettings(false);
-        }
-      };
-      fetchOrganizationSettings();
-    }
-  }, [isSuperAdmin]);
 
-  // Handle organization settings update
-  const handleOrganizationSettingsSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSavingSettings(true);
-    setMessage(null);
-
-    try {
-      await api.put('/api/organization/settings', {
-        defaultGracePeriod: organizationSettings.defaultGracePeriod,
-        lateAttendanceLimit: organizationSettings.lateAttendanceLimit,
-        isStrictAttendance: organizationSettings.isStrictAttendance,
-        yearlyQuotaPL: organizationSettings.yearlyQuotaPL,
-        yearlyQuotaCL: organizationSettings.yearlyQuotaCL,
-        yearlyQuotaSL: organizationSettings.yearlyQuotaSL,
-      });
-
-      setMessage({ type: 'success', text: 'Organization settings updated successfully!' });
-      setTimeout(() => setMessage(null), 3000);
-    } catch (err: any) {
-      setMessage({
-        type: 'error',
-        text: err.response?.data?.msg || 'Failed to update organization settings',
-      });
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
 
   // Update form when user changes
   useEffect(() => {
@@ -298,7 +237,7 @@ const Profile: React.FC = () => {
   const getJoinedDate = () => {
     if (!user?.createdAt) return 'N/A';
     try {
-      return new Date(user.createdAt).toLocaleDateString('en-US', {
+      return formatIST(new Date(user.createdAt).getTime(), {
         month: 'long',
         year: 'numeric',
       });
@@ -350,7 +289,7 @@ const Profile: React.FC = () => {
                 {user.profilePicture && user.profilePicture.trim() !== '' ? (
                   <img
                     key={user.profilePicture} // Force re-render when profile picture changes
-                    src={`${import.meta.env.VITE_API_URL || ''}${user.profilePicture}?t=${Date.now()}`}
+                    src={`${import.meta.env.VITE_API_URL || ''}${user.profilePicture}`}
                     alt="Profile"
                     className="w-32 h-32 rounded-full object-cover border-4 border-[#f04129]/20"
                     onError={(e) => {
@@ -455,17 +394,6 @@ const Profile: React.FC = () => {
               >
                 Preferences
               </button>
-              {isSuperAdmin && (
-                <button
-                  onClick={() => setActiveTab('organization')}
-                  className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${activeTab === 'organization'
-                    ? 'text-[#f04129] border-b-2 border-[#f04129]'
-                    : 'text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark'
-                    }`}
-                >
-                  Organization Settings
-                </button>
-              )}
             </div>
 
             {/* Tab Content */}
@@ -656,162 +584,6 @@ const Profile: React.FC = () => {
                     </button>
                   </div>
                 </div>
-              )}
-
-              {/* Organization Settings Tab */}
-              {activeTab === 'organization' && isSuperAdmin && (
-                <form onSubmit={handleOrganizationSettingsSubmit} className="space-y-6">
-                  {isLoadingSettings ? (
-                    <div className="flex items-center justify-center py-8">
-                      <svg className="animate-spin h-6 w-6 text-[#f04129]" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
-                      </svg>
-                    </div>
-                  ) : (
-                    <>
-                      <div>
-                        <label className="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2">
-                          Default Grace Period (Minutes)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          max="180"
-                          step="1"
-                          value={organizationSettings.defaultGracePeriod}
-                          onChange={(e) => setOrganizationSettings({
-                            ...organizationSettings,
-                            defaultGracePeriod: Math.min(180, Math.max(0, parseInt(e.target.value) || 0)),
-                          })}
-                          className="w-full px-4 py-2 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-slate-900 text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-[#f04129]"
-                          required
-                        />
-                        <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-2">
-                          Organization-wide default grace period for late attendance (0-180 minutes). Classes and individual users can override this setting.
-                        </p>
-                      </div>
-
-                      {/* Strict Attendance Mode Toggle */}
-                      <div className="flex items-center justify-between p-4 rounded-lg border border-border-light dark:border-border-dark">
-                        <div className="flex items-center gap-3">
-                          <span className="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark">lock</span>
-                          <div>
-                            <p className="text-sm font-medium text-text-primary-light dark:text-text-primary-dark">
-                              Strict Attendance Enforcement
-                            </p>
-                            <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
-                              If enabled, users will be BLOCKED from marking attendance after the grace period. If disabled (Default), they can still mark attendance but will be flagged as 'Late'.
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setOrganizationSettings({
-                            ...organizationSettings,
-                            isStrictAttendance: !organizationSettings.isStrictAttendance,
-                          })}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${organizationSettings.isStrictAttendance ? 'bg-[#f04129]' : 'bg-gray-300 dark:bg-gray-600'
-                            }`}
-                        >
-                          <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${organizationSettings.isStrictAttendance ? 'translate-x-6' : 'translate-x-1'
-                              }`}
-                          />
-                        </button>
-                      </div>
-
-                      {/* Annual Leave Quotas Section */}
-                      <div className="pt-6 border-t border-border-light dark:border-border-dark">
-                        <h3 className="text-lg font-semibold text-text-primary-light dark:text-text-primary-dark mb-4">
-                          Annual Leave Quotas
-                        </h3>
-                        <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark mb-6">
-                          Set the maximum number of leave days allowed per year for each leave type.
-                        </p>
-
-                        <div className="space-y-4">
-                          {/* Personal Leave */}
-                          <div>
-                            <label className="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2">
-                              Personal Leave (Days/Year)
-                            </label>
-                            <input
-                              type="number"
-                              min="0"
-                              step="1"
-                              value={organizationSettings.yearlyQuotaPL}
-                              onChange={(e) => setOrganizationSettings({
-                                ...organizationSettings,
-                                yearlyQuotaPL: parseInt(e.target.value) || 0,
-                              })}
-                              className="w-full px-4 py-2 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-slate-900 text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-[#f04129]"
-                              required
-                            />
-                            <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-1">
-                              Maximum personal leave days allowed per year per employee.
-                            </p>
-                          </div>
-
-                          {/* Casual Leave */}
-                          <div>
-                            <label className="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2">
-                              Casual Leave (Days/Year)
-                            </label>
-                            <input
-                              type="number"
-                              min="0"
-                              step="1"
-                              value={organizationSettings.yearlyQuotaCL}
-                              onChange={(e) => setOrganizationSettings({
-                                ...organizationSettings,
-                                yearlyQuotaCL: parseInt(e.target.value) || 0,
-                              })}
-                              className="w-full px-4 py-2 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-slate-900 text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-[#f04129]"
-                              required
-                            />
-                            <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-1">
-                              Maximum casual leave days allowed per year per employee.
-                            </p>
-                          </div>
-
-                          {/* Sick Leave */}
-                          <div>
-                            <label className="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2">
-                              Sick Leave (Days/Year)
-                            </label>
-                            <input
-                              type="number"
-                              min="0"
-                              step="1"
-                              value={organizationSettings.yearlyQuotaSL}
-                              onChange={(e) => setOrganizationSettings({
-                                ...organizationSettings,
-                                yearlyQuotaSL: parseInt(e.target.value) || 0,
-                              })}
-                              className="w-full px-4 py-2 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-slate-900 text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-[#f04129]"
-                              required
-                            />
-                            <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-1">
-                              Maximum sick leave days allowed per year per employee.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex justify-end pt-6 border-t border-border-light dark:border-border-dark">
-                        <button
-                          type="submit"
-                          disabled={isSavingSettings}
-                          className="flex items-center gap-2 px-6 py-2 bg-[#f04129] text-white rounded-lg font-medium hover:bg-[#d63a25] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <span className="material-symbols-outlined text-lg">save</span>
-                          {isSavingSettings ? 'Saving...' : 'Save Settings'}
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </form>
               )}
             </div>
           </div>

@@ -19,9 +19,8 @@ const DISPLAY_ONLY_FILES = [
     'Profile.tsx',  // User profile display
 ];
 
-// Guard flag - can be disabled in production if needed
-const ENABLE_GUARDS = import.meta.env.MODE !== 'production' ||
-    import.meta.env.VITE_ENABLE_TIME_GUARDS === 'true';
+// Guard flag - respects the environment variable
+const ENABLE_GUARDS = import.meta.env.VITE_ENABLE_TIME_GUARDS === 'true';
 
 /**
  * Intercept Date constructor
@@ -214,16 +213,18 @@ export function disableTimeGuards() {
     // For production use, this would need a more sophisticated approach
 }
 
-console.log(
-    '%c📋 TIME ARCHITECTURE FREEZE',
-    'background: #ffa502; color: white; padding: 4px 8px; border-radius: 3px; font-weight: bold;',
-    '\n\n🚫 Feature Development Frozen',
-    '\n\n✓ Runtime guards active',
-    '\n✓ Console warnings for Date usage',
-    '\n✓ Errors for timezone access',
-    '\n\nNext: Wait for architecture approval before refactoring',
-    '\n\n📖 See TIME_ARCHITECTURE.md for full plan'
-);
+if (ENABLE_GUARDS) {
+    console.log(
+        '%c📋 TIME ARCHITECTURE FREEZE',
+        'background: #ffa502; color: white; padding: 4px 8px; border-radius: 3px; font-weight: bold;',
+        '\n\n🚫 Feature Development Frozen',
+        '\n\n✓ Runtime guards active',
+        '\n\n✓ Console warnings for Date usage',
+        '\n✓ Errors for timezone access',
+        '\n\nNext: Wait for architecture approval before refactoring',
+        '\n\n📖 See TIME_ARCHITECTURE.md for full plan'
+    );
+}
 
 export default {
     TIME_GUARDS_ENABLED,

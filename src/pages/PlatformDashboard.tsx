@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { formatIST } from '../utils/time';
 
 interface Organization {
   id: string;
@@ -106,7 +107,7 @@ const PlatformDashboard: React.FC = () => {
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', {
+      return formatIST(date.getTime(), {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -216,16 +217,16 @@ const PlatformDashboard: React.FC = () => {
                     key={org.id}
                     onClick={() => handleOrganizationClick(org)}
                     className={`bg-surface-light dark:bg-surface-dark rounded-lg border p-6 cursor-pointer transition-all duration-200 group ${isSuspended
-                        ? 'border-red-500 dark:border-red-600 opacity-75 hover:opacity-90'
-                        : 'border-border-light dark:border-border-dark hover:shadow-lg hover:border-primary'
+                      ? 'border-red-500 dark:border-red-600 opacity-75 hover:opacity-90'
+                      : 'border-border-light dark:border-border-dark hover:shadow-lg hover:border-primary'
                       }`}
                   >
                     {/* Organization Name and Status Toggle */}
                     <div className="flex items-start justify-between mb-6">
                       <div className="flex-1">
                         <h3 className={`text-2xl font-bold group-hover:text-primary transition-colors ${isSuspended
-                            ? 'text-gray-500 dark:text-gray-400'
-                            : 'text-text-primary-light dark:text-text-primary-dark'
+                          ? 'text-gray-500 dark:text-gray-400'
+                          : 'text-text-primary-light dark:text-text-primary-dark'
                           }`}>
                           {org.name}
                         </h3>
@@ -286,8 +287,8 @@ const PlatformDashboard: React.FC = () => {
                       <div className="ml-6">
                         <span
                           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${org.status === 'ACTIVE'
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                              : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
                             }`}
                         >
                           {org.status}
@@ -304,8 +305,8 @@ const PlatformDashboard: React.FC = () => {
                       <div className="ml-6">
                         <span
                           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${org.subscriptionStatus === 'Active'
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                              : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                            : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
                             }`}
                         >
                           {org.subscriptionStatus}
