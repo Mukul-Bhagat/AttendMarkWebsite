@@ -51,6 +51,7 @@ const CreateSession: React.FC = () => {
     radius: 100,
     weeklyDays: [] as string[],
     sessionAdmin: '', // Only for SuperAdmin
+    gracePeriod: 15, // Default 15 minutes
   });
 
   // Custom dates for Random frequency
@@ -285,6 +286,7 @@ const CreateSession: React.FC = () => {
           sessionAdmin: isSuperAdmin && formData.sessionAdmin && formData.sessionAdmin !== '' && formData.sessionAdmin !== 'none'
             ? formData.sessionAdmin  // Send only ID
             : null,  // Send null when no admin selected
+          gracePeriod: formData.gracePeriod,
         };
 
         const { data } = await api.post('/api/classes', classBatchData);
@@ -640,6 +642,35 @@ const CreateSession: React.FC = () => {
                   </p>
                 )}
               </label>
+
+              {/* Grace Period Input - Only for new classes */}
+              {isCreatingClass && (
+                <label className="flex flex-col">
+                  <div className="flex items-center gap-2 pb-2">
+                    <p className="text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">
+                      Grace Period (Minutes)
+                    </p>
+                    <div className="group relative">
+                      <span className="material-symbols-outlined text-sm text-slate-400 cursor-help">help</span>
+                      <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-48 p-2 bg-slate-800 text-white text-xs rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 text-center">
+                        Allow attendance marking after start time for this duration.
+                      </div>
+                    </div>
+                  </div>
+                  <input
+                    className="form-input w-full rounded-lg border border-[#e6e2db] bg-white p-3 text-[#181511] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                    name="gracePeriod"
+                    type="number"
+                    min="0"
+                    max="180"
+                    value={formData.gracePeriod}
+                    onChange={handleChange}
+                  />
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Typically 15 minutes. Set to 0 for no grace period.
+                  </p>
+                </label>
+              )}
               {formData.frequency === 'Weekly' && (
                 <div>
                   <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Repeat On</p>

@@ -51,20 +51,43 @@ const SetGracePeriodModal: React.FC<SetGracePeriodModalProps> = ({ isOpen, onClo
     }, [isOpen, user]);
 
     const fetchUserClasses = async () => {
-        if (!user) return;
+        if (!user) {
+            console.log('[SetGracePeriodModal] No user provided');
+            return;
+        }
+
         const userId = user._id || user.id;
-        if (!userId) return;
+        console.log('[SetGracePeriodModal] Fetching for user:', { userId, user });
+
+        if (!userId) {
+            console.error('[SetGracePeriodModal] No user ID found in user object:', user);
+            return;
+        }
 
         setLoading(true);
         try {
-            // Get user's class memberships
-            const membershipRes = await api.get(`/api/membership/${userId}/memberships`);
+            // Get user's classes (memberships + session assignments)
+            const membershipUrl = `/api/grace-period/${userId}/user-classes`;
+            console.log('[SetGracePeriodModal] Fetching user classes from:', membershipUrl);
+
+            const membershipRes = await api.get(membershipUrl);
+            console.log('[SetGracePeriodModal] Classes response:', membershipRes.data);
+
             const memberships = membershipRes.data.memberships || [];
+            console.log('[SetGracePeriodModal] Parsed memberships count:', memberships.length);
+            console.log('[SetGracePeriodModal] Memberships:', memberships);
+
             setUserClasses(memberships);
 
             // Get current grace periods for all classes
-            const gpRes = await api.get(`/api/grace-period/${userId}/grace-periods`);
+            const gpUrl = `/api/grace-period/${userId}/grace-periods`;
+            console.log('[SetGracePeriodModal] Fetching grace periods from:', gpUrl);
+
+            const gpRes = await api.get(gpUrl);
+            console.log('[SetGracePeriodModal] Grace period response:', gpRes.data);
+
             const gpData = gpRes.data.gracePeriods || [];
+            console.log('[SetGracePeriodModal] Grace periods count:', gpData.length);
 
             setGracePeriodInfo(gpData);
 
@@ -79,9 +102,23 @@ const SetGracePeriodModal: React.FC<SetGracePeriodModalProps> = ({ isOpen, onClo
 
             setGracePeriods(gpMap);
             setHasOverride(overrideMap);
+
+            console.log('[SetGracePeriodModal] Final state:', {
+                userClassesCount: memberships.length,
+                gracePeriods: gpMap,
+                hasOverride: overrideMap
+            });
         } catch (err: any) {
-            console.error('Error fetching grace periods:', err);
-            alert(err.response?.data?.msg || 'Failed to load grace period data');
+            console.error('[SetGracePeriodModal] Error fetching data:', err);
+            console.error('[SetGracePeriodModal] Error response:', err.response);
+            console.error('[SetGracePeriodModal] Error details:', {
+                status: err.response?.status,
+                data: err.response?.data,
+                message: err.message
+            });
+
+            const errorMsg = err.response?.data?.msg || err.message || 'Failed to load grace period data';
+            alert(`Error loading grace period data: ${errorMsg}`);
         } finally {
             setLoading(false);
         }
@@ -190,9 +227,17 @@ const SetGracePeriodModal: React.FC<SetGracePeriodModalProps> = ({ isOpen, onClo
                             </svg>
                         </div>
                     ) : userClasses.length === 0 ? (
-                        <div className="text-center py-12">
+                        <div className="text-center py-12 px-6">
                             <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">school</span>
-                            <p className="text-gray-500 dark:text-gray-400">This user is not enrolled in any classes.</p>
+                            <p className="text-gray-900 dark:text-white font-semibold text-lg mb-2">
+                                No Active Class Enrollments
+                            </p>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
+                                This user is not currently enrolled in any active classes.
+                            </p>
+                            <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                To assign this user to a class, navigate to <strong>Classes</strong> → select a class → <strong>Members</strong> tab → <strong>Add User</strong>.
+                            </p>
                         </div>
                     ) : (
                         <div className="space-y-4">
