@@ -147,8 +147,8 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
 
             const response = await api.get(`/api/attendance/session/${sessionId}/manage`, {
                 params: {
-                    _ts: Date.now() // Force unique URL to bypass all caches
-                    // ❌ NO targetDate - removed to eliminate date ambiguity
+                    _ts: Date.now(), // Force unique URL to bypass all caches
+                    date: sessionDate // ✅ PASS DATE: Required for Recurring sessions to fetch correct day
                 },
                 headers: {
                     'Cache-Control': 'no-store, no-cache',

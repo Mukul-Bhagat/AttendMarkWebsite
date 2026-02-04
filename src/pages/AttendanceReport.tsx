@@ -210,7 +210,8 @@ const AttendanceReport: React.FC = () => {
       // Use the dedicated export endpoint which returns fresh attendance data including manual corrections
       const { data } = await api.get(`/api/attendance/session/${sessionId}/export`, {
         params: {
-          date: date, // Make sure to pass the date for potential handling of recurring sessions
+          sessionDate: date, // ✅ FIX: Send as 'sessionDate' to match backend expectation
+          date: date, // Keep 'date' for backward compatibility if needed
           format: 'CSV'
         }
       });
@@ -270,7 +271,8 @@ const AttendanceReport: React.FC = () => {
       // Use the dedicated export endpoint which returns fresh attendance data including manual corrections
       const { data } = await api.get(`/api/attendance/session/${sessionId}/export`, {
         params: {
-          date: date, // Make sure to pass the date for potential handling of recurring sessions
+          sessionDate: date, // ✅ FIX: Send as 'sessionDate' to match backend expectation
+          date: date, // Keep 'date' for backward compatibility if needed, but sessionDate is primary
           format: 'PDF'
         }
       });
@@ -876,15 +878,11 @@ const AttendanceReport: React.FC = () => {
                                     <ActionMenu
                                       onManage={() => {
                                         setViewingSessionId(log._id);
-                                        setViewingSessionDate(log.date);
+                                        setViewingSessionDate(log.dateStr || log.date);
                                       }}
                                       onView={() => {
-                                        // "View Details" just opens the exact same modal/overlay as per legacy requirement
-                                        // or could be used to fetch inline details as before.
-                                        // Based on prompt "View Details... Must navigate correctly" vs "Reuse existing...",
-                                        // we stick to opening the SessionAttendanceView as that IS the detailed view.
                                         setViewingSessionId(log._id);
-                                        setViewingSessionDate(log.date);
+                                        setViewingSessionDate(log.dateStr || log.date);
                                       }}
                                       onPdf={() => downloadSessionPDF(log._id, log.name, log.dateStr || log.date)}
                                       onCsv={() => downloadSessionCSV(log._id, log.name, log.dateStr || log.date)}
@@ -924,11 +922,11 @@ const AttendanceReport: React.FC = () => {
                               <ActionMenu
                                 onManage={() => {
                                   setViewingSessionId(log._id);
-                                  setViewingSessionDate(log.date);
+                                  setViewingSessionDate(log.dateStr || log.date); // ✅ PREFER FORMATTED DATE
                                 }}
                                 onView={() => {
                                   setViewingSessionId(log._id);
-                                  setViewingSessionDate(log.date);
+                                  setViewingSessionDate(log.dateStr || log.date); // ✅ PREFER FORMATTED DATE
                                 }}
                                 onPdf={() => downloadSessionPDF(log._id, log.name, log.dateStr || log.date)}
                                 onCsv={() => downloadSessionCSV(log._id, log.name, log.dateStr || log.date)}
