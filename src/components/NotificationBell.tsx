@@ -32,7 +32,7 @@ const NotificationBell: React.FC = () => {
     // Fetch unread count on mount and periodically
     const fetchUnreadCount = async () => {
         try {
-            const response = await api.get('/notifications/unread-count');
+            const response = await api.get('/api/notifications/unread-count');
             const newCount = response.data?.count || 0;
 
             // Trigger bell shake if count increased
@@ -52,7 +52,7 @@ const NotificationBell: React.FC = () => {
     const fetchNotifications = async () => {
         setLoading(true);
         try {
-            const response = await api.get('/notifications?limit=20');
+            const response = await api.get('/api/notifications?limit=20');
             const data = response.data?.data;
 
             // CRASH PREVENTION: Ensure we always have an array
@@ -73,7 +73,7 @@ const NotificationBell: React.FC = () => {
     // Mark notification as read
     const markAsRead = async (notificationId: string) => {
         try {
-            await api.post(`/notifications/${notificationId}/read`);
+            await api.post(`/api/notifications/${notificationId}/read`);
 
             // Update local state
             setNotifications(prev =>
