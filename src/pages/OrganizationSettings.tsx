@@ -14,6 +14,7 @@ const OrganizationSettings: React.FC = () => {
         yearlyQuotaCL: 12,
         yearlyQuotaSL: 10,
         emailEnabled: true,
+        logo: '',
     });
     const [isLoadingSettings, setIsLoadingSettings] = useState(false);
     const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -32,6 +33,7 @@ const OrganizationSettings: React.FC = () => {
                         yearlyQuotaCL: data.yearlyQuotaCL || 12,
                         yearlyQuotaSL: data.yearlyQuotaSL || 10,
                         emailEnabled: data.emailEnabled ?? true,
+                        logo: data.logo || '',
                     });
                 } catch (err: any) {
                     console.error('Failed to fetch organization settings:', err);
@@ -58,6 +60,7 @@ const OrganizationSettings: React.FC = () => {
                 yearlyQuotaCL: organizationSettings.yearlyQuotaCL,
                 yearlyQuotaSL: organizationSettings.yearlyQuotaSL,
                 emailEnabled: organizationSettings.emailEnabled,
+                logo: organizationSettings.logo,
             });
 
             setMessage({ type: 'success', text: 'Organization settings updated successfully!' });
@@ -116,6 +119,75 @@ const OrganizationSettings: React.FC = () => {
                         </div>
                     ) : (
                         <form onSubmit={handleOrganizationSettingsSubmit} className="space-y-6">
+                            {/* Organization Logo Section */}
+                            <div className="p-4 rounded-lg border border-border-light dark:border-border-dark bg-background-light/30 dark:bg-background-dark/30">
+                                <label className="block text-sm font-bold text-text-primary-light dark:text-text-primary-dark mb-4 flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-xl">image</span>
+                                    Organization Logo
+                                </label>
+                                <div className="flex flex-col md:flex-row items-center gap-6">
+                                    <div className="relative group">
+                                        <div className="w-32 h-32 rounded-2xl border-2 border-dashed border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark flex items-center justify-center overflow-hidden transition-all group-hover:border-primary">
+                                            {organizationSettings.logo ? (
+                                                <img
+                                                    src={organizationSettings.logo}
+                                                    alt="Organization Logo"
+                                                    className="w-full h-full object-contain"
+                                                />
+                                            ) : (
+                                                <div className="flex flex-col items-center text-text-secondary-light dark:text-text-secondary-dark font-medium px-4 text-center">
+                                                    <span className="material-symbols-outlined text-4xl mb-1">add_photo_alternate</span>
+                                                    <span className="text-[10px]">No Logo</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                        {organizationSettings.logo && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setOrganizationSettings({ ...organizationSettings, logo: '' })}
+                                                className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-600 transition-all opacity-0 group-hover:opacity-100"
+                                            >
+                                                <span className="material-symbols-outlined text-sm">close</span>
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="flex-1 space-y-3">
+                                        <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark max-w-sm">
+                                            Upload your organization logo to customize portals and reports. Recommended size: 512x512px (PNG/JPG).
+                                        </p>
+                                        <div className="flex items-center gap-3">
+                                            <label className="cursor-pointer px-4 py-2 bg-text-primary-light dark:bg-text-primary-dark text-white dark:text-black rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all inline-block shadow-md">
+                                                <span>{organizationSettings.logo ? 'Change Logo' : 'Choose File'}</span>
+                                                <input
+                                                    type="file"
+                                                    className="hidden"
+                                                    accept="image/*"
+                                                    onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) {
+                                                            const reader = new FileReader();
+                                                            reader.onloadend = () => {
+                                                                setOrganizationSettings({
+                                                                    ...organizationSettings,
+                                                                    logo: reader.result as string,
+                                                                });
+                                                            };
+                                                            reader.readAsDataURL(file);
+                                                        }
+                                                    }}
+                                                />
+                                            </label>
+                                            {organizationSettings.logo && (
+                                                <p className="text-[10px] text-green-600 dark:text-green-400 font-bold flex items-center gap-1 animate-pulse">
+                                                    <span className="material-symbols-outlined text-xs">check_circle</span>
+                                                    Ready to Save
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div>
                                 <label className="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2">
                                     Attendance Grace Period (Minutes)
