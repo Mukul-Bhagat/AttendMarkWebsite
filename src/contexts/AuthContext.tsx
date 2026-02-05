@@ -18,6 +18,7 @@ export interface IUser {
   organization?: string; // This is actually organizationName from backend
   organizationName?: string;
   organizationId?: string;
+  organizationLogo?: string;
   collectionPrefix?: string; // Legacy
 }
 

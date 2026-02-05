@@ -57,6 +57,10 @@ const CreateSession: React.FC = () => {
   // Custom dates for Random frequency
   const [selectedDates, setSelectedDates] = useState<Date[]>([]);
 
+  // Grace Period State (New)
+  const [useOrgGracePeriod, setUseOrgGracePeriod] = useState(true);
+  const [customGracePeriod, setCustomGracePeriod] = useState(15);
+
   const [assignedUsers, setAssignedUsers] = useState<IUser[]>([]); // Legacy: for Physical/Remote single mode
   const [physicalUsers, setPhysicalUsers] = useState<IUser[]>([]); // For Hybrid: Physical attendees
   const [remoteUsers, setRemoteUsers] = useState<IUser[]>([]); // For Hybrid: Remote attendees
@@ -286,6 +290,8 @@ const CreateSession: React.FC = () => {
           sessionAdmin: isSuperAdmin && formData.sessionAdmin && formData.sessionAdmin !== '' && formData.sessionAdmin !== 'none'
             ? formData.sessionAdmin  // Send only ID
             : null,  // Send null when no admin selected
+          useOrganizationGracePeriod: useOrgGracePeriod,
+          gracePeriod: !useOrgGracePeriod ? customGracePeriod : undefined,
         };
 
         const { data } = await api.post('/api/classes', classBatchData);
@@ -669,6 +675,62 @@ const CreateSession: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* New Section: Grace Period Settings (Only for new classes) */}
+          {isCreatingClass && (
+            <div className="flex flex-col gap-5 rounded-xl border border-[#e6e2db] bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-2xl text-[#f04129]">timer</span>
+                <h2 className="text-xl font-bold leading-tight tracking-[-0.015em] text-[#181511] dark:text-white">Attendance Grace Period</h2>
+              </div>
+
+              <div className="space-y-4">
+                <label className="flex items-center gap-3 cursor-pointer p-3 border border-[#e6e2db] dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                  <div className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={useOrgGracePeriod}
+                      onChange={(e) => setUseOrgGracePeriod(e.target.checked)}
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 dark:peer-focus:ring-orange-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-[#f04129]"></div>
+                  </div>
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-[#181511] dark:text-white">Use Organization Default</span>
+                    <p className="text-xs text-[#8a7b60] dark:text-gray-400">
+                      Use the global grace period setting defined in Organization Settings.
+                    </p>
+                  </div>
+                </label>
+
+                {!useOrgGracePeriod && (
+                  <div className="pl-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <label className="block text-sm font-medium text-[#5c5445] dark:text-slate-300 mb-2">
+                      Custom Grace Period (Minutes)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        max="180"
+                        value={customGracePeriod}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value);
+                          if (!isNaN(val) && val >= 0) setCustomGracePeriod(val);
+                        }}
+                        className="form-input w-32 rounded-lg border border-[#e6e2db] bg-white p-2 text-[#181511] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                      />
+                      <span className="text-sm text-[#8a7b60] dark:text-gray-400">minutes after session start time</span>
+                    </div>
+                    <p className="text-xs text-orange-600 dark:text-orange-400 mt-2 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">warning</span>
+                      This will override the organization default for this specific class.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Section 2: Session Mode */}
           <div className="flex flex-col gap-5 rounded-xl border border-[#e6e2db] bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">

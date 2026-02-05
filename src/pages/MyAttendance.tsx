@@ -24,7 +24,7 @@ const MyAttendance: React.FC = () => {
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
-  const { isSuperAdmin, isCompanyAdmin, isManager, isPlatformOwner, isSessionAdmin } = useAuth();
+  const { user, isSuperAdmin, isCompanyAdmin, isManager, isPlatformOwner, isSessionAdmin } = useAuth();
   const isAdmin = isSuperAdmin || isCompanyAdmin || isManager || isPlatformOwner || isSessionAdmin;
 
   const [activeTab, setActiveTab] = useState<'analytics' | 'report' | 'approval'>('analytics');
@@ -196,6 +196,8 @@ const MyAttendance: React.FC = () => {
         startDate={analyticsStartDate}
         endDate={analyticsEndDate}
         userId={userId}
+        initialOrgName={user?.organizationName}
+        initialOrgLogo={user?.organizationLogo}
       />
 
       <DownloadReportModal
@@ -204,6 +206,8 @@ const MyAttendance: React.FC = () => {
         startDate={analyticsStartDate}
         endDate={analyticsEndDate}
         userId={userId}
+        initialOrgName={user?.organizationName}
+        initialOrgLogo={user?.organizationLogo}
       />
     </div>
   );
