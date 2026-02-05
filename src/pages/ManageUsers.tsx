@@ -3,6 +3,7 @@ import api from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import Papa from 'papaparse';
 import EditUserModal from '../components/EditUserModal';
+import SetGracePeriodModal from '../components/SetGracePeriodModal';
 
 type EndUser = {
   _id?: string;
@@ -52,6 +53,10 @@ const ManageUsers: React.FC = () => {
   const [quotaForm, setQuotaForm] = useState({ pl: 12, cl: 12, sl: 10 });
   const [isSavingQuota, setIsSavingQuota] = useState(false);
   const orgDefaults = { pl: 12, cl: 12, sl: 10 };
+
+  // Grace Period Modal State
+  const [isGracePeriodModalOpen, setIsGracePeriodModalOpen] = useState(false);
+  const [selectedUserForGracePeriod, setSelectedUserForGracePeriod] = useState<EndUser | null>(null);
 
   // Bulk import state
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -788,6 +793,23 @@ const ManageUsers: React.FC = () => {
                                                 </li>
                                               )}
 
+                                              {/* Adjust Grace Period */}
+                                              {(isSuperAdmin || isCompanyAdmin) && (
+                                                <li>
+                                                  <button
+                                                    onClick={() => {
+                                                      setOpenMenuId(null);
+                                                      setSelectedUserForGracePeriod(user);
+                                                      setIsGracePeriodModalOpen(true);
+                                                    }}
+                                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                                                  >
+                                                    <span className="material-symbols-outlined text-lg">timer</span>
+                                                    <span>Adjust Grace Period</span>
+                                                  </button>
+                                                </li>
+                                              )}
+
                                               {/* 3. Reset Device ID: Show for SuperAdmin, CompanyAdmin, or Platform Owner */}
                                               {canResetDevice && (
                                                 <li>
@@ -1236,6 +1258,16 @@ const ManageUsers: React.FC = () => {
           setIsEditModalOpen(false);
           setSelectedUserForEdit(null);
         }}
+      />
+
+      {/* Grace Period Modal */}
+      <SetGracePeriodModal
+        isOpen={isGracePeriodModalOpen}
+        onClose={() => {
+          setIsGracePeriodModalOpen(false);
+          setSelectedUserForGracePeriod(null);
+        }}
+        user={selectedUserForGracePeriod}
       />
     </div>
   );

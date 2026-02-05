@@ -44,6 +44,9 @@ const SetGracePeriodModal: React.FC<SetGracePeriodModalProps> = ({ isOpen, onClo
     const [saving, setSaving] = useState<string | null>(null);
     const [gracePeriodInfo, setGracePeriodInfo] = useState<GracePeriodInfo[]>([]);
 
+    const [globalGracePeriod, setGlobalGracePeriod] = useState<number | null>(null);
+    const [hasGlobalOverride, setHasGlobalOverride] = useState(false);
+
     useEffect(() => {
         if (isOpen && user) {
             fetchUserClasses();
@@ -51,74 +54,42 @@ const SetGracePeriodModal: React.FC<SetGracePeriodModalProps> = ({ isOpen, onClo
     }, [isOpen, user]);
 
     const fetchUserClasses = async () => {
-        if (!user) {
-            console.log('[SetGracePeriodModal] No user provided');
-            return;
-        }
-
+        if (!user) return;
         const userId = user._id || user.id;
-        console.log('[SetGracePeriodModal] Fetching for user:', { userId, user });
-
-        if (!userId) {
-            console.error('[SetGracePeriodModal] No user ID found in user object:', user);
-            return;
-        }
+        if (!userId) return;
 
         setLoading(true);
         try {
-            // Get user's classes (memberships + session assignments)
-            const membershipUrl = `/api/grace-period/${userId}/user-classes`;
-            console.log('[SetGracePeriodModal] Fetching user classes from:', membershipUrl);
-
-            const membershipRes = await api.get(membershipUrl);
-            console.log('[SetGracePeriodModal] Classes response:', membershipRes.data);
-
+            // Get user's classes
+            const membershipRes = await api.get(`/api/grace-period/${userId}/user-classes`);
             const memberships = membershipRes.data.memberships || [];
-            console.log('[SetGracePeriodModal] Parsed memberships count:', memberships.length);
-            console.log('[SetGracePeriodModal] Memberships:', memberships);
-
             setUserClasses(memberships);
 
-            // Get current grace periods for all classes
-            const gpUrl = `/api/grace-period/${userId}/grace-periods`;
-            console.log('[SetGracePeriodModal] Fetching grace periods from:', gpUrl);
-
-            const gpRes = await api.get(gpUrl);
-            console.log('[SetGracePeriodModal] Grace period response:', gpRes.data);
-
+            // Get grace periods
+            const gpRes = await api.get(`/api/grace-period/${userId}/grace-periods`);
             const gpData = gpRes.data.gracePeriods || [];
-            console.log('[SetGracePeriodModal] Grace periods count:', gpData.length);
+            const globalOverride = gpRes.data.globalOverride;
 
             setGracePeriodInfo(gpData);
+            setGlobalGracePeriod(globalOverride !== undefined && globalOverride !== null ? globalOverride : null);
+            setHasGlobalOverride(globalOverride !== undefined && globalOverride !== null);
 
-            // Build grace period map and override status
+            // Build map
             const gpMap: Record<string, number> = {};
             const overrideMap: Record<string, boolean> = {};
 
             gpData.forEach((gp: GracePeriodInfo) => {
-                gpMap[gp.classId] = gp.individualOverride || gp.effectiveGracePeriod;
-                overrideMap[gp.classId] = !!gp.individualOverride;
+                gpMap[gp.classId] = gp.individualOverride !== undefined ? gp.individualOverride : gp.effectiveGracePeriod;
+                overrideMap[gp.classId] = gp.individualOverride !== undefined;
             });
 
             setGracePeriods(gpMap);
             setHasOverride(overrideMap);
 
-            console.log('[SetGracePeriodModal] Final state:', {
-                userClassesCount: memberships.length,
-                gracePeriods: gpMap,
-                hasOverride: overrideMap
-            });
         } catch (err: any) {
             console.error('[SetGracePeriodModal] Error fetching data:', err);
-            console.error('[SetGracePeriodModal] Error response:', err.response);
-            console.error('[SetGracePeriodModal] Error details:', {
-                status: err.response?.status,
-                data: err.response?.data,
-                message: err.message
-            });
-
             const errorMsg = err.response?.data?.msg || err.message || 'Failed to load grace period data';
-            alert(`Error loading grace period data: ${errorMsg}`);
+            // alert(`Error loading data: ${errorMsg}`); // Suppress alert to avoid UI clutter
         } finally {
             setLoading(false);
         }
@@ -135,15 +106,6 @@ const SetGracePeriodModal: React.FC<SetGracePeriodModalProps> = ({ isOpen, onClo
                 classBatchId,
                 gracePeriodMinutes: gracePeriods[classBatchId] || 0,
             });
-
-            // Show success message
-            const successDiv = document.createElement('div');
-            successDiv.className = 'fixed top-4 right-4 bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300 px-6 py-3 rounded-lg shadow-lg z-50';
-            successDiv.textContent = 'Grace period updated successfully';
-            document.body.appendChild(successDiv);
-            setTimeout(() => successDiv.remove(), 3000);
-
-            // Refresh data
             await fetchUserClasses();
         } catch (err: any) {
             console.error('Error saving grace period:', err);
@@ -158,26 +120,49 @@ const SetGracePeriodModal: React.FC<SetGracePeriodModalProps> = ({ isOpen, onClo
         const userId = user._id || user.id;
         if (!userId) return;
 
-        if (!window.confirm('Are you sure you want to remove this individual override? The user will inherit the class or organization default.')) {
-            return;
-        }
-
         setSaving(classBatchId);
         try {
             await api.delete(`/api/grace-period/${userId}/grace-period/${classBatchId}`);
-
-            // Show success message
-            const successDiv = document.createElement('div');
-            successDiv.className = 'fixed top-4 right-4 bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300 px-6 py-3 rounded-lg shadow-lg z-50';
-            successDiv.textContent = 'Override removed successfully';
-            document.body.appendChild(successDiv);
-            setTimeout(() => successDiv.remove(), 3000);
-
-            // Refresh data
             await fetchUserClasses();
         } catch (err: any) {
             console.error('Error removing override:', err);
             alert(err.response?.data?.msg || 'Failed to remove override');
+        } finally {
+            setSaving(null);
+        }
+    };
+
+    const handleSaveGlobalGracePeriod = async () => {
+        if (!user) return;
+        const userId = user._id || user.id;
+        if (!userId) return;
+
+        setSaving('GLOBAL');
+        try {
+            await api.post(`/api/grace-period/${userId}/set-global-grace-period`, {
+                gracePeriodMinutes: globalGracePeriod || 0,
+            });
+            await fetchUserClasses();
+        } catch (err: any) {
+            console.error('Error saving global grace period:', err);
+            alert(err.response?.data?.msg || 'Failed to update global grace period');
+        } finally {
+            setSaving(null);
+        }
+    };
+
+    const handleRemoveGlobalOverride = async () => {
+        if (!user) return;
+        const userId = user._id || user.id;
+        if (!userId) return;
+
+        setSaving('GLOBAL');
+        try {
+            await api.delete(`/api/grace-period/${userId}/global-grace-period`);
+            await fetchUserClasses();
+        } catch (err: any) {
+            console.error('Error removing global override:', err);
+            alert(err.response?.data?.msg || 'Failed to remove global override');
         } finally {
             setSaving(null);
         }
@@ -217,26 +202,64 @@ const SetGracePeriodModal: React.FC<SetGracePeriodModalProps> = ({ isOpen, onClo
                     </button>
                 </div>
 
-                {/* Content */}
+                {/* Global Override Section */}
+                <div className="p-6 border-b border-gray-200 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-900/30">
+                    <h3 className="font-semibold text-lg text-gray-900 dark:text-white mb-2">
+                        Global User Override
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                        Set a grace period that applies to ALL classes for this user, unless a specific class override is set.
+                    </p>
+                    <div className="flex items-end gap-3">
+                        <div className="flex-1 max-w-xs">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Global Grace Period (Minutes)
+                            </label>
+                            <input
+                                type="number"
+                                min="0"
+                                max="180"
+                                value={globalGracePeriod ?? 0}
+                                onChange={(e) => setGlobalGracePeriod(Math.min(180, Math.max(0, parseInt(e.target.value) || 0)))}
+                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f04129]"
+                                placeholder="Default"
+                            />
+                        </div>
+                        <button
+                            onClick={handleSaveGlobalGracePeriod}
+                            disabled={saving === 'GLOBAL'}
+                            className="px-5 py-2 bg-[#f04129] text-white rounded-lg font-medium hover:bg-[#d63a25] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                            {saving === 'GLOBAL' ? 'Saving...' : 'Save Global'}
+                        </button>
+                        {hasGlobalOverride && (
+                            <button
+                                onClick={handleRemoveGlobalOverride}
+                                disabled={saving === 'GLOBAL'}
+                                className="px-5 py-2 bg-gray-500 text-white rounded-lg font-medium hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            >
+                                Remove Global
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Class Overrides Content */}
                 <div className="flex-1 overflow-y-auto p-6">
+                    <h3 className="font-semibold text-lg text-gray-900 dark:text-white mb-4">
+                        Class Specific Overrides
+                    </h3>
                     {loading ? (
-                        <div className="flex items-center justify-center py-12">
+                        <div className="flex items-center justify-center py-8">
                             <svg className="animate-spin h-8 w-8 text-[#f04129]" fill="none" viewBox="0 0 24 24">
                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                 <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
                             </svg>
                         </div>
                     ) : userClasses.length === 0 ? (
-                        <div className="text-center py-12 px-6">
-                            <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">school</span>
-                            <p className="text-gray-900 dark:text-white font-semibold text-lg mb-2">
-                                No Active Class Enrollments
-                            </p>
-                            <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
+                        <div className="text-center py-8 px-6 bg-white dark:bg-slate-800 rounded-lg border border-dashed border-gray-300 dark:border-slate-700">
+                            <p className="text-gray-500 dark:text-gray-400 text-sm">
                                 This user is not currently enrolled in any active classes.
-                            </p>
-                            <p className="text-gray-600 dark:text-gray-400 text-sm">
-                                To assign this user to a class, navigate to <strong>Classes</strong> → select a class → <strong>Members</strong> tab → <strong>Add User</strong>.
                             </p>
                         </div>
                     ) : (
@@ -249,20 +272,20 @@ const SetGracePeriodModal: React.FC<SetGracePeriodModalProps> = ({ isOpen, onClo
                                 const source = getGracePeriodSource(classId);
 
                                 return (
-                                    <div key={membership._id} className="border border-gray-200 dark:border-slate-700 rounded-lg p-5 bg-gray-50 dark:bg-slate-900/50">
+                                    <div key={membership._id} className="border border-gray-200 dark:border-slate-700 rounded-lg p-5 bg-white dark:bg-slate-800">
                                         <div className="flex items-start justify-between mb-4">
                                             <div className="flex-1">
                                                 <h3 className="font-semibold text-lg text-gray-900 dark:text-white mb-1">
                                                     {className}
                                                 </h3>
                                                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                    Current effective: <span className="font-semibold">{currentValue} minutes</span>
+                                                    Effective: <span className="font-semibold">{currentValue} mins</span>
                                                     {' '}({source})
                                                 </p>
                                             </div>
                                             {isOverride && (
                                                 <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 text-xs font-medium rounded">
-                                                    Overridden
+                                                    Class Override
                                                 </span>
                                             )}
                                         </div>
@@ -270,7 +293,7 @@ const SetGracePeriodModal: React.FC<SetGracePeriodModalProps> = ({ isOpen, onClo
                                         <div className="flex items-end gap-3">
                                             <div className="flex-1">
                                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                                    Individual Grace Period (Minutes)
+                                                    Class Override (Minutes)
                                                 </label>
                                                 <input
                                                     type="number"
@@ -282,38 +305,24 @@ const SetGracePeriodModal: React.FC<SetGracePeriodModalProps> = ({ isOpen, onClo
                                                         [classId]: Math.min(180, Math.max(0, parseInt(e.target.value) || 0))
                                                     }))}
                                                     className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f04129]"
-                                                    placeholder="0-180"
+                                                    placeholder="Inherit"
                                                     disabled={saving === classId}
                                                 />
                                             </div>
                                             <button
                                                 onClick={() => handleSaveGracePeriod(classId)}
                                                 disabled={saving === classId}
-                                                className="px-5 py-2 bg-[#f04129] text-white rounded-lg font-medium hover:bg-[#d63a25] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                                className="px-4 py-2 bg-gray-900 dark:bg-slate-600 text-white rounded-lg font-medium hover:bg-black dark:hover:bg-slate-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                                             >
-                                                {saving === classId ? (
-                                                    <>
-                                                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                            <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
-                                                        </svg>
-                                                        Saving...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <span className="material-symbols-outlined text-lg">save</span>
-                                                        Save
-                                                    </>
-                                                )}
+                                                {saving === classId ? 'Saving...' : 'Set Override'}
                                             </button>
                                             {isOverride && (
                                                 <button
                                                     onClick={() => handleRemoveOverride(classId)}
                                                     disabled={saving === classId}
-                                                    className="px-5 py-2 bg-gray-500 text-white rounded-lg font-medium hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                                    className="px-4 py-2 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                                                 >
-                                                    <span className="material-symbols-outlined text-lg">delete</span>
-                                                    Remove
+                                                    Clear
                                                 </button>
                                             )}
                                         </div>

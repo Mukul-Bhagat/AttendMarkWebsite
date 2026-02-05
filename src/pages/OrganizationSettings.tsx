@@ -13,6 +13,7 @@ const OrganizationSettings: React.FC = () => {
         yearlyQuotaPL: 12,
         yearlyQuotaCL: 12,
         yearlyQuotaSL: 10,
+        emailEnabled: true,
     });
     const [isLoadingSettings, setIsLoadingSettings] = useState(false);
     const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -30,6 +31,7 @@ const OrganizationSettings: React.FC = () => {
                         yearlyQuotaPL: data.yearlyQuotaPL || 12,
                         yearlyQuotaCL: data.yearlyQuotaCL || 12,
                         yearlyQuotaSL: data.yearlyQuotaSL || 10,
+                        emailEnabled: data.emailEnabled ?? true,
                     });
                 } catch (err: any) {
                     console.error('Failed to fetch organization settings:', err);
@@ -55,6 +57,7 @@ const OrganizationSettings: React.FC = () => {
                 yearlyQuotaPL: organizationSettings.yearlyQuotaPL,
                 yearlyQuotaCL: organizationSettings.yearlyQuotaCL,
                 yearlyQuotaSL: organizationSettings.yearlyQuotaSL,
+                emailEnabled: organizationSettings.emailEnabled,
             });
 
             setMessage({ type: 'success', text: 'Organization settings updated successfully!' });
@@ -93,8 +96,8 @@ const OrganizationSettings: React.FC = () => {
             {message && (
                 <div
                     className={`mb-6 p-4 rounded-xl border ${message.type === 'success'
-                            ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800'
-                            : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800'
+                        ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800'
+                        : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800'
                         }`}
                 >
                     {message.text}
@@ -166,6 +169,54 @@ const OrganizationSettings: React.FC = () => {
                                     />
                                 </button>
                             </div>
+
+                            {/* Email Service Toggle - Platform Owner Only */}
+                            {isSuperAdmin && (
+                                <div className={`flex items-center justify-between p-4 rounded-lg border ${organizationSettings.emailEnabled
+                                    ? 'border-border-light dark:border-border-dark'
+                                    : 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/10'
+                                    }`}>
+                                    <div className="flex items-center gap-3">
+                                        <span className={`material-symbols-outlined ${organizationSettings.emailEnabled
+                                            ? 'text-text-secondary-light dark:text-text-secondary-dark'
+                                            : 'text-red-600 dark:text-red-400'
+                                            }`}>mail</span>
+                                        <div>
+                                            <p className={`text-sm font-medium ${organizationSettings.emailEnabled
+                                                ? 'text-text-primary-light dark:text-text-primary-dark'
+                                                : 'text-red-700 dark:text-red-300'
+                                                }`}>
+                                                Enable Email Notifications
+                                            </p>
+                                            <p className={`text-xs ${organizationSettings.emailEnabled
+                                                ? 'text-text-secondary-light dark:text-text-secondary-dark'
+                                                : 'text-red-600 dark:text-red-400'
+                                                }`}>
+                                                {organizationSettings.emailEnabled
+                                                    ? 'Authorized emails (Welcome, Leave) are sent normally. Password resets are always allowed.'
+                                                    : '⚠️ ALL standard emails are BLOCKED. Only critical security emails (Forgot Password, Device Reset) will be sent.'
+                                                }
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setOrganizationSettings({
+                                                ...organizationSettings,
+                                                emailEnabled: !organizationSettings.emailEnabled,
+                                            })
+                                        }
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${organizationSettings.emailEnabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
+                                            }`}
+                                    >
+                                        <span
+                                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${organizationSettings.emailEnabled ? 'translate-x-6' : 'translate-x-1'
+                                                }`}
+                                        />
+                                    </button>
+                                </div>
+                            )}
 
                             {/* Annual Leave Quotas Section */}
                             <div className="pt-6 border-t border-border-light dark:border-border-dark">
