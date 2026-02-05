@@ -88,7 +88,6 @@ const SetGracePeriodModal: React.FC<SetGracePeriodModalProps> = ({ isOpen, onClo
 
         } catch (err: any) {
             console.error('[SetGracePeriodModal] Error fetching data:', err);
-            const errorMsg = err.response?.data?.msg || err.message || 'Failed to load grace period data';
             // alert(`Error loading data: ${errorMsg}`); // Suppress alert to avoid UI clutter
         } finally {
             setLoading(false);
