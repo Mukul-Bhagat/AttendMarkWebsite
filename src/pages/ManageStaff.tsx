@@ -406,7 +406,7 @@ const ManageStaff: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-4">
               {/* Create Staff Form */}
               <div className="lg:col-span-1 bg-white dark:bg-slate-800 dark:border dark:border-slate-700 rounded-xl shadow-sm p-6 sm:p-8 lg:sticky lg:top-8 lg:self-start">
-                <div className="flex items-center justify-between pb-5">
+                <div className="flex items-center justify-between pb-5 flex-wrap gap-4">
                   <h2 className="text-[#181511] dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] flex items-center">
                     <span className="material-symbols-outlined mr-3 text-[#f04129]" style={{ fontSize: '28px' }}>manage_accounts</span>
                     Add Staff Member
@@ -423,8 +423,8 @@ const ManageStaff: React.FC = () => {
                   )}
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4">
-                    <label className="flex flex-col min-w-40 flex-1 mb-4">
+                  <div className="grid grid-cols-1 gap-4">
+                    <label className="flex flex-col min-w-40 flex-1 mb-0">
                       <p className="text-[#181511] dark:text-gray-200 text-base font-medium leading-normal pb-2">First Name</p>
                       <input
                         className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 focus:border-primary/50 dark:focus:border-primary/50 h-14 placeholder:text-[#8a7b60] dark:placeholder-gray-400 p-[15px] text-base font-normal leading-normal"

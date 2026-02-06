@@ -1663,10 +1663,13 @@ const Leaves: React.FC = () => {
                     Attached Document
                   </h3>
                   {(() => {
-                    const url = `${getApiUrl()}${selectedLeave.attachment}`;
+                    const attachment = selectedLeave.attachment || '';
+                    const isAbsolute = attachment.startsWith('http');
+                    const url = isAbsolute ? attachment : `${getApiUrl()}${attachment}`;
+
                     // Simple extension check
-                    const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(selectedLeave.attachment);
-                    const isPDF = /\.pdf$/i.test(selectedLeave.attachment);
+                    const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(attachment);
+                    const isPDF = /\.pdf$/i.test(attachment);
 
                     if (isImage) {
                       return (

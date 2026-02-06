@@ -18,6 +18,7 @@ const OrganizationSettings: React.FC = () => {
     });
     const [isLoadingSettings, setIsLoadingSettings] = useState(false);
     const [isSavingSettings, setIsSavingSettings] = useState(false);
+    const [logoFile, setLogoFile] = useState<File | null>(null);
 
     // Fetch organization settings on mount
     useEffect(() => {
@@ -46,13 +47,30 @@ const OrganizationSettings: React.FC = () => {
         }
     }, [isSuperAdmin, isCompanyAdmin]);
 
-    // Handle organization settings update
     const handleOrganizationSettingsSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSavingSettings(true);
         setMessage(null);
 
         try {
+            let currentLogoUrl = organizationSettings.logo;
+
+            // Step 1: Upload Logo if selected
+            if (logoFile) {
+                const formData = new FormData();
+                formData.append('logo', logoFile);
+
+                // Using the specific upload endpoint
+                const uploadRes = await api.post('/api/organization/logo', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+
+                if (uploadRes.data.logo) {
+                    currentLogoUrl = uploadRes.data.logo;
+                }
+            }
+
+            // Step 2: Update other settings (and ensure logo matches)
             await api.put('/api/organization/settings', {
                 lateAttendanceLimit: organizationSettings.lateAttendanceLimit,
                 isStrictAttendance: organizationSettings.isStrictAttendance,
@@ -60,12 +78,15 @@ const OrganizationSettings: React.FC = () => {
                 yearlyQuotaCL: organizationSettings.yearlyQuotaCL,
                 yearlyQuotaSL: organizationSettings.yearlyQuotaSL,
                 emailEnabled: organizationSettings.emailEnabled,
-                logo: organizationSettings.logo,
+                logo: currentLogoUrl,
             });
 
             setMessage({ type: 'success', text: 'Organization settings updated successfully!' });
+            // Clear file input state
+            setLogoFile(null);
             setTimeout(() => setMessage(null), 3000);
         } catch (err: any) {
+            console.error(err);
             setMessage({
                 type: 'error',
                 text: err.response?.data?.msg || 'Failed to update organization settings',
@@ -144,7 +165,10 @@ const OrganizationSettings: React.FC = () => {
                                         {organizationSettings.logo && (
                                             <button
                                                 type="button"
-                                                onClick={() => setOrganizationSettings({ ...organizationSettings, logo: '' })}
+                                                onClick={() => {
+                                                    setOrganizationSettings({ ...organizationSettings, logo: '' });
+                                                    setLogoFile(null);
+                                                }}
                                                 className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-600 transition-all opacity-0 group-hover:opacity-100"
                                             >
                                                 <span className="material-symbols-outlined text-sm">close</span>
@@ -165,11 +189,12 @@ const OrganizationSettings: React.FC = () => {
                                                     onChange={(e) => {
                                                         const file = e.target.files?.[0];
                                                         if (file) {
+                                                            setLogoFile(file); // Store file for upload
                                                             const reader = new FileReader();
                                                             reader.onloadend = () => {
                                                                 setOrganizationSettings({
                                                                     ...organizationSettings,
-                                                                    logo: reader.result as string,
+                                                                    logo: reader.result as string, // Show preview
                                                                 });
                                                             };
                                                             reader.readAsDataURL(file);

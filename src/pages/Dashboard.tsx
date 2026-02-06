@@ -3,22 +3,32 @@ import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import { ISession } from '../types';
-import { nowIST, formatIST, sessionTimeToIST, istDayStart } from '../utils/time';
+import { nowIST, formatIST, sessionTimeToIST } from '../utils/time';
+
+interface DashboardSummary {
+  organization: {
+    name: string;
+    logoUrl: string | null;
+  };
+  activeClasses: number;
+  totalUsers: number;
+  attendance: {
+    percentage: number;
+    status: string;
+  };
+  upcomingLeave: {
+    startDate: string;
+    endDate: string;
+    dates: string[];
+    leaveType: string;
+    status: 'Pending' | 'Approved' | 'Rejected';
+    daysCount: number;
+  } | null;
+}
 
 const Dashboard: React.FC = () => {
   const { user, isEndUser, isPlatformOwner } = useAuth();
-  const [stats, setStats] = useState({
-    orgName: '',
-    activeClasses: 0,
-    totalUsers: 0,
-    attendancePercentage: 0,
-    upcomingLeave: null as {
-      startDate: string;
-      endDate: string;
-      dates?: string[]; // Array of specific dates (for non-consecutive dates)
-      leaveType: string;
-    } | null,
-  });
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [upcomingSessions, setUpcomingSessions] = useState<ISession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -26,15 +36,9 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        // Fetch dashboard stats from API
-        const { data } = await api.get('/api/dashboard/stats');
-        setStats({
-          orgName: data.orgName || '',
-          activeClasses: data.activeClasses || 0,
-          totalUsers: data.totalUsers || 0,
-          attendancePercentage: data.attendancePercentage || 0,
-          upcomingLeave: data.upcomingLeave || null,
-        });
+        // Fetch dashboard summary from NEW API
+        const { data } = await api.get('/api/dashboard/summary');
+        setSummary(data);
 
         // Fetch sessions to get upcoming ones
         try {
@@ -61,7 +65,7 @@ const Dashboard: React.FC = () => {
           console.error('Failed to fetch sessions:', sessionErr);
         }
       } catch (err) {
-        console.error('Failed to fetch dashboard stats:', err);
+        console.error('Failed to fetch dashboard summary:', err);
       } finally {
         setIsLoading(false);
       }
@@ -78,7 +82,6 @@ const Dashboard: React.FC = () => {
       if (isNaN(sessionTimestamp)) {
         return dateString;
       }
-      // formatIST handles both date and time formatting based on options
       return formatIST(sessionTimestamp, {
         month: 'short',
         day: 'numeric',
@@ -92,58 +95,34 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // Format date for leave display (MMM dd format)
-  const formatLeaveDate = (dateString: string) => {
-    try {
-      const timestamp = new Date(dateString).getTime();
-      if (isNaN(timestamp)) {
-        return dateString;
-      }
-      return formatIST(timestamp, {
-        month: 'short',
-        day: 'numeric',
-      });
-    } catch {
-      return dateString;
-    }
+  const getAttendanceStatusColor = (percentage: number, status: string) => {
+    if (percentage >= 90) return 'text-green-600 dark:text-green-500';
+    if (percentage >= 75) return 'text-orange-500 dark:text-orange-400';
+    if (percentage > 0) return 'text-red-500 dark:text-red-400';
+    return 'text-text-secondary-light dark:text-text-secondary-dark'; // No data or 0 assigned
   };
 
-  // Format leave date range
-  const formatLeaveDateRange = (startDate: string, endDate: string, dates?: string[]) => {
-    // If dates array exists and has multiple non-consecutive dates, show count
-    if (dates && dates.length > 0) {
-      const sortedTimestamps = dates.map(d => istDayStart(d)).sort((a, b) => a - b);
-      const startTimestamp = sortedTimestamps[0];
-      const endTimestamp = sortedTimestamps[sortedTimestamps.length - 1];
+  const getRoleDisplay = () => {
+    if (!user?.role) return '';
+    const roleMap: { [key: string]: string } = {
+      'SuperAdmin': 'Company Administrator',
+      'CompanyAdmin': 'Company Administrator',
+      'Manager': 'Manager',
+      'SessionAdmin': 'Session Administrator',
+      'EndUser': 'End User',
+      'PLATFORM_OWNER': 'Platform Owner',
+    };
+    return roleMap[user.role] || user.role;
+  };
 
-      const startFormatted = formatLeaveDate(new Date(startTimestamp).toISOString());
-      const endFormatted = formatLeaveDate(new Date(endTimestamp).toISOString());
-
-      // Check if dates are consecutive
-      const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-      const isConsecutive = dates.length === 1 ||
-        (endTimestamp - startTimestamp) ===
-        ((dates.length - 1) * ONE_DAY_MS);
-
-      if (isConsecutive) {
-        // Consecutive dates - show range
-        if (startFormatted === endFormatted) {
-          return startFormatted;
-        }
-        return `${startFormatted} - ${endFormatted}`;
-      } else {
-        // Non-consecutive dates - show range with count
-        return `${startFormatted} - ${endFormatted} (${dates.length} days)`;
-      }
+  const getUserInitials = () => {
+    if (user?.profile?.firstName?.[0] && user?.profile?.lastName?.[0]) {
+      return `${user.profile.firstName[0]}${user.profile.lastName[0]}`.toUpperCase();
     }
-
-    // Fallback to start/end date range
-    const startFormatted = formatLeaveDate(startDate);
-    const endFormatted = formatLeaveDate(endDate);
-    if (startFormatted === endFormatted) {
-      return startFormatted;
+    if (user?.profile?.firstName?.[0]) {
+      return user.profile.firstName[0].toUpperCase();
     }
-    return `${startFormatted} - ${endFormatted}`;
+    return 'U';
   };
 
   if (isLoading) {
@@ -159,35 +138,6 @@ const Dashboard: React.FC = () => {
       </div>
     );
   }
-
-  // Get user avatar URL or initials
-  const getUserAvatar = () => {
-    // For now, return null to use initials fallback
-    return null;
-  };
-
-  const getUserInitials = () => {
-    if (user?.profile?.firstName?.[0] && user?.profile?.lastName?.[0]) {
-      return `${user.profile.firstName[0]}${user.profile.lastName[0]}`.toUpperCase();
-    }
-    if (user?.profile?.firstName?.[0]) {
-      return user.profile.firstName[0].toUpperCase();
-    }
-    return 'U';
-  };
-
-  const getRoleDisplay = () => {
-    if (!user?.role) return '';
-    const roleMap: { [key: string]: string } = {
-      'SuperAdmin': 'Company Administrator',
-      'CompanyAdmin': 'Company Administrator',
-      'Manager': 'Manager',
-      'SessionAdmin': 'Session Administrator',
-      'EndUser': 'End User',
-      'PLATFORM_OWNER': 'Platform Owner',
-    };
-    return roleMap[user.role] || user.role;
-  };
 
   return (
     <div className="p-4 md:p-10">
@@ -205,44 +155,61 @@ const Dashboard: React.FC = () => {
 
       {/* Stats Grid - 4 Cards */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4 mb-6">
-        {/* Organization Name Card */}
-        <div className="flex min-w-[158px] flex-1 flex-col gap-2 rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm">
+        {/* Organization Name/Logo Card */}
+        <div className="flex min-w-[200px] flex-1 flex-col gap-2 rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm justify-center">
           <div className="flex items-center gap-2 mb-1">
             <span className="material-symbols-outlined text-[#f04129] text-xl">business</span>
             <p className="text-base font-medium text-text-primary-light dark:text-text-primary-dark">Organization</p>
           </div>
-          <p className="tracking-light text-2xl font-bold text-text-primary-light dark:text-text-primary-dark truncate" title={stats.orgName}>
-            {stats.orgName || 'N/A'}
-          </p>
+          {summary?.organization.logoUrl ? (
+            <div className="h-12 flex items-center">
+              <img
+                src={summary.organization.logoUrl}
+                alt={summary.organization.name}
+                className="h-full w-auto object-contain max-w-full"
+              />
+            </div>
+          ) : (
+            <p className="tracking-light text-2xl font-bold text-text-primary-light dark:text-text-primary-dark truncate" title={summary?.organization.name}>
+              {summary?.organization.name || 'N/A'}
+            </p>
+          )}
         </div>
 
         {/* Active Classes Card */}
-        <div className="flex min-w-[158px] flex-1 flex-col gap-2 rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm">
+        <div className="flex min-w-[200px] flex-1 flex-col gap-2 rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm justify-center">
           <div className="flex items-center gap-2 mb-1">
             <span className="material-symbols-outlined text-[#f04129] text-xl">groups</span>
             <p className="text-base font-medium text-text-primary-light dark:text-text-primary-dark">Active Classes/Batches</p>
           </div>
-          <p className="tracking-light text-3xl font-bold text-text-primary-light dark:text-text-primary-dark">{stats.activeClasses || 0}</p>
+          <p className="tracking-light text-3xl font-bold text-text-primary-light dark:text-text-primary-dark">{summary?.activeClasses || 0}</p>
         </div>
 
-        {/* Total Users Card - Only show for non-EndUsers */}
-        {!isEndUser && (
-          <div className="flex min-w-[158px] flex-1 flex-col gap-2 rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="material-symbols-outlined text-[#f04129] text-xl">people</span>
-              <p className="text-base font-medium text-text-primary-light dark:text-text-primary-dark">Total Users</p>
-            </div>
-            <p className="tracking-light text-3xl font-bold text-text-primary-light dark:text-text-primary-dark">{stats.totalUsers || 0}</p>
+        {/* Total Users Card - Show for EVERYONE now based on redesign specs "Organization-driven" */}
+        <div className="flex min-w-[200px] flex-1 flex-col gap-2 rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm justify-center">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="material-symbols-outlined text-[#f04129] text-xl">people</span>
+            <p className="text-base font-medium text-text-primary-light dark:text-text-primary-dark">Total Users</p>
           </div>
-        )}
+          <p className="tracking-light text-3xl font-bold text-text-primary-light dark:text-text-primary-dark">{summary?.totalUsers || 0}</p>
+        </div>
 
-        {/* This Month's Attendance Card */}
-        <div className="flex min-w-[158px] flex-1 flex-col gap-2 rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm">
+        {/* Attendance Widget (REDESIGNED) */}
+        <div className="flex min-w-[200px] flex-1 flex-col gap-2 rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm">
           <div className="flex items-center gap-2 mb-1">
             <span className="material-symbols-outlined text-[#f04129] text-xl">check_circle</span>
-            <p className="text-base font-medium text-text-primary-light dark:text-text-primary-dark">This Month's Attendance</p>
+            <p className="text-base font-medium text-text-primary-light dark:text-text-primary-dark truncate">Avg. Classes/Batches Att.</p>
           </div>
-          <p className="tracking-light text-3xl font-bold text-text-primary-light dark:text-text-primary-dark">{stats.attendancePercentage || 0}%</p>
+          <div className="flex flex-col">
+            <p className="tracking-light text-3xl font-bold text-text-primary-light dark:text-text-primary-dark">
+              {summary?.attendance.status === 'Not assigned to any class' && summary.attendance.percentage === 0
+                ? '--'
+                : `${summary?.attendance.percentage || 0}%`}
+            </p>
+            <p className={`text-sm font-medium mt-1 ${getAttendanceStatusColor(summary?.attendance.percentage || 0, summary?.attendance.status || '')}`}>
+              {summary?.attendance.status || 'No data'}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -250,7 +217,7 @@ const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Left Column: Upcoming Sessions */}
         <div className="lg:col-span-2">
-          <div className="w-full rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm">
+          <div className="w-full rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm h-full">
             <h2 className="text-xl font-bold mb-4 text-text-primary-light dark:text-text-primary-dark">Upcoming Classes/Batches</h2>
             <div className="flex flex-col gap-4">
               {upcomingSessions.length > 0 ? (
@@ -258,7 +225,7 @@ const Dashboard: React.FC = () => {
                   <Link
                     key={session._id}
                     to={`/sessions/${session._id}`}
-                    className="flex items-center justify-between p-4 rounded-lg hover:bg-[#f04129]/10 transition-colors"
+                    className="flex items-center justify-between p-4 rounded-lg hover:bg-[#f04129]/10 transition-colors bg-background-light dark:bg-background-dark border border-gray-100 dark:border-gray-800"
                   >
                     <div className="flex items-center gap-4">
                       <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[#f04129]/20 text-[#f04129]">
@@ -282,95 +249,107 @@ const Dashboard: React.FC = () => {
                 <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm py-4">No upcoming classes/batches scheduled.</p>
               )}
             </div>
+
+            <div className="mt-4 pt-4 border-t border-border-light dark:border-border-dark flex justify-end">
+              <Link to="/sessions" className="text-[#f04129] font-medium text-sm hover:underline">View All Sessions &rarr;</Link>
+            </div>
           </div>
         </div>
 
-        {/* Right Column: Profile and Account Status */}
+        {/* Right Column: Profile Only (Leave removed as per redesign simplification) */}
         <div className="flex flex-col gap-6">
           {/* Profile Card */}
           {user && (
             <div className="flex flex-col rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm">
               <div className="flex items-center gap-4 mb-4">
-                {getUserAvatar() ? (
-                  <div
-                    className="w-16 h-16 bg-center bg-no-repeat bg-cover rounded-full"
-                    style={{ backgroundImage: `url(${getUserAvatar()})` }}
-                  />
-                ) : (
-                  <div className="w-16 h-16 bg-[#f04129]/20 rounded-full flex items-center justify-center">
-                    <span className="text-[#f04129] text-xl font-bold">{getUserInitials()}</span>
-                  </div>
-                )}
-                <div className="flex flex-col">
-                  <p className="text-lg font-bold tracking-[-0.015em] text-text-primary-light dark:text-text-primary-dark">
+                {/* Avatar / Initials */}
+                <div className="w-16 h-16 bg-[#f04129]/20 rounded-full flex items-center justify-center shrink-0">
+                  <span className="text-[#f04129] text-xl font-bold">{getUserInitials()}</span>
+                </div>
+                <div className="flex flex-col overflow-hidden">
+                  <p className="text-lg font-bold tracking-[-0.015em] text-text-primary-light dark:text-text-primary-dark truncate">
                     {user.profile.firstName} {user.profile.lastName}
                   </p>
-                  <p className="text-base text-text-secondary-light dark:text-text-secondary-dark">{getRoleDisplay()}</p>
+                  <p className="text-base text-text-secondary-light dark:text-text-secondary-dark truncate">{getRoleDisplay()}</p>
                 </div>
               </div>
-              <p className="text-base text-text-secondary-light dark:text-text-secondary-dark">{user.email}</p>
+              <p className="text-base text-text-secondary-light dark:text-text-secondary-dark truncate">{user.email}</p>
             </div>
           )}
 
-          {/* Upcoming Leave Card - Hide for Platform Owner */}
+
+          {/* Upcoming Leave Widget */}
           {!isPlatformOwner && (
             <div className="flex flex-col rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="material-symbols-outlined text-[#f04129] text-xl">flight_takeoff</span>
-                <h2 className="text-xl font-bold text-text-primary-light dark:text-text-primary-dark">Upcoming Leave</h2>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#f04129] text-xl">flight_takeoff</span>
+                  <h2 className="text-xl font-bold text-text-primary-light dark:text-text-primary-dark">Upcoming Leave</h2>
+                </div>
               </div>
-              {stats.upcomingLeave ? (
-                <div className="flex flex-col gap-2">
-                  <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                    <p className="text-lg font-bold text-green-800 dark:text-green-300 mb-1">
-                      {formatLeaveDateRange(stats.upcomingLeave.startDate, stats.upcomingLeave.endDate, stats.upcomingLeave.dates)}
-                    </p>
-                    {stats.upcomingLeave.dates && stats.upcomingLeave.dates.length > 0 && (
-                      <p className="text-xs text-green-600 dark:text-green-500 mb-1" title={stats.upcomingLeave.dates.sort().map(d => formatLeaveDate(d)).join(', ')}>
-                        Multiple Dates: {stats.upcomingLeave.dates.length} days
-                      </p>
-                    )}
-                    <p className="text-sm text-green-700 dark:text-green-400">
-                      {stats.upcomingLeave.leaveType} (Approved)
-                    </p>
+
+              {summary?.upcomingLeave ? (
+                <div className="flex flex-col gap-3">
+                  <div className="p-4 rounded-lg bg-background-light dark:bg-background-dark border border-gray-100 dark:border-gray-800">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-text-primary-light dark:text-text-primary-dark text-lg">
+                          {formatIST(new Date(summary.upcomingLeave.startDate).getTime(), { month: 'short', day: 'numeric' })}
+                          {summary.upcomingLeave.startDate !== summary.upcomingLeave.endDate &&
+                            ` - ${formatIST(new Date(summary.upcomingLeave.endDate).getTime(), { month: 'short', day: 'numeric' })}`
+                          }
+                        </p>
+                        <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-0.5">
+                          {summary.upcomingLeave.leaveType} • {summary.upcomingLeave.daysCount} Day{summary.upcomingLeave.daysCount > 1 ? 's' : ''}
+                        </p>
+                      </div>
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${summary.upcomingLeave.status === 'Approved'
+                          ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800'
+                          : 'bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800'
+                        }`}>
+                        {summary.upcomingLeave.status}
+                      </span>
+                    </div>
                   </div>
-                  <Link
-                    to="/leaves"
-                    className="text-sm text-[#f04129] hover:underline font-medium mt-2"
-                  >
-                    View all leaves →
-                  </Link>
+                  <div className="flex justify-end">
+                    <Link to="/leaves" className="text-[#f04129] font-medium text-sm hover:underline flex items-center gap-1">
+                      View details <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                    </Link>
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
-                  <p className="text-text-secondary-light dark:text-text-secondary-dark">
-                    No upcoming leaves scheduled.
+                  <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm">
+                    No upcoming leave planned.
                   </p>
                   <Link
                     to="/leaves"
-                    className="text-sm text-[#f04129] hover:underline font-medium"
+                    className="text-sm font-medium text-[#f04129] hover:underline flex items-center gap-1"
                   >
-                    Apply Now →
+                    Apply for leave <span className="material-symbols-outlined text-sm">arrow_forward</span>
                   </Link>
                 </div>
               )}
             </div>
           )}
 
-          {/* Account Status Card - Hide for Platform Owner */}
+          {/* Account Status Card - Simplified */}
           {user && !isPlatformOwner && (
             <div className="flex flex-col rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm">
               <h2 className="text-xl font-bold mb-3 text-text-primary-light dark:text-text-primary-dark">Account Status</h2>
-              <p className="text-text-secondary-light dark:text-text-secondary-dark mb-4">Your account is active and verified.</p>
+              <div className="flex items-center gap-2 text-green-600 dark:text-green-500 mb-2">
+                <span className="material-symbols-outlined">verified</span>
+                <p className="font-medium">Active & Verified</p>
+              </div>
 
               {/* Alert/Banner - Show if mustResetPassword */}
               {user.mustResetPassword && (
-                <div className="flex items-start gap-3 rounded-lg bg-[#f04129]/20 p-4">
-                  <span className="material-symbols-outlined text-[#f04129] mt-1">warning</span>
+                <div className="mt-2 flex items-start gap-3 rounded-lg bg-[#f04129]/10 p-4 border border-[#f04129]/20">
+                  <span className="material-symbols-outlined text-[#f04129] mt-1 text-sm">warning</span>
                   <div className="flex flex-col">
-                    <p className="font-semibold text-[#f04129]">Password Reset Required</p>
-                    <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark">
-                      Your password must be reset. <Link to="/force-reset-password" className="font-bold underline text-[#f04129]">Reset now.</Link>
+                    <p className="font-semibold text-[#f04129] text-sm">Action Required</p>
+                    <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-1">
+                      Your password must be reset. <Link to="/force-reset-password" className="font-bold underlineDecoration text-[#f04129]">Reset now.</Link>
                     </p>
                   </div>
                 </div>
@@ -384,4 +363,5 @@ const Dashboard: React.FC = () => {
 };
 
 export default Dashboard;
+
 

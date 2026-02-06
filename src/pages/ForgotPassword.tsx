@@ -5,13 +5,11 @@ import OrgSelector from '../components/OrgSelector';
 import Toast from '../components/Toast';
 
 const ForgotPassword: React.FC = () => {
-  const [organizationName, setOrganizationName] = useState('');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-  const orgNameInputRef = useRef<HTMLInputElement>(null) as React.RefObject<HTMLInputElement>;
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -20,8 +18,9 @@ const ForgotPassword: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      const { data } = await api.post('/api/auth/forgot-password', { organizationName, email });
-      
+      // Send only email - backend does not need organization name
+      const { data } = await api.post('/api/auth/forgot-password', { email });
+
       // Show success message and toast
       const successMessage = data.msg || 'If that email exists in our system, you will receive a password reset link.';
       setMessage(successMessage);
@@ -32,7 +31,7 @@ const ForgotPassword: React.FC = () => {
     } catch (err: any) {
       // Extract error message
       let errorMessage = 'An error occurred. Please try again.';
-      
+
       if (err.response?.data?.errors) {
         errorMessage = err.response.data.errors.map((e: any) => e.msg).join(', ');
       } else if (err.response?.data?.msg) {
@@ -42,7 +41,7 @@ const ForgotPassword: React.FC = () => {
       } else if (err.message) {
         errorMessage = err.message;
       }
-      
+
       setError(errorMessage);
       setToast({
         message: errorMessage,
@@ -80,7 +79,9 @@ const ForgotPassword: React.FC = () => {
                 Forgot Password
               </h1>
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                Enter your organization name and email address to receive a reset link.
+                Enter your registered email address.
+                <br />
+                If an account exists, you will receive a password reset link.
               </p>
             </div>
 
@@ -104,23 +105,7 @@ const ForgotPassword: React.FC = () => {
             <form onSubmit={onSubmit} className="space-y-5">
               <label className="flex flex-col">
                 <p className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal pb-2">
-                  Organization Name <span className="text-red-500">*</span>
-                </p>
-                <OrgSelector
-                  value={organizationName}
-                  onChange={(value) => {
-                    setOrganizationName(value);
-                    if (error) setError('');
-                  }}
-                  inputRef={orgNameInputRef}
-                  disabled={!!message}
-                  placeholder="Search for your organization..."
-                />
-              </label>
-
-              <label className="flex flex-col">
-                <p className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal pb-2">
-                  Your Email <span className="text-red-500">*</span>
+                  Your Email
                 </p>
                 <input
                   className="form-input flex w-full min-w-0 resize-none overflow-hidden rounded-lg text-slate-900 dark:text-white focus:outline-0 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 focus:border-[#f04129] focus:ring-2 focus:ring-[#f04129]/20 h-12 placeholder:text-slate-400 dark:placeholder:text-slate-500 px-4 text-base font-normal leading-normal disabled:opacity-50 disabled:cursor-not-allowed"
@@ -132,17 +117,16 @@ const ForgotPassword: React.FC = () => {
                     if (error) setError('');
                   }}
                   required
-                  disabled={!!message}
+                  disabled={!!message || isSubmitting}
                   autoComplete="email"
                 />
               </label>
 
               <button
                 type="submit"
-                disabled={isSubmitting}
-                className={`flex items-center justify-center text-center font-bold text-base h-12 w-full rounded-lg bg-[#f04129] text-white hover:bg-[#d63a25] transition-colors duration-200 ${
-                  isSubmitting ? 'opacity-70 cursor-not-allowed' : ''
-                }`}
+                disabled={isSubmitting || !!message}
+                className={`flex items-center justify-center text-center font-bold text-base h-12 w-full rounded-lg bg-[#f04129] text-white hover:bg-[#d63a25] transition-colors duration-200 ${(isSubmitting || message) ? 'opacity-70 cursor-not-allowed' : ''
+                  }`}
               >
                 {isSubmitting ? (
                   <>
@@ -165,8 +149,8 @@ const ForgotPassword: React.FC = () => {
 
             {/* Back to Login Link */}
             <div className="text-center pt-2">
-              <Link 
-                to="/login" 
+              <Link
+                to="/login"
                 className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-[#f04129] dark:hover:text-[#f04129] transition-colors"
               >
                 <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>arrow_back</span>
@@ -176,19 +160,19 @@ const ForgotPassword: React.FC = () => {
 
             {/* Powered By AI ALLY Logo */}
             <div className="flex items-center justify-center pt-4 border-t border-slate-200 dark:border-slate-700" style={{ gap: '8px' }}>
-              <a 
-                href="https://aially.in" 
-                target="_blank" 
+              <a
+                href="https://aially.in"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
                 style={{ gap: '8px' }}
               >
                 <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Powered By</p>
-                <img 
-                  src="/assets/image01.png" 
-                  alt="AI ALLY Logo" 
-                  style={{ 
-                    height: '24px', 
+                <img
+                  src="/assets/image01.png"
+                  alt="AI ALLY Logo"
+                  style={{
+                    height: '24px',
                     width: 'auto',
                     objectFit: 'contain'
                   }}

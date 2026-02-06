@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import api from '../api';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 
 const ResetPassword: React.FC = () => {
   const [newPassword, setNewPassword] = useState('');
@@ -10,9 +10,10 @@ const ResetPassword: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
-  // Get the tokens from the URL
-  const { collectionPrefix, token } = useParams();
+
+  // Get token from URL query params (e.g. ?token=abc)
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token');
   const navigate = useNavigate();
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -27,15 +28,16 @@ const ResetPassword: React.FC = () => {
       return;
     }
 
-    if (!collectionPrefix || !token) {
+    if (!token) {
       setError('Invalid reset link. Please request a new one.');
       setIsSubmitting(false);
       return;
     }
 
     try {
-      const { data } = await api.put(`/api/auth/reset-password/${collectionPrefix}/${token}`, { newPassword });
-      
+      // Send token in body, not as path param
+      const { data } = await api.post('/api/auth/reset-password', { token, newPassword });
+
       setIsSubmitting(false);
       setMessage(data.msg + ' Redirecting to login...');
       setTimeout(() => {
@@ -45,7 +47,7 @@ const ResetPassword: React.FC = () => {
     } catch (err: any) {
       // CRITICAL: Always stop loading state FIRST, before any error handling
       setIsSubmitting(false);
-      
+
       if (err.response?.data?.errors) {
         const errorMessages = err.response.data.errors.map((e: any) => e.msg).join(', ');
         setError(errorMessages);
@@ -61,7 +63,7 @@ const ResetPassword: React.FC = () => {
       <p style={{ color: '#6b7280', marginBottom: '24px', textAlign: 'center' }}>
         Enter your new password below.
       </p>
-      
+
       {message && (
         <div className="success-message" style={{ marginBottom: '20px', padding: '12px', backgroundColor: '#d1fae5', border: '1px solid #10b981', borderRadius: '6px', color: '#065f46' }}>
           {message}
@@ -72,7 +74,7 @@ const ResetPassword: React.FC = () => {
           {error}
         </div>
       )}
-      
+
       <form onSubmit={onSubmit}>
         <div className="form-group">
           <label>New Password *</label>
