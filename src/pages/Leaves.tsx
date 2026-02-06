@@ -7,6 +7,7 @@ import 'react-day-picker/dist/style.css';
 import { X, Trash2 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { nowIST, toISTDateString, formatIST, istDayStart, istDayEnd } from '../utils/time';
+import { getApiUrl } from '../utils/apiUrl';
 
 interface ILeaveRequest {
   _id: string;
@@ -1662,7 +1663,7 @@ const Leaves: React.FC = () => {
                     Attached Document
                   </h3>
                   {(() => {
-                    const url = `${import.meta.env.VITE_API_URL || ''}${selectedLeave.attachment}`;
+                    const url = `${getApiUrl()}${selectedLeave.attachment}`;
                     // Simple extension check
                     const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(selectedLeave.attachment);
                     const isPDF = /\.pdf$/i.test(selectedLeave.attachment);

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
+import { getApiUrl } from '../utils/apiUrl';
 
 interface ProfileMenuProps {
   userInitials: string;
@@ -163,7 +164,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userInitials, userName, userR
           {profilePicture && profilePicture.trim() !== '' ? (
             <img
               key={profilePicture} // Force re-render when profile picture changes
-              src={`${import.meta.env.VITE_API_URL || ''}${profilePicture}?t=${Date.now()}`}
+              src={`${getApiUrl()}${profilePicture}?t=${Date.now()}`}
               alt="Profile"
               className="size-9 rounded-full object-cover border-2 border-[#f04129]/20"
             />

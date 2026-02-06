@@ -4,8 +4,22 @@
  * 
  * @returns API base URL (e.g., 'https://api.example.com' or '')
  */
+// Hardcoded production URL as a safety fallback
+const PROD_API_URL = 'https://attend-mark.onrender.com';
+
 export const getApiUrl = (): string => {
-  return import.meta.env.VITE_API_URL || '';
+  const envUrl = import.meta.env.VITE_API_URL || '';
+
+  // SAFETY CHECK: If we are in production build, but the API URL is either missing
+  // or pointing to localhost (misconfiguration), force use of the production URL.
+  if (import.meta.env.PROD) {
+    if (!envUrl || envUrl.includes('localhost') || envUrl.includes('127.0.0.1')) {
+      console.warn('⚠️ PROD detected but VITE_API_URL is missing or localhost. Falling back to production URL.');
+      return PROD_API_URL;
+    }
+  }
+
+  return envUrl;
 };
 
 /**

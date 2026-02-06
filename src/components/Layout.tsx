@@ -7,6 +7,7 @@ import Toast from './Toast';
 import { useAutoBackup } from '../hooks/useAutoBackup';
 import NotificationBell from './NotificationBell';
 import RequestQueueNotification from './attendance/reporting/RequestQueueNotification';
+import { getApiUrl } from '../utils/apiUrl';
 
 const Layout: React.FC = () => {
   const { user, isSuperAdmin, isCompanyAdmin, isManager, isSessionAdmin, isPlatformOwner, isLoading } = useAuth();
@@ -55,7 +56,7 @@ const Layout: React.FC = () => {
   const getProfilePictureUrl = () => {
     if (user?.profilePicture) {
       // Add cache-busting parameter to ensure fresh image loads
-      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const apiUrl = getApiUrl();
       return `${apiUrl}${user.profilePicture}`;
     }
     return null;

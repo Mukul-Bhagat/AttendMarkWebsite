@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api';
 import { formatIST } from '../utils/time';
+import { getApiUrl } from '../utils/apiUrl';
 
 interface Organization {
   orgName: string;
@@ -289,7 +290,7 @@ const Profile: React.FC = () => {
                 {user.profilePicture && user.profilePicture.trim() !== '' ? (
                   <img
                     key={user.profilePicture} // Force re-render when profile picture changes
-                    src={`${import.meta.env.VITE_API_URL || ''}${user.profilePicture}`}
+                    src={`${getApiUrl()}${user.profilePicture}`}
                     alt="Profile"
                     className="w-32 h-32 rounded-full object-cover border-4 border-[#f04129]/20"
                     onError={(e) => {
