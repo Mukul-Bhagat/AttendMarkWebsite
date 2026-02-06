@@ -573,7 +573,7 @@ const ManageUsers: React.FC = () => {
                         <div className="relative">
                           <input
                             className="form-input w-full rounded-lg text-[#181511] dark:text-white focus:outline-none focus:ring-2 focus:ring-primary border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 focus:border-primary/50 dark:focus:border-primary/50 h-10 px-3 pr-10 text-sm font-normal leading-normal placeholder:text-[#8a7b60] dark:placeholder-gray-400"
-                            placeholder="Min 6 characters"
+                            placeholder="Leave empty to auto-generate"
                             type={showPassword ? "text" : "password"}
                             value={password}
                             onChange={(e) => {
@@ -581,7 +581,6 @@ const ManageUsers: React.FC = () => {
                               if (error) setError('');
                             }}
                             minLength={6}
-                            required
                             disabled={isSubmitting}
                           />
                           <button

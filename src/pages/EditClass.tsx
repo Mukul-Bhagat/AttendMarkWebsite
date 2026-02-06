@@ -262,31 +262,70 @@ const EditClass: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      // IMPORTANT: For class updates, we ONLY send class metadata
-      // Session updates should be handled separately (not in this flow)
+      // Normalize sessionAdmin: empty string should be undefined
+      let normalizedSessionAdmin: string | undefined = undefined;
+      if (isSuperAdmin && formData.sessionAdmin) {
+        // If it's an object (though state is string initialized), stringify it, else use as is
+        if (typeof formData.sessionAdmin === 'object') {
+          // @ts-ignore
+          normalizedSessionAdmin = formData.sessionAdmin._id || undefined;
+        } else if (typeof formData.sessionAdmin === 'string' && formData.sessionAdmin.trim() !== '') {
+          normalizedSessionAdmin = formData.sessionAdmin;
+        }
+      }
+
+      // Construct FULL payload for backend
+      // We send all fields because we want to propagate these settings to future sessions
       const updateData: any = {
         name: formData.name.trim(),
         description: formData.description.trim() || undefined,
         defaultTime: formData.startTime || undefined,
         startDate: formData.startDate || undefined,
         endDate: formData.endDate || undefined,
+
+        // Session Configuration Propagation Fields
+        endTime: formData.endTime, // Pass endTime explicitly for session updates
+        frequency: formData.frequency, // Required for extending sessions
+        weeklyDays: formData.weeklyDays, // Required for extending sessions
+
+        sessionAdmin: normalizedSessionAdmin,
+
+        locationType: formData.locationType,
+        sessionType: formData.sessionType,
+        physicalLocation: formData.locationType === 'Physical' ? formData.name : undefined, // Legacy/Fallback
+        virtualLocation: formData.virtualLocation || undefined,
+        radius: formData.radius,
+
+        // Location Object Structure
+        location: formData.locationType !== 'Virtual' ? {
+          type: 'COORDS',
+          geolocation: formData.geolocation?.latitude ? {
+            latitude: Number(formData.geolocation.latitude),
+            longitude: Number(formData.geolocation.longitude)
+          } : undefined
+        } : undefined,
+
+        // Flat geolocation for legacy support
+        geolocation: formData.geolocation?.latitude ? {
+          latitude: Number(formData.geolocation.latitude),
+          longitude: Number(formData.geolocation.longitude)
+        } : undefined
       };
 
-      // Only include sessionAdmin if user is SuperAdmin
-      if (isSuperAdmin && formData.sessionAdmin) {
-        updateData.sessionAdmin = formData.sessionAdmin;
-      }
-
-      console.log('[EDIT_CLASS] Sending update:', updateData);
+      console.log('[EDIT_CLASS] Sending update payload:', JSON.stringify(updateData, null, 2));
 
       const response = await api.put(`/api/classes/${id}`, updateData);
 
       console.log('[EDIT_CLASS] Update successful:', response.data);
-      navigate('/classes');
+
+      // Store success message in history state if possible or just navigate
+      navigate('/classes', { state: { message: 'Class and sessions updated successfully.' } });
     } catch (err: any) {
       console.error('[EDIT_CLASS] Update failed:', err);
 
       if (err.response && err.response.data) {
+        console.error('[EDIT_CLASS] Backend Error Response:', err.response.data);
+
         // Handle new error format from backend
         if (err.response.data.message) {
           setError(err.response.data.message);
