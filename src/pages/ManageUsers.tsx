@@ -518,7 +518,7 @@ const ManageUsers: React.FC = () => {
                         Import CSV
                       </button>
                     </div>
-                    <form onSubmit={handleSubmit} className="space-y-3">
+                    <form onSubmit={handleSubmit} className="space-y-3" autoComplete="off">
                       <div className="grid grid-cols-2 gap-4">
                         <label className="block">
                           <p className="text-[#181511] dark:text-gray-200 text-sm font-medium leading-normal mb-1">First Name</p>
@@ -533,6 +533,8 @@ const ManageUsers: React.FC = () => {
                             }}
                             required
                             disabled={isSubmitting}
+                            autoComplete="off"
+                            name="firstName_new_user"
                           />
                         </label>
                         <label className="block">
@@ -548,6 +550,8 @@ const ManageUsers: React.FC = () => {
                             }}
                             required
                             disabled={isSubmitting}
+                            autoComplete="off"
+                            name="lastName_new_user"
                           />
                         </label>
                       </div>
@@ -565,6 +569,8 @@ const ManageUsers: React.FC = () => {
                           }}
                           required
                           disabled={isSubmitting}
+                          autoComplete="off"
+                          name="email_new_user"
                         />
                       </label>
 
@@ -582,6 +588,8 @@ const ManageUsers: React.FC = () => {
                             }}
                             minLength={6}
                             disabled={isSubmitting}
+                            autoComplete="new-password"
+                            name="password_new_user"
                           />
                           <button
                             type="button"
@@ -605,6 +613,8 @@ const ManageUsers: React.FC = () => {
                           value={phone}
                           onChange={(e) => setPhone(e.target.value)}
                           disabled={isSubmitting}
+                          autoComplete="off"
+                          name="phone_new_user"
                         />
                       </label>
 

@@ -132,7 +132,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, isOpen, onClose, on
                 </div>
 
                 {/* Form */}
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                <form onSubmit={handleSubmit} className="p-6 space-y-4" autoComplete="off">
                     {/* First Name */}
                     <div>
                         <label className="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-1">
@@ -148,6 +148,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, isOpen, onClose, on
                                 : 'border-border-light dark:border-border-dark'
                                 } bg-white dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary`}
                             placeholder="Enter first name"
+                            autoComplete="off"
                         />
                         {errors.firstName && (
                             <p className="text-red-500 text-xs mt-1">{errors.firstName}</p>
@@ -169,6 +170,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, isOpen, onClose, on
                                 : 'border-border-light dark:border-border-dark'
                                 } bg-white dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary`}
                             placeholder="Enter last name"
+                            autoComplete="off"
                         />
                         {errors.lastName && (
                             <p className="text-red-500 text-xs mt-1">{errors.lastName}</p>
@@ -190,6 +192,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, isOpen, onClose, on
                                 : 'border-border-light dark:border-border-dark'
                                 } bg-white dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary`}
                             placeholder="Enter email"
+                            autoComplete="off"
                         />
                         {errors.email && (
                             <p className="text-red-500 text-xs mt-1">{errors.email}</p>
@@ -208,6 +211,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, isOpen, onClose, on
                             onChange={handleInputChange}
                             className="w-full px-3 py-2 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary"
                             placeholder="Enter phone number"
+                            autoComplete="off"
                         />
                     </div>
 

@@ -422,7 +422,7 @@ const ManageStaff: React.FC = () => {
                     </button>
                   )}
                 </div>
-                <form onSubmit={handleSubmit} className="space-y-5">
+                <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4">
                     <label className="flex flex-col min-w-40 flex-1 mb-4">
                       <p className="text-[#181511] dark:text-gray-200 text-base font-medium leading-normal pb-2">First Name</p>
@@ -437,6 +437,8 @@ const ManageStaff: React.FC = () => {
                         }}
                         required
                         disabled={isSubmitting}
+                        autoComplete="off"
+                        name="staff_firstName_new"
                       />
                     </label>
                     <label className="flex flex-col min-w-40 flex-1 mb-4">
@@ -452,6 +454,8 @@ const ManageStaff: React.FC = () => {
                         }}
                         required
                         disabled={isSubmitting}
+                        autoComplete="off"
+                        name="staff_lastName_new"
                       />
                     </label>
                   </div>
@@ -469,6 +473,8 @@ const ManageStaff: React.FC = () => {
                       }}
                       required
                       disabled={isSubmitting}
+                      autoComplete="off"
+                      name="staff_email_new"
                     />
                   </label>
 
@@ -486,6 +492,8 @@ const ManageStaff: React.FC = () => {
                         }}
                         minLength={6}
                         disabled={isSubmitting}
+                        autoComplete="new-password"
+                        name="staff_password_new"
                       />
                       <button
                         type="button"
@@ -509,6 +517,8 @@ const ManageStaff: React.FC = () => {
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       disabled={isSubmitting}
+                      autoComplete="off"
+                      name="staff_phone_new"
                     />
                   </label>
 
