@@ -114,7 +114,7 @@ const DownloadReportModal: React.FC<DownloadReportModalProps> = ({
                         </div>
                         <div>
                             <h2 className="text-2xl font-black text-text-primary-light dark:text-text-primary-dark tracking-tight">Generate Report</h2>
-                            <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark font-medium">Download branded attendance timesheet</p>
+                            <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark font-medium">Download branded attendance AttendSheet</p>
                         </div>
                     </div>
                     <button

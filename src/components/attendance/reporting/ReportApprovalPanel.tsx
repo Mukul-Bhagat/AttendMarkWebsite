@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Check, X, Mail, Calendar, Clock, RefreshCw, Eye, Trash2 } from 'lucide-react';
-import { getReportShareRequests, approveReportShareRequest, rejectReportShareRequest, deleteReportShareRequest, ReportShareRequest, downloadAttendanceReport } from '../../../api/reportingApi';
+import { getReportShareRequests, approveReportShareRequest, rejectReportShareRequest, deleteReportShareRequest, clearReportShareRequestsHistory, ReportShareRequest, downloadAttendanceReport } from '../../../api/reportingApi';
 import toast from 'react-hot-toast';
 import { formatIST } from '../../../utils/time';
 
@@ -82,6 +82,25 @@ const ReportApprovalPanel: React.FC = () => {
             fetchRequests();
         } catch (err: any) {
             toast.error(err.response?.data?.message || 'Failed to delete request');
+            console.error(err);
+        } finally {
+            setIsProcessing(null);
+        }
+    };
+
+    const handleClearHistory = async () => {
+        if (!window.confirm('Are you sure you want to clear ALL processed records? This will delete all approved and rejected request history. This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            setIsProcessing('CLEAR_ALL');
+            const toastId = toast.loading('Clearing history...');
+            const response = await clearReportShareRequestsHistory();
+            toast.success(response.data?.message || 'History cleared successfully', { id: toastId });
+            fetchRequests();
+        } catch (err: any) {
+            toast.error(err.response?.data?.message || 'Failed to clear history');
             console.error(err);
         } finally {
             setIsProcessing(null);
@@ -175,12 +194,25 @@ const ReportApprovalPanel: React.FC = () => {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-border-light dark:border-border-dark">
                                         <div className="space-y-1">
-                                            <label className="text-[10px] font-black text-text-secondary-light uppercase tracking-widest">Recipient</label>
+                                            <label className="text-[10px] font-black text-text-secondary-light uppercase tracking-widest">
+                                                {request.hasSecondRecipient ? 'Primary Recipient' : 'Recipient'}
+                                            </label>
                                             <div className="flex items-center gap-2 text-sm font-bold text-text-primary-light dark:text-text-primary-dark">
                                                 <Mail size={14} className="text-primary" />
                                                 <span>{request.recipientName} ({request.recipientEmail})</span>
                                             </div>
                                         </div>
+
+                                        {request.hasSecondRecipient && (
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-black text-text-secondary-light uppercase tracking-widest">Secondary Recipient</label>
+                                                <div className="flex items-center gap-2 text-sm font-bold text-text-primary-light dark:text-text-primary-dark">
+                                                    <Mail size={14} className="text-primary" />
+                                                    <span>{request.recipient2Name} ({request.recipient2Email})</span>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <div className="space-y-1">
                                             <label className="text-[10px] font-black text-text-secondary-light uppercase tracking-widest">Report Period</label>
                                             <div className="flex items-center gap-2 text-sm font-bold text-text-primary-light dark:text-text-primary-dark">
@@ -235,26 +267,57 @@ const ReportApprovalPanel: React.FC = () => {
                 </div>
             )}
 
-            {/* History Section (Optional) */}
             {requests.some(r => r.status !== 'PENDING') && (
-                <div className="pt-8">
-                    <h4 className="text-sm font-black text-text-secondary-light uppercase tracking-widest mb-4">Recently Processed</h4>
-                    <div className="space-y-2 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all">
-                        {requests.filter(r => r.status !== 'PENDING').slice(0, 5).map(request => (
-                            <div key={request._id} className="flex items-center justify-between p-4 bg-surface-light dark:bg-surface-dark rounded-2xl border border-border-light dark:border-border-dark text-xs font-bold">
+                <div className="pt-8 border-t border-border-light dark:border-border-dark mt-8">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <Clock size={16} className="text-text-secondary-light" />
+                            <h4 className="text-sm font-black text-text-secondary-light uppercase tracking-widest">
+                                Recently Processed ({requests.filter(r => r.status !== 'PENDING').length})
+                            </h4>
+                        </div>
+                        <button
+                            onClick={handleClearHistory}
+                            disabled={!!isProcessing}
+                            className="text-[10px] font-bold text-red-500 hover:text-red-600 uppercase tracking-widest flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900/30 hover:bg-red-50 dark:hover:bg-red-900/10 transition-all disabled:opacity-50"
+                        >
+                            <Trash2 size={12} />
+                            Clear History
+                        </button>
+                    </div>
+                    <div className="space-y-3">
+                        {requests.filter(r => r.status !== 'PENDING').slice(0, 15).map(request => (
+                            <div key={request._id} className="flex flex-col md:flex-row md:items-center justify-between p-4 bg-surface-light dark:bg-surface-dark rounded-2xl border border-border-light dark:border-border-dark text-xs font-bold gap-3">
                                 <div className="flex items-center gap-3">
-                                    <div className={`p-1.5 rounded-lg ${request.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
+                                    <div className={`p-2 rounded-xl flex-shrink-0 ${request.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
                                         {request.status === 'APPROVED' ? <Check size={14} /> : <X size={14} />}
                                     </div>
-                                    <span className="text-text-primary-light dark:text-text-primary-dark">{request.userId?.profile?.firstName} {request.userId?.profile?.lastName}</span>
-                                    <span className="text-text-secondary-light">shared report of {request.targetUserId?.profile?.firstName} with {request.recipientEmail}</span>
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-text-primary-light dark:text-text-primary-dark font-black">
+                                                {request.userId?.profile?.firstName} {request.userId?.profile?.lastName}
+                                            </span>
+                                            <span className={`px-2 py-0.5 rounded text-[10px] uppercase ${request.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'}`}>
+                                                {request.status}
+                                            </span>
+                                        </div>
+                                        <p className="text-text-secondary-light dark:text-text-secondary-dark truncate mt-0.5">
+                                            Shared report for <span className="text-primary">{request.targetUserId?.profile?.firstName}</span> with {request.recipientEmail}
+                                        </p>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                    <span className="text-text-secondary-light">{formatIST(new Date(request.createdAt).getTime(), { month: 'short', day: 'numeric' })}</span>
+                                <div className="flex items-center justify-between md:justify-end gap-4 ml-11 md:ml-0">
+                                    <span className="text-text-secondary-light font-bold flex items-center gap-1">
+                                        <Calendar size={12} />
+                                        {formatIST(new Date(request.createdAt).getTime(), { month: 'short', day: 'numeric' })}
+                                    </span>
                                     <button
-                                        onClick={() => handleDelete(request._id)}
-                                        disabled={isProcessing === request._id}
-                                        className="p-2 rounded-lg border border-red-200 dark:border-red-800/50 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-95 transition-all disabled:opacity-50"
+                                        onClick={() => {
+                                            console.log('[ReportApprovalPanel] Requesting delete for:', request._id);
+                                            handleDelete(request._id);
+                                        }}
+                                        disabled={!!isProcessing}
+                                        className="p-2 rounded-xl border border-red-200 dark:border-red-800/50 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-95 transition-all disabled:opacity-50"
                                         title="Delete this request"
                                     >
                                         <Trash2 size={14} />

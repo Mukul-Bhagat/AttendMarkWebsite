@@ -112,9 +112,11 @@ const OverallStatusDonut: React.FC<OverallStatusDonutProps> = ({ summary }) => {
                     {/* Stats Summary Grid - Focusing on Working Days */}
                     <div className="grid grid-cols-2 gap-3 mt-4">
                         <div className="bg-green-50 dark:bg-green-900/10 border border-green-100 dark:border-green-900/30 p-3 rounded-lg flex flex-col items-center justify-center">
-                            <span className="text-green-600 dark:text-green-400 font-bold text-lg">{summary.presentPercentage.toFixed(1)}%</span>
-                            <span className="text-green-700 dark:text-green-300 text-[10px] font-medium uppercase tracking-wider text-center">Present Rate</span>
-                            <span className="text-green-600 dark:text-green-500 text-[10px]">{summary.present} / {summary.totalRecords} Days</span>
+                            <span className="text-green-600 dark:text-green-400 font-bold text-lg">
+                                {(((summary.present + summary.late) / (summary.totalRecords || 1)) * 100).toFixed(1)}%
+                            </span>
+                            <span className="text-green-700 dark:text-green-300 text-[10px] font-medium uppercase tracking-wider text-center">Attendance Rate</span>
+                            <span className="text-green-600 dark:text-green-500 text-[10px]">{summary.present + summary.late} / {summary.totalRecords} Days</span>
                         </div>
                         <div className="bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 p-3 rounded-lg flex flex-col items-center justify-center">
                             <span className="text-red-600 dark:text-red-400 font-bold text-lg">{summary.absentPercentage.toFixed(1)}%</span>
