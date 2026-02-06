@@ -1,7 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import api from '../api';
 import { Link } from 'react-router-dom';
-import OrgSelector from '../components/OrgSelector';
 import Toast from '../components/Toast';
 
 const ForgotPassword: React.FC = () => {

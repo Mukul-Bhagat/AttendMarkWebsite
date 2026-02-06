@@ -27,7 +27,7 @@ interface DashboardSummary {
 }
 
 const Dashboard: React.FC = () => {
-  const { user, isEndUser, isPlatformOwner } = useAuth();
+  const { user, isPlatformOwner } = useAuth();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [upcomingSessions, setUpcomingSessions] = useState<ISession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -101,7 +101,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const getAttendanceStatusColor = (percentage: number, status: string) => {
+  const getAttendanceStatusColor = (percentage: number) => {
     if (percentage >= 90) return 'text-green-600 dark:text-green-500';
     if (percentage >= 75) return 'text-orange-500 dark:text-orange-400';
     if (percentage > 0) return 'text-red-500 dark:text-red-400';
@@ -236,7 +236,7 @@ const Dashboard: React.FC = () => {
                 ? '--'
                 : `${summary?.attendance.percentage || 0}%`}
             </p>
-            <p className={`text-sm font-medium mt-1 ${getAttendanceStatusColor(summary?.attendance.percentage || 0, summary?.attendance.status || '')}`}>
+            <p className={`text-sm font-medium mt-1 ${getAttendanceStatusColor(summary?.attendance.percentage || 0)}`}>
               {summary?.attendance.status || 'No data'}
             </p>
           </div>
