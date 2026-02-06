@@ -61,7 +61,16 @@ export interface ReportShareRequest {
         };
     };
     organizationLogo?: string;
-    // ... other fields if needed
+    hasSecondRecipient: boolean;
+    recipient2Name?: string;
+    recipient2Email?: string;
+    recipient2Gender?: string;
+    recipient2Role?: string;
+    preferredWeekday?: string;
+    preferredTime?: string;
+    monthlySchedule?: string;
+    monthlyTime?: string;
+    automationId?: string;
 }
 
 export const shareAttendanceReport = async (options: ShareReportOptions) => {
@@ -88,5 +97,22 @@ export const rejectReportShareRequest = async (id: string, adminNote?: string) =
 
 export const deleteReportShareRequest = async (id: string) => {
     return await api.delete(`/api/attendance/share-requests/${id}`);
+};
+
+export const clearReportShareRequestsHistory = async () => {
+    return await api.delete('/api/attendance/share-requests/history/clear');
+};
+
+// Email Automation APIs
+export const getEmailAutomationConfigs = async () => {
+    return await api.get('/api/email-automation/configs');
+};
+
+export const toggleEmailAutomation = async (id: string) => {
+    return await api.patch(`/api/email-automation/config/toggle/${id}`);
+};
+
+export const deleteEmailAutomation = async (id: string) => {
+    return await api.delete(`/api/email-automation/config/${id}`);
 };
 

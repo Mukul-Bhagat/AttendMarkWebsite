@@ -62,6 +62,16 @@ const RequestQueueNotification: React.FC = () => {
                         <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark font-medium">
                             Waiting in your approval queue
                         </p>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setIsVisible(false); // Dismiss notification immediately
+                                window.location.href = '/reports?tab=approval';
+                            }}
+                            className="mt-3 inline-flex items-center justify-center px-4 py-2 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-primary-dark transition-all active:scale-95 shadow-lg shadow-primary/20"
+                        >
+                            Review Now
+                        </button>
                     </div>
                 </div>
 

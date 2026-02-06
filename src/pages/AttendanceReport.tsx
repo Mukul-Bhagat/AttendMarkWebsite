@@ -87,8 +87,8 @@ const AttendanceReport: React.FC = () => {
       setSelectedClass(classBatchId);
     }
 
-    if (tab === 'logs' || tab === 'analytics') {
-      setActiveTab(tab);
+    if (tab === 'logs' || tab === 'analytics' || tab === 'approval') {
+      setActiveTab(tab as any);
     }
   }, [searchParams]);
 

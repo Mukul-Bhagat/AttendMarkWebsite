@@ -11,6 +11,9 @@ import DownloadReportModal from '../components/attendance/reporting/DownloadRepo
 import ShareReportModal from '../components/attendance/reporting/ShareReportModal';
 import { useAuth } from '../contexts/AuthContext';
 import ReportApprovalPanel from '../components/attendance/reporting/ReportApprovalPanel';
+import { AutomationIndicator } from '../components/attendance/reporting/AutomationIndicator';
+import { getEmailAutomationConfigs, toggleEmailAutomation, deleteEmailAutomation } from '../api/reportingApi';
+import toast from 'react-hot-toast';
 
 const MyAttendance: React.FC = () => {
   const { userId } = useParams<{ userId?: string }>();
@@ -32,6 +35,9 @@ const MyAttendance: React.FC = () => {
   // Reporting Modals state
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+
+  // Email Automation state
+  const [automationConfigs, setAutomationConfigs] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchBasicInfo = async () => {
@@ -67,7 +73,16 @@ const MyAttendance: React.FC = () => {
     const thirtyDaysAgoIST = todayIST - (30 * 24 * 60 * 60 * 1000);
     setAnalyticsEndDate(toISTDateString(todayIST));
     setAnalyticsStartDate(toISTDateString(thirtyDaysAgoIST));
-  }, [userId]);
+
+    // Handle initial tab from URL
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+    if (tabParam === 'approval' && isAdmin) {
+      setActiveTab('approval');
+    } else if (tabParam === 'report') {
+      setActiveTab('report');
+    }
+  }, [userId, isAdmin]);
 
   const handleFetchAnalytics = async () => {
     if (!analyticsStartDate || !analyticsEndDate) return;
@@ -94,6 +109,45 @@ const MyAttendance: React.FC = () => {
       handleFetchAnalytics();
     }
   }, [userId]);
+
+  // Fetch automation configs
+  const fetchAutomationConfigs = async () => {
+    try {
+      const response = await getEmailAutomationConfigs();
+      setAutomationConfigs(response.data.data || []);
+    } catch (err: any) {
+      console.error('Error fetching automation configs:', err);
+    }
+  };
+
+  // Toggle automation status
+  const handleToggleAutomation = async (id: string) => {
+    try {
+      const toastId = toast.loading('Updating automation...');
+      await toggleEmailAutomation(id);
+      toast.success('Automation status updated!', { id: toastId });
+      fetchAutomationConfigs();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to update automation');
+    }
+  };
+
+  // Delete automation
+  const handleDeleteAutomation = async (id: string) => {
+    try {
+      const toastId = toast.loading('Deleting automation...');
+      await deleteEmailAutomation(id);
+      toast.success('Automation deleted successfully!', { id: toastId });
+      fetchAutomationConfigs();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to delete automation');
+    }
+  };
+
+  // Load automation on mount
+  useEffect(() => {
+    fetchAutomationConfigs();
+  }, []);
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
@@ -187,6 +241,18 @@ const MyAttendance: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Automation Indicator - Bottom Section */}
+        {!userId && automationConfigs.length > 0 && (
+          <div className="mt-8">
+            <AutomationIndicator
+              configs={automationConfigs}
+              onToggle={handleToggleAutomation}
+              onDelete={handleDeleteAutomation}
+              onEdit={() => setIsShareModalOpen(true)}
+            />
+          </div>
+        )}
       </div>
 
       {/* Modals */}

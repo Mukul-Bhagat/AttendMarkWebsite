@@ -266,26 +266,55 @@ const ShareReportModal: React.FC<ShareReportModalProps> = ({
                             </div>
 
                             {shareForm.hasSecondRecipient && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-6 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-3xl border border-indigo-100 dark:border-indigo-800/30 animate-in slide-in-from-top-2 duration-300">
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-black text-indigo-400 uppercase tracking-widest ml-1">Name</label>
-                                        <input
-                                            type="text"
-                                            placeholder="e.g. HR Manager Name"
-                                            value={shareForm.recipient2Name}
-                                            onChange={(e) => setShareForm({ ...shareForm, recipient2Name: e.target.value })}
-                                            className="w-full px-5 py-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
-                                        />
+                                <div className="p-6 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-3xl border border-indigo-100 dark:border-indigo-800/30 animate-in slide-in-from-top-2 duration-300 space-y-5">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-black text-indigo-400 uppercase tracking-widest ml-1">Name</label>
+                                            <input
+                                                type="text"
+                                                placeholder="e.g. Principal's Name"
+                                                value={shareForm.recipient2Name}
+                                                onChange={(e) => setShareForm({ ...shareForm, recipient2Name: e.target.value })}
+                                                className="w-full px-5 py-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-black text-indigo-400 uppercase tracking-widest ml-1">Email</label>
+                                            <input
+                                                type="email"
+                                                placeholder="hr@college.edu"
+                                                value={shareForm.recipient2Email}
+                                                onChange={(e) => setShareForm({ ...shareForm, recipient2Email: e.target.value })}
+                                                className="w-full px-5 py-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-black text-indigo-400 uppercase tracking-widest ml-1">Email</label>
-                                        <input
-                                            type="email"
-                                            placeholder="hr@company.com"
-                                            value={shareForm.recipient2Email}
-                                            onChange={(e) => setShareForm({ ...shareForm, recipient2Email: e.target.value })}
-                                            className="w-full px-5 py-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
-                                        />
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-black text-indigo-400 uppercase tracking-widest ml-1">Role</label>
+                                            <select
+                                                value={shareForm.recipient2Role}
+                                                onChange={(e) => setShareForm({ ...shareForm, recipient2Role: e.target.value as any })}
+                                                className="w-full px-5 py-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-4 focus:ring-indigo-500/10 transition-all font-bold appearance-none"
+                                            >
+                                                <option value="HOD">HOD</option>
+                                                <option value="TPO">TPO</option>
+                                                <option value="HR">HR Manager</option>
+                                                <option value="OTHER">Other</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-black text-indigo-400 uppercase tracking-widest ml-1">Gender</label>
+                                            <select
+                                                value={shareForm.recipient2Gender}
+                                                onChange={(e) => setShareForm({ ...shareForm, recipient2Gender: e.target.value as any })}
+                                                className="w-full px-5 py-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-4 focus:ring-indigo-500/10 transition-all font-bold appearance-none"
+                                            >
+                                                <option value="Male">Male (Sir)</option>
+                                                <option value="Female">Female (Madam)</option>
+                                                <option value="Other">Other</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
                             )}
