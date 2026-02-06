@@ -1664,12 +1664,13 @@ const Leaves: React.FC = () => {
                   </h3>
                   {(() => {
                     const attachment = selectedLeave.attachment || '';
+                    const isCloudinary = attachment.includes('cloudinary');
                     const isAbsolute = attachment.startsWith('http');
                     const url = isAbsolute ? attachment : `${getApiUrl()}${attachment}`;
 
-                    // Simple extension check
-                    const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(attachment);
-                    const isPDF = /\.pdf$/i.test(attachment);
+                    // Simple extension check or cloud resource
+                    const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(attachment) || (isCloudinary && !attachment.endsWith('.pdf'));
+                    const isPDF = /\.pdf$/i.test(attachment) || (isCloudinary && attachment.endsWith('.pdf'));
 
                     if (isImage) {
                       return (

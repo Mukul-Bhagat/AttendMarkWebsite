@@ -31,6 +31,7 @@ const Dashboard: React.FC = () => {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [upcomingSessions, setUpcomingSessions] = useState<ISession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch dashboard stats and upcoming sessions
   useEffect(() => {
@@ -64,8 +65,13 @@ const Dashboard: React.FC = () => {
         } catch (sessionErr) {
           console.error('Failed to fetch sessions:', sessionErr);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to fetch dashboard summary:', err);
+        if (err.response?.status === 404 || err.response?.status === 400) {
+          setError('Organization data mismatch. Please logout and login again to refresh your session.');
+        } else {
+          setError('Failed to load dashboard data. Check your connection or try again.');
+        }
       } finally {
         setIsLoading(false);
       }
@@ -141,6 +147,30 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="p-4 md:p-10">
+
+      {/* Error Banner */}
+      {error && (
+        <div className="mb-6 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined">error</span>
+            <p className="font-medium">{error}</p>
+          </div>
+          <div className="flex gap-4">
+            <button
+              onClick={() => window.location.reload()}
+              className="text-sm underline hover:text-red-800 dark:hover:text-red-300 font-semibold"
+            >
+              Reload
+            </button>
+            {error.includes('logout') && (
+              <Link to="/login" onClick={() => localStorage.removeItem('token')} className="text-sm underline hover:text-red-800 dark:hover:text-red-300 font-bold">
+                Logout
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* PageHeading */}
       <div className="flex flex-wrap justify-between gap-3 mb-6">
         <div className="flex flex-col gap-2">
@@ -304,8 +334,8 @@ const Dashboard: React.FC = () => {
                         </p>
                       </div>
                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${summary.upcomingLeave.status === 'Approved'
-                          ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800'
-                          : 'bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800'
+                        ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800'
+                        : 'bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800'
                         }`}>
                         {summary.upcomingLeave.status}
                       </span>
