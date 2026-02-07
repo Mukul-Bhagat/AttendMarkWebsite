@@ -66,16 +66,25 @@ const RegisterSuperAdmin: React.FC = () => {
       };
 
       // Send registration request
-      await api.post('/api/auth/register-super-admin', requestData);
+      const response = await api.post('/api/auth/register-super-admin', requestData);
 
       // Show success message and toast
-      const successMessage = 'Registration successful! You can now login with your password.';
+      const isNewUser = response.data.isNewUser;
+
+      let successMessage = 'Registration successful! You can now login with your password.';
+      let toastType: 'success' | 'info' = 'success';
+
+      if (isNewUser === false) {
+        successMessage = 'Organization created! You already have an account, so please login with your EXISTING password.';
+        toastType = 'info';
+      }
+
       setMessage(successMessage);
       setToast({
         message: successMessage,
-        type: 'success',
+        type: toastType,
       });
-      
+
       // Clear the form
       setFormData({
         organizationName: '',
@@ -85,16 +94,16 @@ const RegisterSuperAdmin: React.FC = () => {
         phone: '',
         password: '',
       });
-      
+
       // Ensure no auth tokens exist (clean state)
       // This prevents any automatic auth checks from triggering
       localStorage.removeItem('token');
-      
-      // Redirect to login after 2-3 seconds
+
+      // Redirect to login after 4 seconds to allow reading the message
       // Use window.location to ensure a clean page load without triggering React Router auth checks
       setTimeout(() => {
         window.location.href = '/login';
-      }, 2500);
+      }, 4000);
     } catch (err: any) {
       // Clear any previous success messages
       setMessage('');
@@ -110,11 +119,11 @@ const RegisterSuperAdmin: React.FC = () => {
           // Handle express-validator errors (array format) - 400 Bad Request
           if (data.errors && Array.isArray(data.errors) && data.errors.length > 0) {
             errorMessage = data.errors.map((e: any) => e.msg || e.message || 'Validation error').join(', ');
-          } 
+          }
           // Handle custom error messages (string format)
           else if (data.msg) {
             errorMessage = data.msg;
-          } 
+          }
           // Handle error object with message property
           else if (data.message) {
             errorMessage = data.message;
@@ -298,9 +307,8 @@ const RegisterSuperAdmin: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className={`flex h-14 w-full items-center justify-center gap-2 rounded-lg bg-primary px-6 text-base font-bold text-white shadow-sm transition-all hover:bg-[#d63a25] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
-                    isSubmitting ? 'opacity-70 cursor-not-allowed' : ''
-                  }`}
+                  className={`flex h-14 w-full items-center justify-center gap-2 rounded-lg bg-primary px-6 text-base font-bold text-white shadow-sm transition-all hover:bg-[#d63a25] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''
+                    }`}
                 >
                   {isSubmitting ? 'Registering...' : 'Register'}
                 </button>

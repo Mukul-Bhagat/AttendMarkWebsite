@@ -223,9 +223,25 @@ const ScanQR: React.FC = () => {
           isEligible: status === 'live'
         });
 
-        if (status !== 'live') {
+        // Logic Update: Allow "Upcoming" sessions if within 2 hours
+        // Previously only 'live' used to be allowed.
+        const minutesUntilStart = getMinutesUntilStart(currentSession);
+        const isLive = status === 'live';
+        const isUpcomingWithinWindow = status === 'upcoming' && minutesUntilStart <= 120;
+
+        // Eligibility Check
+        if (!isLive && !isUpcomingWithinWindow) {
           setMessageType('error');
-          setMessage('Attendance is only allowed during the session time.');
+          if (status === 'past') {
+            setMessage('This session has already ended.');
+          } else if (status === 'upcoming') {
+            const hours = Math.floor(minutesUntilStart / 60);
+            const mins = minutesUntilStart % 60;
+            const timeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+            setMessage(`Attendance not yet open. Starts in ${timeStr}.(Window opens 2 hours before start)`);
+          } else {
+            setMessage('Attendance is only allowed during the session time.');
+          }
           return;
         }
       }
@@ -473,6 +489,10 @@ const ScanQR: React.FC = () => {
       setMessage('Device Mismatch: Attendance must be marked from the same device/browser used earlier.');
     } else if (data.reason === 'INVALID_QR') {
       setMessage('Invalid QR Code. Please scan the correct code.');
+    } else if (data.reason === 'USER_NOT_ASSIGNED') {
+      setMessage('Access Denied: You are not assigned to this session.');
+    } else if (data.type === 'TOO_EARLY' || data.reason === 'ATTENDANCE_WINDOW_CLOSED') {
+      setMessage(data.msg || 'Attendance is not open yet.');
     } else {
       setMessage(data.msg || 'Attendance Failed');
     }
