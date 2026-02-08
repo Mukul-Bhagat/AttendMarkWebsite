@@ -74,6 +74,7 @@ const Leaves: React.FC = () => {
   const { user, isSuperAdmin, isCompanyAdmin, isManager, isSessionAdmin } = useAuth();
   const [leaveRequests, setLeaveRequests] = useState<ILeaveRequest[]>([]);
   const [pendingRequests, setPendingRequests] = useState<ILeaveRequest[]>([]);
+  const [orgHistory, setOrgHistory] = useState<ILeaveRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [quota, setQuota] = useState<IQuota>({ yearlyQuotaPL: 12, yearlyQuotaCL: 12, yearlyQuotaSL: 10 });
@@ -160,9 +161,22 @@ const Leaves: React.FC = () => {
           // Fetch active leaves today
           const { data: activeToday } = await api.get('/api/leaves/active-today');
           setActiveLeaves(Array.isArray(activeToday) ? activeToday : []);
+
+          // Fetch organization history (Approved/Rejected)
+          const { data: historyData } = await api.get('/api/leaves/organization?status=Approved,Rejected');
+          // Filter out current user's own history to avoid duplication with "My Leave History"
+          /* const myId = user?.id || user?._id; 
+             const filteredHistory = normalizeLeaves(historyData).filter(l => {
+                const uid = typeof l.userId === 'object' ? l.userId._id : l.userId;
+                return uid !== myId;
+             });
+          */
+          // Actually, showing all organization history (including mine) is fine for admins
+          setOrgHistory(normalizeLeaves(historyData));
         } catch (err) {
-          console.error('Failed to fetch pending requests:', err);
+          console.error('Failed to fetch org data:', err);
           setPendingRequests([]);
+          setOrgHistory([]);
         }
       }
     } catch (err) {
@@ -951,6 +965,94 @@ const Leaves: React.FC = () => {
         </div>
       )}
 
+      {/* Organization History Section - Only for Admins/Staff */}
+      {isAdminOrStaff && (
+        <div className="w-full rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm mb-6">
+          <h2 className="text-xl font-bold mb-4 text-text-primary-light dark:text-text-primary-dark">
+            Organization History
+          </h2>
+          <div className="flex flex-col gap-4">
+            {orgHistory.length > 0 ? (
+              orgHistory.map((leave) => (
+                <div
+                  key={leave._id}
+                  onClick={() => handleOpenDetails(leave)}
+                  className="relative flex flex-col sm:flex-row gap-2 sm:gap-4 p-3 sm:p-5 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-background-dark hover:bg-gray-50 dark:hover:bg-surface-dark/50 transition-colors cursor-pointer"
+                >
+                  {/* User Avatar */}
+                  {typeof leave.userId === 'object' && leave.userId.profile && (
+                    <div className="flex-shrink-0">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                        <span className="text-blue-600 dark:text-blue-400 text-sm sm:text-base font-bold">
+                          {leave.userId.profile.firstName?.[0]?.toUpperCase() || ''}
+                          {leave.userId.profile.lastName?.[0]?.toUpperCase() || ''}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Main Content */}
+                  <div className="flex flex-col gap-1 sm:gap-2 flex-1 min-w-0 pr-12 sm:pr-0">
+                    {/* User Name */}
+                    {typeof leave.userId === 'object' && leave.userId.profile && (
+                      <p className="text-sm sm:text-base font-semibold text-text-primary-light dark:text-text-primary-dark truncate">
+                        {leave.userId.profile.firstName} {leave.userId.profile.lastName}
+                      </p>
+                    )}
+
+                    {/* Date Range */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm sm:text-base font-semibold text-text-primary-light dark:text-text-primary-dark break-words">
+                        {formatDateRange(leave.startDate, leave.endDate, leave.dates)}
+                      </p>
+                      {leave.dates && leave.dates.length > 0 && (
+                        <span
+                          className="text-xs text-text-secondary-light dark:text-text-secondary-dark cursor-help whitespace-nowrap"
+                          title={formatDatesList(leave.dates)}
+                        >
+                          (Multiple Dates)
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Leave Type and Days */}
+                    <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark break-words">
+                      {leave.leaveType} • {leave.daysCount} {leave.daysCount === 1 ? 'day' : 'days'}
+                    </p>
+
+                    {/* Approved/Rejected By Info */}
+                    {leave.approvedBy && (
+                      <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-1">
+                        {leave.status === 'Approved' ? 'Approved by: ' : 'Rejected by: '}
+                        <span className="font-medium text-text-primary-light dark:text-text-primary-dark">
+                          {typeof leave.approvedBy === 'object'
+                            ? `${leave.approvedBy.profile.firstName} ${leave.approvedBy.profile.lastName}`
+                            : 'Unknown'}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Status Badge */}
+                  <div className="absolute top-3 right-3 sm:relative sm:top-0 sm:right-0 flex sm:flex-col sm:items-end items-center gap-2 sm:gap-3 flex-shrink-0">
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(leave.status)}`}>
+                      {leave.status}
+                    </span>
+                    <span className="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark text-lg">
+                      chevron_right
+                    </span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm py-4">
+                No organization history found.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Leave History */}
       <div className="w-full rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm">
         <h2 className="text-xl font-bold mb-4 text-text-primary-light dark:text-text-primary-dark">Leave History</h2>
@@ -980,6 +1082,16 @@ const Leaves: React.FC = () => {
                     <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark">
                       {leave.leaveType} • {leave.daysCount} {leave.daysCount === 1 ? 'day' : 'days'}
                     </p>
+                    {(leave.status === 'Approved' || leave.status === 'Rejected') && leave.approvedBy && (
+                      <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-1">
+                        {leave.status === 'Approved' ? 'Approved by: ' : 'Rejected by: '}
+                        <span className="font-medium text-text-primary-light dark:text-text-primary-dark">
+                          {typeof leave.approvedBy === 'object'
+                            ? `${leave.approvedBy.profile.firstName} ${leave.approvedBy.profile.lastName}`
+                            : 'Unknown'}
+                        </span>
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
