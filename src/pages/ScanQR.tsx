@@ -19,7 +19,7 @@ import { formatIST } from '../utils/time';
 const ScanQR: React.FC = () => {
   const [searchParams] = useSearchParams();
   const sessionIdFromUrl = searchParams.get('sessionId');
-  const { user } = useAuth();
+
   const navigate = useNavigate();
 
   // View State Management

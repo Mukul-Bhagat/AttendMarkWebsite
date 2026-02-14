@@ -8,6 +8,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import { AuthProvider } from './contexts/AuthContext' // Import the provider
+import { OrganizationProvider } from './contexts/OrganizationContext'
 import './index.css'
 
 // Set default theme to light mode on initial load
@@ -22,7 +23,9 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider> {/* Wrap the App in the provider */}
-        <App />
+        <OrganizationProvider>
+          <App />
+        </OrganizationProvider>
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,

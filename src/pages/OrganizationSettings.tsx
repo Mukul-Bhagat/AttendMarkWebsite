@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useOrganization } from '../contexts/OrganizationContext';
 import api from '../api';
 
 const OrganizationSettings: React.FC = () => {
     const { user, isSuperAdmin, isCompanyAdmin } = useAuth();
+    const { refreshOrganization } = useOrganization();
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     // Organization Settings State
@@ -80,6 +82,8 @@ const OrganizationSettings: React.FC = () => {
                 emailEnabled: organizationSettings.emailEnabled,
                 logo: currentLogoUrl,
             });
+
+            await refreshOrganization();
 
             setMessage({ type: 'success', text: 'Organization settings updated successfully!' });
             // Clear file input state

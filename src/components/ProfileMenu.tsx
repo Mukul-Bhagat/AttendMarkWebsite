@@ -45,6 +45,14 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userInitials, userName, userR
   const { logout, refetchUser, switchOrganization, user } = useAuth();
   const navigate = useNavigate();
 
+  const profilePictureUrl = React.useMemo(() => {
+    if (!profilePicture) return null;
+    if (profilePicture.startsWith('http') || profilePicture.startsWith('data:')) {
+      return profilePicture;
+    }
+    return `${getApiUrl()}${profilePicture}`;
+  }, [profilePicture]);
+
   // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -164,7 +172,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userInitials, userName, userR
           {profilePicture && profilePicture.trim() !== '' ? (
             <img
               key={profilePicture} // Force re-render when profile picture changes
-              src={`${getApiUrl()}${profilePicture}?t=${Date.now()}`}
+              src={`${profilePictureUrl}?t=${Date.now()}`}
               alt="Profile"
               className="size-9 rounded-full object-cover border-2 border-[#f04129]/20"
             />

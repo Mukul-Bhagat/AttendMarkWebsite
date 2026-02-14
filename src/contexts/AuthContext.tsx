@@ -12,6 +12,7 @@ export interface IUser {
     phone?: string;
     bio?: string;
   };
+  profileImageUrl?: string;
   profilePicture?: string;
   createdAt?: string;
   mustResetPassword: boolean;
@@ -19,6 +20,7 @@ export interface IUser {
   organizationName?: string;
   organizationId?: string;
   organizationLogo?: string;
+  organizationLogoUrl?: string;
   collectionPrefix?: string; // Legacy
 }
 

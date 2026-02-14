@@ -1,8 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api';
 import { formatIST } from '../utils/time';
 import { getApiUrl } from '../utils/apiUrl';
+import Cropper, { Area } from 'react-easy-crop';
+import { getCroppedImageBlob, getCroppedPreviewUrl } from '../utils/imageCrop';
 
 interface Organization {
   orgName: string;
@@ -12,6 +14,17 @@ interface Organization {
   organizationName: string;
 }
 
+const FILTER_OPTIONS = [
+  { key: 'normal', label: 'Normal', css: 'none' },
+  { key: 'grayscale', label: 'Grayscale', css: 'grayscale(100%)' },
+  { key: 'sepia', label: 'Sepia', css: 'sepia(80%)' },
+  { key: 'bright', label: 'Bright', css: 'brightness(110%)' },
+  { key: 'contrast', label: 'Contrast', css: 'contrast(120%)' },
+  { key: 'warm', label: 'Warm', css: 'hue-rotate(20deg)' },
+] as const;
+
+type FilterKey = typeof FILTER_OPTIONS[number]['key'];
+
 const Profile: React.FC = () => {
   const { user, refetchUser, switchOrganization } = useAuth();
   const [activeTab, setActiveTab] = useState<'personal' | 'preferences'>('personal');
@@ -19,6 +32,14 @@ const Profile: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isCropModalOpen, setIsCropModalOpen] = useState(false);
+  const [selectedImageSrc, setSelectedImageSrc] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const [filterKey, setFilterKey] = useState<FilterKey>('normal');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
   const [showOrgSwitchModal, setShowOrgSwitchModal] = useState(false);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
@@ -88,8 +109,54 @@ const Profile: React.FC = () => {
     }
   }, [user]);
 
+  const profilePictureValue = user?.profileImageUrl || user?.profilePicture;
+
+  const profilePictureUrl = useMemo(() => {
+    if (!profilePictureValue) return null;
+    if (profilePictureValue.startsWith('http') || profilePictureValue.startsWith('data:')) {
+      return profilePictureValue;
+    }
+    return `${getApiUrl()}${profilePictureValue}`;
+  }, [profilePictureValue]);
+
+  const activeFilter = useMemo(
+    () => FILTER_OPTIONS.find((filter) => filter.key === filterKey) ?? FILTER_OPTIONS[0],
+    [filterKey]
+  );
+
+  useEffect(() => {
+    if (!selectedImageSrc || !croppedAreaPixels) {
+      setPreviewUrl(null);
+      return;
+    }
+
+    let isCancelled = false;
+    setIsGeneratingPreview(true);
+
+    getCroppedPreviewUrl(selectedImageSrc, croppedAreaPixels, activeFilter.css)
+      .then((url) => {
+        if (!isCancelled) {
+          setPreviewUrl(url);
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setPreviewUrl(null);
+        }
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsGeneratingPreview(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedImageSrc, croppedAreaPixels, activeFilter.css]);
+
   // Handle profile picture upload
-  const handleProfilePictureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfilePictureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -105,10 +172,55 @@ const Profile: React.FC = () => {
       return;
     }
 
+    setMessage(null);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setFilterKey('normal');
+    setCroppedAreaPixels(null);
+    setPreviewUrl(null);
+
+    if (selectedImageSrc) {
+      URL.revokeObjectURL(selectedImageSrc);
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    setSelectedImageSrc(objectUrl);
+    setIsCropModalOpen(true);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleCropComplete = useCallback((_croppedArea: Area, croppedPixels: Area) => {
+    setCroppedAreaPixels(croppedPixels);
+  }, []);
+
+  const closeCropModal = useCallback(() => {
+    setIsCropModalOpen(false);
+    setCroppedAreaPixels(null);
+    setPreviewUrl(null);
+    if (selectedImageSrc) {
+      URL.revokeObjectURL(selectedImageSrc);
+    }
+    setSelectedImageSrc(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [selectedImageSrc]);
+
+  const handleSaveCroppedImage = async () => {
+    if (!selectedImageSrc || !croppedAreaPixels) {
+      setMessage({ type: 'error', text: 'Please crop the image before saving.' });
+      return;
+    }
+
     setIsUploading(true);
     setMessage(null);
 
     try {
+      const blob = await getCroppedImageBlob(selectedImageSrc, croppedAreaPixels, activeFilter.css);
+      const file = new File([blob], `profile-${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' });
       const formData = new FormData();
       formData.append('profilePicture', file);
 
@@ -118,11 +230,10 @@ const Profile: React.FC = () => {
         },
       });
 
-      // Update user in context
       await refetchUser();
-
       setMessage({ type: 'success', text: 'Profile picture updated successfully!' });
       setTimeout(() => setMessage(null), 3000);
+      closeCropModal();
     } catch (err: any) {
       setMessage({
         type: 'error',
@@ -130,15 +241,12 @@ const Profile: React.FC = () => {
       });
     } finally {
       setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
     }
   };
 
   // Handle remove profile picture
   const handleRemoveProfilePicture = async () => {
-    if (!user?.profilePicture) return;
+    if (!profilePictureValue) return;
 
     if (!window.confirm('Are you sure you want to remove your profile picture?')) {
       return;
@@ -287,10 +395,10 @@ const Profile: React.FC = () => {
             {/* Profile Picture */}
             <div className="relative mb-6 flex justify-center">
               <div className="relative group">
-                {user.profilePicture && user.profilePicture.trim() !== '' ? (
+                {profilePictureValue && profilePictureValue.trim() !== '' ? (
                   <img
-                    key={user.profilePicture} // Force re-render when profile picture changes
-                    src={`${getApiUrl()}${user.profilePicture}`}
+                    key={profilePictureValue} // Force re-render when profile picture changes
+                    src={profilePictureUrl || ''}
                     alt="Profile"
                     className="w-32 h-32 rounded-full object-cover border-4 border-[#f04129]/20"
                     onError={(e) => {
@@ -337,7 +445,7 @@ const Profile: React.FC = () => {
             </div>
 
             {/* Remove Profile Picture Button */}
-            {user.profilePicture && user.profilePicture.trim() !== '' && (
+            {profilePictureValue && profilePictureValue.trim() !== '' && (
               <div className="mb-6 flex justify-center">
                 <button
                   onClick={handleRemoveProfilePicture}
@@ -590,6 +698,129 @@ const Profile: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Profile Image Crop Modal */}
+      {isCropModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-surface-light dark:bg-surface-dark rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-border-light dark:border-border-dark flex items-center justify-between">
+              <h2 className="text-lg font-bold text-text-primary-light dark:text-text-primary-dark">
+                Edit Profile Photo
+              </h2>
+              <button
+                onClick={closeCropModal}
+                className="text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark transition-colors"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2 space-y-4">
+                <div className="relative w-full h-80 rounded-xl bg-black/5 dark:bg-white/5 overflow-hidden border border-border-light dark:border-border-dark">
+                  {selectedImageSrc ? (
+                    <Cropper
+                      image={selectedImageSrc}
+                      crop={crop}
+                      zoom={zoom}
+                      aspect={1}
+                      onCropChange={setCrop}
+                      onZoomChange={setZoom}
+                      onCropComplete={handleCropComplete}
+                      showGrid={false}
+                      style={{
+                        mediaStyle: { filter: activeFilter.css },
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-text-secondary-light dark:text-text-secondary-dark">
+                      Select an image to start
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-text-secondary-light dark:text-text-secondary-dark mb-2">
+                    Zoom
+                  </label>
+                  <input
+                    type="range"
+                    min={1}
+                    max={3}
+                    step={0.1}
+                    value={zoom}
+                    onChange={(e) => setZoom(Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs font-semibold text-text-secondary-light dark:text-text-secondary-dark mb-2">
+                    Preview
+                  </p>
+                  <div className="w-32 h-32 rounded-full border border-border-light dark:border-border-dark bg-white dark:bg-slate-900 overflow-hidden flex items-center justify-center">
+                    {previewUrl ? (
+                      <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                        {isGeneratingPreview ? 'Updating...' : 'Preview'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-text-secondary-light dark:text-text-secondary-dark mb-2">
+                    Filters
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {FILTER_OPTIONS.map((filter) => (
+                      <button
+                        key={filter.key}
+                        type="button"
+                        onClick={() => setFilterKey(filter.key as FilterKey)}
+                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filterKey === filter.key
+                          ? 'bg-[#f04129] text-white border-[#f04129]'
+                          : 'border-border-light dark:border-border-dark text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark'
+                          }`}
+                      >
+                        {filter.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-border-light dark:border-border-dark flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeCropModal}
+                className="px-4 py-2 text-sm font-medium text-text-primary-light dark:text-text-primary-dark bg-transparent hover:bg-gray-100 dark:hover:bg-surface-dark rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="px-4 py-2 text-sm font-medium text-[#f04129] border border-[#f04129] rounded-lg hover:bg-[#f04129]/10 transition-colors"
+              >
+                Change
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveCroppedImage}
+                disabled={isUploading || !croppedAreaPixels}
+                className="px-4 py-2 text-sm font-bold text-white bg-[#f04129] rounded-lg hover:bg-[#d63a25] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isUploading ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Organization Switch Modal */}
       {showOrgSwitchModal && (
