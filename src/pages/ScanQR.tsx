@@ -6,7 +6,6 @@ import { getOrCreateDeviceId } from '../utils/deviceId';
 import { extractSessionIdFromQR } from '../utils/qrParser';
 import { RefreshCw, ArrowLeft } from 'lucide-react';
 import { ISession } from '../types';
-import { useAuth } from '../contexts/AuthContext';
 import { FullScreenAnimation } from '../components/FullScreenAnimation';
 import {
   getSessionStatus,

@@ -1483,7 +1483,7 @@ const Leaves: React.FC = () => {
                           </div>
                           <button
                             type="button"
-                            onClick={clearSelectedFile}
+                            onClick={() => clearSelectedFile()}
                             className="flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
