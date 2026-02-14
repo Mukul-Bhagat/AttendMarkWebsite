@@ -49,6 +49,7 @@ const EditClass: React.FC = () => {
   const [sessionAdmins, setSessionAdmins] = useState<IAuthUser[]>([]);
   const [showUserModal, setShowUserModal] = useState(false);
   const [userModalContext, setUserModalContext] = useState<'PHYSICAL' | 'REMOTE' | 'ALL'>('ALL');
+  const initialUserIdsRef = useRef<Set<string>>(new Set());
 
   // Location State
   const [selectedCoordinates, setSelectedCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -124,9 +125,11 @@ const EditClass: React.FC = () => {
 
                 setPhysicalUsers(allUsers.filter((u: IUser) => physicalIds.includes(u._id)));
                 setRemoteUsers(allUsers.filter((u: IUser) => remoteIds.includes(u._id)));
+                initialUserIdsRef.current = new Set([...physicalIds, ...remoteIds]);
               } else {
                 const userIds = session.assignedUsers.map((u: any) => u.userId);
                 setAssignedUsers(allUsers.filter((u: IUser) => userIds.includes(u._id)));
+                initialUserIdsRef.current = new Set(userIds);
               }
             } catch (err) {
               console.error('Error fetching users:', err);
@@ -317,6 +320,36 @@ const EditClass: React.FC = () => {
       const response = await api.put(`/api/classes/${id}`, updateData);
 
       console.log('[EDIT_CLASS] Update successful:', response.data);
+
+      // Sync class enrollments (add/remove users)
+      const currentUserIds = new Set<string>(
+        formData.sessionType === 'HYBRID'
+          ? [...physicalUsers.map(u => u._id), ...remoteUsers.map(u => u._id)]
+          : assignedUsers.map(u => u._id)
+      );
+
+      const initialUserIds = initialUserIdsRef.current;
+      const usersToAdd = Array.from(currentUserIds).filter(id => !initialUserIds.has(id));
+      const usersToRemove = Array.from(initialUserIds).filter(id => !currentUserIds.has(id));
+
+      if (usersToAdd.length > 0 || usersToRemove.length > 0) {
+        const joinedAt = new Date().toISOString();
+        const addCalls = usersToAdd.map(userId =>
+          api.post(`/api/membership/${userId}/assign-class`, {
+            classBatchId: id,
+            joinedAt
+          })
+        );
+        const removeCalls = usersToRemove.map(userId =>
+          api.post(`/api/membership/${userId}/remove-class`, {
+            classBatchId: id
+          })
+        );
+
+        await Promise.all([...addCalls, ...removeCalls]);
+        // Update baseline after successful sync
+        initialUserIdsRef.current = currentUserIds;
+      }
 
       // Store success message in history state if possible or just navigate
       navigate('/classes', { state: { message: 'Class and sessions updated successfully.' } });

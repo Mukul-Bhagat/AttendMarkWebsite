@@ -6,8 +6,12 @@ import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import { X, Trash2 } from 'lucide-react';
 import jsPDF from 'jspdf';
-import { nowIST, toISTDateString, formatIST, istDayStart, istDayEnd } from '../utils/time';
+import { nowIST, toISTDateString, formatIST } from '../utils/time';
 import { getApiUrl } from '../utils/apiUrl';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+import customParseFormat from 'dayjs/plugin/customParseFormat';
 
 interface ILeaveRequest {
   _id: string;
@@ -26,6 +30,8 @@ interface ILeaveRequest {
   daysCount: number;
   reason: string;
   status: 'Pending' | 'Approved' | 'Rejected';
+  isBackdated?: boolean;
+  backdatedLabel?: string;
   approvedBy?: string | {
     _id: string;
     email: string;
@@ -35,7 +41,11 @@ interface ILeaveRequest {
     };
   };
   rejectionReason?: string;
-  attachment?: string; // File path/URL for attached document
+  attachment?: string; // Legacy file path/URL
+  attachmentUrl?: string;
+  attachmentPublicId?: string;
+  documentUrl?: string;
+  documentPublicId?: string;
   organizationPrefix: string;
   createdAt: string;
   updatedAt?: string;
@@ -68,7 +78,33 @@ interface IActiveLeave {
   leaveType: string;
   startDate: string;
   endDate: string;
+  isBackdated?: boolean;
+  backdatedLabel?: string;
+  documentUrl?: string | null;
 }
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.extend(customParseFormat);
+
+const IST_TIMEZONE = 'Asia/Kolkata';
+const DATE_ONLY_FORMAT = 'YYYY-MM-DD';
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+const toISTDateOnly = (date: Date): string =>
+  dayjs(date).tz(IST_TIMEZONE).format(DATE_ONLY_FORMAT);
+
+const parseISTDateOnly = (dateStr: string) =>
+  dayjs.tz(dateStr, DATE_ONLY_FORMAT, IST_TIMEZONE);
+
+const normalizeDateOnly = (value: string): string => {
+  const trimmed = value?.trim?.() ?? '';
+  if (DATE_ONLY_REGEX.test(trimmed)) return trimmed;
+  const parsed = dayjs(trimmed);
+  return parsed.isValid()
+    ? parsed.tz(IST_TIMEZONE).format(DATE_ONLY_FORMAT)
+    : value;
+};
 
 const Leaves: React.FC = () => {
   const { user, isSuperAdmin, isCompanyAdmin, isManager, isSessionAdmin } = useAuth();
@@ -236,11 +272,13 @@ const Leaves: React.FC = () => {
 
   // Calculate used leaves for current year
   const getUsedLeaves = (type: 'Personal' | 'Casual' | 'Sick') => {
-    const currentYear = new Date(nowIST()).getFullYear();
+    const currentYear = dayjs().tz(IST_TIMEZONE).year();
     const leaves = Array.isArray(leaveRequests) ? leaveRequests : [];
     return leaves
       .filter(leave => {
-        const leaveYear = new Date(leave.startDate).getFullYear();
+        const startStr = normalizeDateOnly(leave.startDate);
+        if (!DATE_ONLY_REGEX.test(startStr)) return false;
+        const leaveYear = parseISTDateOnly(startStr).year();
         return leave.leaveType === type &&
           leave.status === 'Approved' &&
           leaveYear === currentYear;
@@ -250,28 +288,34 @@ const Leaves: React.FC = () => {
 
   // Calculate disabled dates (already applied leaves)
   const disabledDates = React.useMemo(() => {
-    const dates: Date[] = [];
-    if (!Array.isArray(leaveRequests)) return dates;
+    const dateSet = new Set<string>();
+    if (!Array.isArray(leaveRequests)) return [];
 
     leaveRequests.forEach(leave => {
-      // Filter for Pending/Approved only (status can only be 'Pending' | 'Approved' | 'Rejected')
       if (leave.status !== 'Pending' && leave.status !== 'Approved') return;
 
-      if (leave.dates && leave.dates.length > 0) {
-        leave.dates.forEach(d => dates.push(new Date(istDayStart(d))));
-      } else if (leave.startDate && leave.endDate) {
-        let currentTimestamp = istDayStart(leave.startDate);
-        const endTimestamp = istDayEnd(leave.endDate);
-        // 24 hours in milliseconds
-        const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+      const normalizedDates = (leave.dates || [])
+        .map(normalizeDateOnly)
+        .filter(d => DATE_ONLY_REGEX.test(d));
 
-        while (currentTimestamp <= endTimestamp) {
-          dates.push(new Date(currentTimestamp));
-          currentTimestamp += ONE_DAY_MS;
-        }
+      if (normalizedDates.length > 0) {
+        normalizedDates.forEach(d => dateSet.add(d));
+        return;
+      }
+
+      const startStr = normalizeDateOnly(leave.startDate);
+      const endStr = normalizeDateOnly(leave.endDate);
+      if (!DATE_ONLY_REGEX.test(startStr) || !DATE_ONLY_REGEX.test(endStr)) return;
+
+      let cursor = parseISTDateOnly(startStr);
+      const endDate = parseISTDateOnly(endStr);
+      while (cursor.isBefore(endDate, 'day') || cursor.isSame(endDate, 'day')) {
+        dateSet.add(cursor.format(DATE_ONLY_FORMAT));
+        cursor = cursor.add(1, 'day');
       }
     });
-    return dates;
+
+    return Array.from(dateSet).map(dateStr => parseISTDateOnly(dateStr).toDate());
   }, [leaveRequests]);
 
   const usedPL = getUsedLeaves('Personal');
@@ -316,6 +360,15 @@ const Leaves: React.FC = () => {
       errors.sendTo = 'Please select at least one recipient';
     }
 
+    if (selectedFile) {
+      const isPdf = selectedFile.type === 'application/pdf' || selectedFile.name.toLowerCase().endsWith('.pdf');
+      if (!isPdf) {
+        errors.attachment = 'Only PDF files are allowed';
+      } else if (selectedFile.size > 5 * 1024 * 1024) {
+        errors.attachment = 'PDF must be smaller than 5MB';
+      }
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -334,7 +387,7 @@ const Leaves: React.FC = () => {
       // Convert selected dates to ISO strings (YYYY-MM-DD format)
       const datesArray = selectedDates
         .sort((a, b) => a.getTime() - b.getTime())
-        .map(date => toISTDateString(istDayStart(date.toISOString())));
+        .map(date => toISTDateOnly(date));
 
       // Create FormData for file upload
       const formDataToSend = new FormData();
@@ -428,61 +481,44 @@ const Leaves: React.FC = () => {
 
   // Format date for display
   const formatDate = (dateString: string) => {
-    try {
-      const timestamp = new Date(dateString).getTime();
-      if (isNaN(timestamp)) {
-        return dateString;
-      }
-      return formatIST(timestamp, {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
-    } catch {
-      return dateString;
-    }
+    return normalizeDateOnly(dateString);
   };
 
   // Format date range
   // Format date range
   const formatDateRange = (start: string, end: string, dates?: string[]) => {
-    let startTime = istDayStart(start);
-    let endTime = istDayEnd(end);
+    let startDateStr = normalizeDateOnly(start);
+    let endDateStr = normalizeDateOnly(end);
     let isConsecutive = true;
     let count = 0;
 
     if (dates && dates.length > 0) {
-      const sorted = dates.map(d => istDayStart(d)).sort((a, b) => a - b);
-      startTime = sorted[0];
-      endTime = sorted[sorted.length - 1];
+      const normalized = dates.map(normalizeDateOnly).filter(d => DATE_ONLY_REGEX.test(d));
+      const sorted = normalized.sort();
+      startDateStr = sorted[0] || startDateStr;
+      endDateStr = sorted[sorted.length - 1] || endDateStr;
       count = sorted.length;
 
-      // Check consecutive
-      const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-      const diffDays = Math.round((endTime - startTime) / ONE_DAY_MS) + 1;
-      isConsecutive = diffDays === count;
+      if (startDateStr && endDateStr) {
+        const diffDays = parseISTDateOnly(endDateStr).diff(parseISTDateOnly(startDateStr), 'day') + 1;
+        isConsecutive = diffDays === count;
+      }
     }
 
-    const startDateFormatted = formatIST(startTime, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-    const endDateFormatted = formatIST(endTime, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+    if (!DATE_ONLY_REGEX.test(startDateStr) || !DATE_ONLY_REGEX.test(endDateStr)) {
+      if (startDateStr === endDateStr) return startDateStr;
+      return `${startDateStr} - ${endDateStr}`;
+    }
 
-    if (startDateFormatted === endDateFormatted) {
-      return startDateFormatted;
+    if (startDateStr === endDateStr) {
+      return startDateStr;
     }
 
     if (!isConsecutive && count > 0) {
-      return `${startDateFormatted} - ${endDateFormatted} (${count} days)`;
+      return `${startDateStr} - ${endDateStr} (${count} days)`;
     }
 
-    return `${startDateFormatted} - ${endDateFormatted}`;
+    return `${startDateStr} - ${endDateStr}`;
   };
 
   // Format dates list for tooltip
@@ -506,6 +542,15 @@ const Leaves: React.FC = () => {
       default:
         return 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300';
     }
+  };
+
+  const renderBackdatedBadge = (leave: { isBackdated?: boolean; backdatedLabel?: string }) => {
+    if (!leave?.isBackdated) return null;
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+        {leave.backdatedLabel || 'Backdated Entry'}
+      </span>
+    );
   };
 
   // Get user name from leave request
@@ -938,6 +983,7 @@ const Leaves: React.FC = () => {
                         </span>
                       )}
                     </div>
+                    {renderBackdatedBadge(leave)}
 
                     {/* Leave Type and Days */}
                     <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark break-words">
@@ -1014,6 +1060,7 @@ const Leaves: React.FC = () => {
                         </span>
                       )}
                     </div>
+                    {renderBackdatedBadge(leave)}
 
                     {/* Leave Type and Days */}
                     <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark break-words">
@@ -1079,6 +1126,7 @@ const Leaves: React.FC = () => {
                         </span>
                       )}
                     </div>
+                    {renderBackdatedBadge(leave)}
                     <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark">
                       {leave.leaveType} • {leave.daysCount} {leave.daysCount === 1 ? 'day' : 'days'}
                     </p>
@@ -1270,10 +1318,10 @@ const Leaves: React.FC = () => {
                           mode="multiple"
                           selected={selectedDates}
                           onSelect={(dates) => setSelectedDates(dates || [])}
-                          disabled={[{ before: new Date(nowIST()) }, ...disabledDates]}
+                          disabled={disabledDates}
                           modifiers={{ used: disabledDates }}
                           modifiersClassNames={{ used: 'rdp-day_used' }}
-                          title="Disabled dates include past dates and already applied leaves"
+                          title="Disabled dates include already applied leaves"
                           numberOfMonths={1}
                           pagedNavigation
                           showOutsideDays
@@ -1295,7 +1343,7 @@ const Leaves: React.FC = () => {
                             key={index}
                             className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#f04129]/10 text-[#f04129] text-xs rounded-full"
                           >
-                            {formatIST(date.getTime(), { month: 'short', day: 'numeric' })}
+                            {toISTDateOnly(date)}
                             <button
                               type="button"
                               onClick={() => setSelectedDates(selectedDates.filter((_, i) => i !== index))}
@@ -1340,9 +1388,29 @@ const Leaves: React.FC = () => {
                     </label>
                     <input
                       type="file"
-                      accept=".pdf,.jpg,.png,.jpeg"
+                      accept="application/pdf"
                       onChange={(e) => {
                         const file = e.target.files?.[0] || null;
+                        if (!file) {
+                          setSelectedFile(null);
+                          return;
+                        }
+                        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+                        if (!isPdf) {
+                          setFormErrors(prev => ({ ...prev, attachment: 'Only PDF files are allowed' }));
+                          setSelectedFile(null);
+                          return;
+                        }
+                        if (file.size > 5 * 1024 * 1024) {
+                          setFormErrors(prev => ({ ...prev, attachment: 'PDF must be smaller than 5MB' }));
+                          setSelectedFile(null);
+                          return;
+                        }
+                        setFormErrors(prev => {
+                          const next = { ...prev };
+                          delete next.attachment;
+                          return next;
+                        });
                         setSelectedFile(file);
                       }}
                       className="w-full px-3 py-1.5 h-9 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#f04129] file:text-white hover:file:bg-[#d63a25] file:cursor-pointer text-sm"
@@ -1352,8 +1420,11 @@ const Leaves: React.FC = () => {
                         Selected: {selectedFile.name}
                       </p>
                     )}
+                    {formErrors.attachment && (
+                      <p className="text-red-500 text-xs mt-1">{formErrors.attachment}</p>
+                    )}
                     <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-1">
-                      PDF, JPG, PNG (Max 10MB)
+                      PDF only (Max 5MB)
                     </p>
                   </div>
 
@@ -1597,6 +1668,7 @@ const Leaves: React.FC = () => {
                   <span className={`px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(selectedLeave.status)}`}>
                     {selectedLeave.status}
                   </span>
+                  {renderBackdatedBadge(selectedLeave)}
                 </div>
                 <div className="flex items-center gap-2 ml-3">
                   {(selectedLeave.status === 'Approved' || selectedLeave.status === 'Pending') && (
@@ -1768,39 +1840,40 @@ const Leaves: React.FC = () => {
               </div>
 
               {/* Attachment */}
-              {/* Attachment */}
-              {selectedLeave.attachment && (
-                <div>
-                  <h3 className="text-xs font-semibold text-text-secondary-light dark:text-text-secondary-dark mb-2">
-                    Attached Document
-                  </h3>
-                  {(() => {
-                    const attachment = selectedLeave.attachment || '';
-                    const isCloudinary = attachment.includes('cloudinary');
-                    const isAbsolute = attachment.startsWith('http');
-                    const url = isAbsolute ? attachment : `${getApiUrl()}${attachment}`;
+              {(() => {
+                const attachment =
+                  selectedLeave.documentUrl ||
+                  selectedLeave.attachmentUrl ||
+                  selectedLeave.attachment ||
+                  '';
 
-                    // Simple extension check or cloud resource
-                    const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(attachment) || (isCloudinary && !attachment.endsWith('.pdf'));
-                    const isPDF = /\.pdf$/i.test(attachment) || (isCloudinary && attachment.endsWith('.pdf'));
+                if (!attachment) return null;
 
-                    if (isImage) {
-                      return (
-                        <div className="flex flex-col gap-2">
-                          <img
-                            src={url}
-                            alt="Attachment"
-                            className="max-w-full h-auto max-h-64 object-contain rounded-lg border border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-900"
-                          />
-                          <a href={url} download target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline self-start flex items-center gap-1">
-                            <span className="material-symbols-outlined text-sm">download</span>
-                            Download Image
-                          </a>
-                        </div>
-                      );
-                    }
+                const isCloudinary = attachment.includes('cloudinary');
+                const isAbsolute = attachment.startsWith('http');
+                const url = isAbsolute ? attachment : `${getApiUrl()}${attachment}`;
 
-                    return (
+                const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(attachment) || (isCloudinary && !attachment.endsWith('.pdf'));
+                const isPDF = /\.pdf$/i.test(attachment) || (isCloudinary && attachment.endsWith('.pdf'));
+
+                return (
+                  <div>
+                    <h3 className="text-xs font-semibold text-text-secondary-light dark:text-text-secondary-dark mb-2">
+                      Attached Document
+                    </h3>
+                    {isImage ? (
+                      <div className="flex flex-col gap-2">
+                        <img
+                          src={url}
+                          alt="Attachment"
+                          className="max-w-full h-auto max-h-64 object-contain rounded-lg border border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-900"
+                        />
+                        <a href={url} download target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline self-start flex items-center gap-1">
+                          <span className="material-symbols-outlined text-sm">download</span>
+                          Download Image
+                        </a>
+                      </div>
+                    ) : (
                       <a
                         href={url}
                         target="_blank"
@@ -1810,12 +1883,12 @@ const Leaves: React.FC = () => {
                         <span className="material-symbols-outlined text-red-600 text-lg">
                           {isPDF ? 'picture_as_pdf' : 'attach_file'}
                         </span>
-                        {isPDF ? 'Open PDF Document' : 'View Document'}
+                        {isPDF ? 'View Attachment' : 'View Document'}
                       </a>
-                    );
-                  })()}
-                </div>
-              )}
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Application Date */}
               <div>

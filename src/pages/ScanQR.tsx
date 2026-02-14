@@ -686,16 +686,7 @@ const ScanQR: React.FC = () => {
   // Default View: Session List
   const filteredSessions = getFilteredSessions();
 
-  // Filter sessions to only show those where the current user is assigned
-  const myScanSessions = filteredSessions.filter(session => {
-    if (!user) return false;
-    if (!session.assignedUsers || !Array.isArray(session.assignedUsers)) return false;
-
-    // Check if user is in assignedUsers by userId or email
-    return session.assignedUsers.some(u =>
-      u.userId === user.id || u.email === user.email
-    );
-  });
+  const myScanSessions = filteredSessions;
 
   if (isLoadingSessions) {
     return (

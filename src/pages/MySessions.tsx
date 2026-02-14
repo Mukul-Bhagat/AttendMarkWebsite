@@ -16,14 +16,7 @@ const MySessions: React.FC = () => {
     const fetchSessions = async () => {
       try {
         const { data } = await api.get('/api/sessions');
-        // Filter sessions to only show those assigned to the current user (for End Users)
-        const allSessions = data || [];
-        const filteredSessions = user?.role === 'EndUser'
-          ? allSessions.filter((session: ISession) =>
-            session.assignedUsers?.some(assignedUser => assignedUser.userId === user?.id)
-          )
-          : allSessions;
-        setSessions(filteredSessions);
+        setSessions(data || []);
       } catch (err: any) {
         if (err.response?.status === 401) {
           setError('You are not authorized. Please log in again.');

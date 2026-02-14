@@ -324,9 +324,9 @@ const Dashboard: React.FC = () => {
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <p className="font-semibold text-text-primary-light dark:text-text-primary-dark text-lg">
-                          {formatIST(new Date(summary.upcomingLeave.startDate).getTime(), { month: 'short', day: 'numeric' })}
+                          {summary.upcomingLeave.startDate}
                           {summary.upcomingLeave.startDate !== summary.upcomingLeave.endDate &&
-                            ` - ${formatIST(new Date(summary.upcomingLeave.endDate).getTime(), { month: 'short', day: 'numeric' })}`
+                            ` - ${summary.upcomingLeave.endDate}`
                           }
                         </p>
                         <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-0.5">
