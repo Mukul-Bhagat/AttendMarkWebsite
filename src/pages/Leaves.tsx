@@ -22,6 +22,8 @@ interface ILeaveRequest {
       firstName: string;
       lastName: string;
     };
+    profileImageUrl?: string;
+    profilePicture?: string;
   };
   leaveType: 'Personal' | 'Casual' | 'Sick' | 'Extra';
   startDate: string;
@@ -327,10 +329,31 @@ const Leaves: React.FC = () => {
     return Array.from(dateSet).map(dateStr => parseISTDateOnly(dateStr).toDate());
   }, [leaveRequests]);
 
+  const todayStr = dayjs().tz(IST_TIMEZONE).format(DATE_ONLY_FORMAT);
+
   const isBackdatedSelection = useMemo(() => {
-    const todayStr = dayjs().tz(IST_TIMEZONE).format(DATE_ONLY_FORMAT);
     return selectedDates.some(date => toISTDateOnly(date) < todayStr);
-  }, [selectedDates]);
+  }, [selectedDates, todayStr]);
+
+  const pendingLeaveRequests = pendingRequests;
+  const orgHistoryUpcoming = useMemo(() => orgHistory.filter((leave) => !isLeavePast(leave)), [orgHistory, todayStr]);
+  const orgHistoryPast = useMemo(() => orgHistory.filter((leave) => isLeavePast(leave)), [orgHistory, todayStr]);
+  const myPastLeaves = useMemo(() => leaveRequests.filter((leave) => isLeavePast(leave)), [leaveRequests, todayStr]);
+  const combinedPastLeaves = useMemo(() => {
+    if (!isAdminOrStaff) return myPastLeaves;
+    const map = new Map<string, ILeaveRequest>();
+    [...orgHistoryPast, ...myPastLeaves].forEach((leave) => {
+      map.set(leave._id, leave);
+    });
+    return Array.from(map.values());
+  }, [isAdminOrStaff, orgHistoryPast, myPastLeaves]);
+
+  const leaveHistoryList = isAdminOrStaff ? combinedPastLeaves : leaveRequests;
+
+  const selectedLeaveAvatar = selectedLeave ? getUserAvatarUrl(selectedLeave) : null;
+  const selectedLeaveSizeLabel = selectedLeave?.documentSize
+    ? `${(selectedLeave.documentSize / (1024 * 1024)).toFixed(2)} MB`
+    : null;
 
   const usedPL = getUsedLeaves('Personal');
   const usedCL = getUsedLeaves('Casual');
@@ -595,7 +618,7 @@ const Leaves: React.FC = () => {
   };
 
   // Get user name from leave request
-  const getUserName = (leave: ILeaveRequest): string => {
+  function getUserName(leave: ILeaveRequest): string {
     if (typeof leave.userId === 'object' && leave.userId.profile) {
       if (leave.userId.profile.firstName && leave.userId.profile.lastName) {
         return `${leave.userId.profile.firstName} ${leave.userId.profile.lastName}`;
@@ -608,6 +631,136 @@ const Leaves: React.FC = () => {
       }
     }
     return '';
+  }
+
+  function getUserInitialsForLeave(leave: ILeaveRequest): string {
+    if (typeof leave.userId === 'object' && leave.userId.profile) {
+      const first = leave.userId.profile.firstName?.[0] || '';
+      const last = leave.userId.profile.lastName?.[0] || '';
+      const initials = `${first}${last}`.trim();
+      if (initials) return initials.toUpperCase();
+    }
+    if (typeof leave.userId === 'object' && leave.userId.email) {
+      return leave.userId.email.charAt(0).toUpperCase();
+    }
+    return 'U';
+  }
+
+  function getUserAvatarUrl(leave: ILeaveRequest): string | null {
+    if (typeof leave.userId !== 'object') return null;
+    const raw = leave.userId.profileImageUrl || leave.userId.profilePicture;
+    if (!raw) return null;
+    if (raw.startsWith('http') || raw.startsWith('data:')) return raw;
+    return `${getApiUrl()}${raw}`;
+  }
+
+  function getLeaveEndDate(leave: ILeaveRequest): string {
+    if (leave.dates && leave.dates.length > 0) {
+      const sorted = leave.dates.map(normalizeDateOnly).filter(d => DATE_ONLY_REGEX.test(d)).sort();
+      return sorted[sorted.length - 1] || normalizeDateOnly(leave.endDate);
+    }
+    return normalizeDateOnly(leave.endDate);
+  }
+
+  function isLeavePast(leave: ILeaveRequest): boolean {
+    const end = getLeaveEndDate(leave);
+    if (!DATE_ONLY_REGEX.test(end)) return false;
+    return parseISTDateOnly(end).isBefore(parseISTDateOnly(todayStr), 'day');
+  }
+
+  function isLeaveToday(leave: ILeaveRequest): boolean {
+    const start = normalizeDateOnly(leave.startDate);
+    if (!DATE_ONLY_REGEX.test(start)) return false;
+    return start === todayStr;
+  }
+
+  const renderLeaveCard = (
+    leave: ILeaveRequest,
+    options: {
+      showUser?: boolean;
+      showApprover?: boolean;
+      showDelete?: boolean;
+    } = {}
+  ) => {
+    const avatarUrl = getUserAvatarUrl(leave);
+    const todayGlow = isLeaveToday(leave);
+
+    return (
+      <div
+        key={leave._id}
+        onClick={() => handleOpenDetails(leave)}
+        className={`min-w-[320px] max-w-[350px] flex-shrink-0 rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-background-dark p-4 cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-lg card-fade-in ${todayGlow ? 'glow-today' : ''}`}
+      >
+        {options.showUser && (
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-full overflow-hidden bg-[#f04129]/20 flex items-center justify-center text-[#f04129] font-bold text-sm flex-shrink-0">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={getUserName(leave)} className="w-full h-full object-cover" />
+              ) : (
+                <span>{getUserInitialsForLeave(leave)}</span>
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark truncate">
+                {getUserName(leave) || 'Unknown User'}
+              </p>
+              {typeof leave.userId === 'object' && leave.userId.email && (
+                <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark truncate">
+                  {leave.userId.email}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark">
+              {formatDateRange(leave.startDate, leave.endDate, leave.dates)}
+            </p>
+            {leave.dates && leave.dates.length > 0 && (
+              <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark truncate" title={formatDatesList(leave.dates)}>
+                Multiple dates
+              </p>
+            )}
+          </div>
+          <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap ${getStatusColor(leave.status)}`}>
+            {leave.status}
+          </span>
+        </div>
+
+        {renderBackdatedBadge(leave)}
+
+        <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-2">
+          {leave.leaveType} - {leave.daysCount} {leave.daysCount === 1 ? 'day' : 'days'}
+        </p>
+
+        {options.showApprover && leave.approvedBy && (
+          <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-2">
+            {leave.status === 'Approved' ? 'Approved by: ' : 'Rejected by: '}
+            <span className="font-medium text-text-primary-light dark:text-text-primary-dark">
+              {typeof leave.approvedBy === 'object'
+                ? `${leave.approvedBy.profile.firstName} ${leave.approvedBy.profile.lastName}`
+                : 'Unknown'}
+            </span>
+          </p>
+        )}
+
+        {options.showDelete && leave.status === 'Pending' && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteLeave(leave._id);
+            }}
+            className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-semibold hover:bg-red-600 transition-colors"
+            title="Delete Leave Request"
+          >
+            <Trash2 size={14} />
+            Delete
+          </button>
+        )}
+      </div>
+    );
   };
 
 
@@ -966,7 +1119,7 @@ const Leaves: React.FC = () => {
                     {leave.userName}
                   </p>
                   <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark truncate">
-                    {leave.leaveType} • <span className="text-green-600 dark:text-green-400 font-medium">Active Today</span>
+                    {leave.leaveType} - <span className="text-green-600 dark:text-green-400 font-medium">Active Today</span>
                   </p>
                 </div>
               </div>
@@ -979,76 +1132,17 @@ const Leaves: React.FC = () => {
       {isAdminOrStaff && (
         <div className="w-full rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm mb-6">
           <h2 className="text-xl font-bold mb-4 text-text-primary-light dark:text-text-primary-dark">
-            Pending Requests {pendingRequests.length > 0 && `(${pendingRequests.length})`}
+            Pending Requests {pendingLeaveRequests.length > 0 && `(${pendingLeaveRequests.length})`}
           </h2>
-          <div className="flex flex-col gap-4">
-            {pendingRequests.length > 0 ? (
-              pendingRequests.map((leave) => (
-                <div
-                  key={leave._id}
-                  onClick={() => handleOpenDetails(leave)}
-                  className="relative flex flex-col sm:flex-row gap-2 sm:gap-4 p-3 sm:p-5 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-background-dark hover:bg-gray-50 dark:hover:bg-surface-dark/50 transition-colors cursor-pointer"
-                >
-                  {/* User Avatar */}
-                  {typeof leave.userId === 'object' && leave.userId.profile && (
-                    <div className="flex-shrink-0">
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#f04129]/20 flex items-center justify-center">
-                        <span className="text-[#f04129] text-sm sm:text-base font-bold">
-                          {leave.userId.profile.firstName?.[0]?.toUpperCase() || ''}
-                          {leave.userId.profile.lastName?.[0]?.toUpperCase() || ''}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Main Content */}
-                  <div className="flex flex-col gap-1 sm:gap-2 flex-1 min-w-0 pr-12 sm:pr-0">
-                    {/* User Name - if available */}
-                    {typeof leave.userId === 'object' && leave.userId.profile && (
-                      <p className="text-sm sm:text-base font-semibold text-text-primary-light dark:text-text-primary-dark truncate">
-                        {leave.userId.profile.firstName} {leave.userId.profile.lastName}
-                      </p>
-                    )}
-
-                    {/* Date Range */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm sm:text-base font-semibold text-text-primary-light dark:text-text-primary-dark break-words">
-                        {formatDateRange(leave.startDate, leave.endDate, leave.dates)}
-                      </p>
-                      {leave.dates && leave.dates.length > 0 && (
-                        <span
-                          className="text-xs text-text-secondary-light dark:text-text-secondary-dark cursor-help whitespace-nowrap"
-                          title={formatDatesList(leave.dates)}
-                        >
-                          (Multiple Dates)
-                        </span>
-                      )}
-                    </div>
-                    {renderBackdatedBadge(leave)}
-
-                    {/* Leave Type and Days */}
-                    <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark break-words">
-                      {leave.leaveType} • {leave.daysCount} {leave.daysCount === 1 ? 'day' : 'days'}
-                    </p>
-                  </div>
-
-                  {/* Status Badge and Chevron - Top Right on Mobile, Right Side on Desktop */}
-                  <div className="absolute top-3 right-3 sm:relative sm:top-0 sm:right-0 flex sm:flex-col sm:items-end items-center gap-2 sm:gap-3 flex-shrink-0">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(leave.status)}`}>
-                      {leave.status}
-                    </span>
-                    <span className="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark text-lg">
-                      chevron_right
-                    </span>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm py-4">
-                No pending leave requests.
-              </p>
-            )}
-          </div>
+          {pendingLeaveRequests.length > 0 ? (
+            <div className="horizontal-scroll">
+              {pendingLeaveRequests.map((leave) => renderLeaveCard(leave, { showUser: true }))}
+            </div>
+          ) : (
+            <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm py-4">
+              No pending leave requests.
+            </p>
+          )}
         </div>
       )}
 
@@ -1058,157 +1152,30 @@ const Leaves: React.FC = () => {
           <h2 className="text-xl font-bold mb-4 text-text-primary-light dark:text-text-primary-dark">
             Organization History
           </h2>
-          <div className="flex flex-col gap-4">
-            {orgHistory.length > 0 ? (
-              orgHistory.map((leave) => (
-                <div
-                  key={leave._id}
-                  onClick={() => handleOpenDetails(leave)}
-                  className="relative flex flex-col sm:flex-row gap-2 sm:gap-4 p-3 sm:p-5 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-background-dark hover:bg-gray-50 dark:hover:bg-surface-dark/50 transition-colors cursor-pointer"
-                >
-                  {/* User Avatar */}
-                  {typeof leave.userId === 'object' && leave.userId.profile && (
-                    <div className="flex-shrink-0">
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                        <span className="text-blue-600 dark:text-blue-400 text-sm sm:text-base font-bold">
-                          {leave.userId.profile.firstName?.[0]?.toUpperCase() || ''}
-                          {leave.userId.profile.lastName?.[0]?.toUpperCase() || ''}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Main Content */}
-                  <div className="flex flex-col gap-1 sm:gap-2 flex-1 min-w-0 pr-12 sm:pr-0">
-                    {/* User Name */}
-                    {typeof leave.userId === 'object' && leave.userId.profile && (
-                      <p className="text-sm sm:text-base font-semibold text-text-primary-light dark:text-text-primary-dark truncate">
-                        {leave.userId.profile.firstName} {leave.userId.profile.lastName}
-                      </p>
-                    )}
-
-                    {/* Date Range */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm sm:text-base font-semibold text-text-primary-light dark:text-text-primary-dark break-words">
-                        {formatDateRange(leave.startDate, leave.endDate, leave.dates)}
-                      </p>
-                      {leave.dates && leave.dates.length > 0 && (
-                        <span
-                          className="text-xs text-text-secondary-light dark:text-text-secondary-dark cursor-help whitespace-nowrap"
-                          title={formatDatesList(leave.dates)}
-                        >
-                          (Multiple Dates)
-                        </span>
-                      )}
-                    </div>
-                    {renderBackdatedBadge(leave)}
-
-                    {/* Leave Type and Days */}
-                    <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark break-words">
-                      {leave.leaveType} • {leave.daysCount} {leave.daysCount === 1 ? 'day' : 'days'}
-                    </p>
-
-                    {/* Approved/Rejected By Info */}
-                    {leave.approvedBy && (
-                      <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-1">
-                        {leave.status === 'Approved' ? 'Approved by: ' : 'Rejected by: '}
-                        <span className="font-medium text-text-primary-light dark:text-text-primary-dark">
-                          {typeof leave.approvedBy === 'object'
-                            ? `${leave.approvedBy.profile.firstName} ${leave.approvedBy.profile.lastName}`
-                            : 'Unknown'}
-                        </span>
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Status Badge */}
-                  <div className="absolute top-3 right-3 sm:relative sm:top-0 sm:right-0 flex sm:flex-col sm:items-end items-center gap-2 sm:gap-3 flex-shrink-0">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(leave.status)}`}>
-                      {leave.status}
-                    </span>
-                    <span className="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark text-lg">
-                      chevron_right
-                    </span>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm py-4">
-                No organization history found.
-              </p>
-            )}
-          </div>
+          {orgHistoryUpcoming.length > 0 ? (
+            <div className="horizontal-scroll">
+              {orgHistoryUpcoming.map((leave) => renderLeaveCard(leave, { showUser: true, showApprover: true }))}
+            </div>
+          ) : (
+            <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm py-4">
+              No organization history found.
+            </p>
+          )}
         </div>
       )}
 
       {/* Leave History */}
       <div className="w-full rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm">
         <h2 className="text-xl font-bold mb-4 text-text-primary-light dark:text-text-primary-dark">Leave History</h2>
-        <div className="flex flex-col gap-4">
-          {leaveRequests.length > 0 ? (
-            leaveRequests.map((leave) => (
-              <div
-                key={leave._id}
-                onClick={() => handleOpenDetails(leave)}
-                className="flex items-center justify-between p-4 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-background-dark hover:bg-gray-50 dark:hover:bg-surface-dark/50 transition-colors cursor-pointer"
-              >
-                <div className="flex items-center gap-4 flex-1">
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold text-text-primary-light dark:text-text-primary-dark">
-                        {formatDateRange(leave.startDate, leave.endDate, leave.dates)}
-                      </p>
-                      {leave.dates && leave.dates.length > 0 && (
-                        <span
-                          className="text-xs text-text-secondary-light dark:text-text-secondary-dark cursor-help"
-                          title={formatDatesList(leave.dates)}
-                        >
-                          (Multiple Dates)
-                        </span>
-                      )}
-                    </div>
-                    {renderBackdatedBadge(leave)}
-                    <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark">
-                      {leave.leaveType} • {leave.daysCount} {leave.daysCount === 1 ? 'day' : 'days'}
-                    </p>
-                    {(leave.status === 'Approved' || leave.status === 'Rejected') && leave.approvedBy && (
-                      <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-1">
-                        {leave.status === 'Approved' ? 'Approved by: ' : 'Rejected by: '}
-                        <span className="font-medium text-text-primary-light dark:text-text-primary-dark">
-                          {typeof leave.approvedBy === 'object'
-                            ? `${leave.approvedBy.profile.firstName} ${leave.approvedBy.profile.lastName}`
-                            : 'Unknown'}
-                        </span>
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(leave.status)}`}>
-                    {leave.status}
-                  </span>
-                  {/* Delete button - only show for Pending leaves */}
-                  {leave.status === 'Pending' && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteLeave(leave._id);
-                      }}
-                      className="p-2 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors"
-                      title="Delete Leave Request"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))
-          ) : (
-            <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm py-4">
-              No leave requests found.
-            </p>
-          )}
-        </div>
+        {leaveHistoryList.length > 0 ? (
+          <div className="horizontal-scroll">
+            {leaveHistoryList.map((leave) => renderLeaveCard(leave, { showUser: isAdminOrStaff, showApprover: isAdminOrStaff, showDelete: !isAdminOrStaff }))}
+          </div>
+        ) : (
+          <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm py-4">
+            No leave requests found.
+          </p>
+        )}
       </div>
 
       {/* Apply Leave Modal */}
@@ -1218,7 +1185,7 @@ const Leaves: React.FC = () => {
           onClick={() => setIsModalOpen(false)}
         >
           <div
-            className="bg-surface-light dark:bg-surface-dark rounded-xl shadow-xl w-full max-w-5xl max-w-[95vw] mx-4 max-h-[85vh] flex flex-col overflow-hidden"
+            className="bg-surface-light dark:bg-surface-dark rounded-xl shadow-xl w-full max-w-5xl max-w-[95vw] mx-4 max-h-[90vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -1699,7 +1666,7 @@ const Leaves: React.FC = () => {
               <button
                 onClick={handleRejectSubmit}
                 disabled={isProcessingRejection || !rejectionReason.trim()}
-                className="px-6 py-2 text-sm font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-reject px-6 py-2 text-sm font-bold text-white flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isProcessingRejection ? (
                   <>
@@ -1728,7 +1695,7 @@ const Leaves: React.FC = () => {
           onClick={handleCloseDetails}
         >
           <div
-            className="bg-surface-light dark:bg-surface-dark rounded-xl shadow-xl w-full max-w-2xl max-w-[95vw] mx-4 max-h-[85vh] flex flex-col overflow-hidden"
+            className="bg-surface-light dark:bg-surface-dark rounded-xl shadow-xl w-full max-w-2xl max-w-[95vw] mx-4 max-h-[90vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -1736,10 +1703,12 @@ const Leaves: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 flex-1">
                   {/* User Avatar */}
-                  <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
-                    {typeof selectedLeave.userId === 'object' && selectedLeave.userId.profile
-                      ? `${selectedLeave.userId.profile.firstName.charAt(0)}${selectedLeave.userId.profile.lastName.charAt(0)}`
-                      : 'U'}
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-[#f04129]/20 flex items-center justify-center text-[#f04129] font-semibold text-sm flex-shrink-0">
+                    {selectedLeaveAvatar ? (
+                      <img src={selectedLeaveAvatar} alt={getUserName(selectedLeave)} className="w-full h-full object-cover" />
+                    ) : (
+                      <span>{getUserInitialsForLeave(selectedLeave)}</span>
+                    )}
                   </div>
                   {/* User Name */}
                   <div className="flex-1 min-w-0">
@@ -1935,12 +1904,13 @@ const Leaves: React.FC = () => {
 
                 if (!attachment) return null;
 
-                const isCloudinary = attachment.includes('cloudinary');
-                const isAbsolute = attachment.startsWith('http');
+                const isAbsolute = attachment.startsWith('http') || attachment.startsWith('data:');
                 const url = isAbsolute ? attachment : `${getApiUrl()}${attachment}`;
 
-                const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(attachment) || (isCloudinary && !attachment.endsWith('.pdf'));
-                const isPDF = /\.pdf$/i.test(attachment) || (isCloudinary && attachment.endsWith('.pdf'));
+                const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(attachment);
+                const attachmentLabel = selectedLeaveSizeLabel
+                  ? `View Attachment (${selectedLeaveSizeLabel})`
+                  : 'View Attachment';
 
                 return (
                   <div>
@@ -1967,9 +1937,9 @@ const Leaves: React.FC = () => {
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 h-9 rounded-lg border-2 border-red-600 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-sm"
                       >
                         <span className="material-symbols-outlined text-red-600 text-lg">
-                          {isPDF ? 'picture_as_pdf' : 'attach_file'}
+                          picture_as_pdf
                         </span>
-                        {isPDF ? 'View Attachment' : 'View Document'}
+                        {attachmentLabel}
                       </a>
                     )}
                   </div>
@@ -2019,7 +1989,7 @@ const Leaves: React.FC = () => {
                         setToast({ message: errorMsg, type: 'error' });
                       }
                     }}
-                    className="px-4 py-2 h-10 text-sm font-bold text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    className="btn-approve px-4 py-2 h-10 text-sm font-bold text-white flex items-center justify-center gap-2"
                   >
                     <span className="material-symbols-outlined text-lg">check</span>
                     Approve Leave
@@ -2029,7 +1999,7 @@ const Leaves: React.FC = () => {
                       handleCloseDetails();
                       handleRejectClick(selectedLeave._id);
                     }}
-                    className="px-4 py-2 h-10 text-sm font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    className="btn-reject px-4 py-2 h-10 text-sm font-bold text-white flex items-center justify-center gap-2"
                   >
                     <span className="material-symbols-outlined text-lg">close</span>
                     Reject Leave

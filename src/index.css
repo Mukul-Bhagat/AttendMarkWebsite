@@ -39,3 +39,89 @@
   animation: slide-in-right 0.3s ease-out;
 }
 
+/* Organization logo wrapper */
+.organization-logo-wrapper {
+  width: 100%;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.organization-logo-wrapper img {
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+/* Horizontal scroll container for leave cards */
+.horizontal-scroll {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  scroll-behavior: smooth;
+}
+
+/* Glow animation for today's leave */
+@keyframes pulse-glow {
+  0% {
+    box-shadow: 0 0 8px rgba(255, 90, 90, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(255, 90, 90, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 8px rgba(255, 90, 90, 0.3);
+  }
+}
+
+.glow-today {
+  animation: pulse-glow 1.5s infinite;
+  box-shadow: 0 0 15px rgba(255, 90, 90, 0.6);
+}
+
+/* Simple fade-in for cards */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.card-fade-in {
+  animation: fade-in 0.4s ease-out;
+}
+
+/* Approve/Reject gradient buttons */
+.btn-approve {
+  background: linear-gradient(135deg, #28a745, #218838);
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.btn-approve:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.16);
+}
+
+.btn-reject {
+  background: linear-gradient(135deg, #dc3545, #c82333);
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.btn-reject:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.16);
+}
+

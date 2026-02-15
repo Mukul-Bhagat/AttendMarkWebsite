@@ -1,7 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useOrganization } from '../contexts/OrganizationContext';
 import LoadingSpinner from './LoadingSpinner';
 import ProfileMenu from './ProfileMenu';
 import Toast from './Toast';
@@ -12,7 +11,6 @@ import { getApiUrl } from '../utils/apiUrl';
 
 const Layout: React.FC = () => {
   const { user, isSuperAdmin, isCompanyAdmin, isManager, isSessionAdmin, isPlatformOwner, isLoading } = useAuth();
-  const { organization } = useOrganization();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -42,17 +40,6 @@ const Layout: React.FC = () => {
     if (path === '/email-automation') return 'Email Automation';
     return 'Dashboard';
   };
-
-  const organizationName = organization.name || user.organizationName || user.organization || 'AttendMark';
-
-  const organizationLogoUrl = useMemo(() => {
-    if (!organization.logoUrl) return null;
-    if (organization.logoUrl.startsWith('http') || organization.logoUrl.startsWith('data:')) {
-      return organization.logoUrl;
-    }
-    const apiUrl = getApiUrl();
-    return `${apiUrl}${organization.logoUrl}`;
-  }, [organization.logoUrl]);
 
   // Get user initials for avatar
   const getUserInitials = () => {
@@ -128,17 +115,26 @@ const Layout: React.FC = () => {
       <aside className="hidden md:flex flex-col h-screen sticky top-0 w-64 bg-surface-light dark:bg-surface-dark border-r border-border-light dark:border-border-dark shadow-sm">
         {/* Logo Header */}
         <div className="py-4 border-b border-border-light dark:border-border-dark flex items-center justify-center flex-shrink-0">
-          {organizationLogoUrl ? (
-            <img
-              src={organizationLogoUrl}
-              alt={`${organizationName} Logo`}
-              className="max-h-10 w-auto object-contain"
-            />
-          ) : (
-            <span className="text-lg font-bold text-text-primary-light dark:text-text-primary-dark px-4 text-center">
-              {organizationName}
-            </span>
-          )}
+          <img
+            src="/assets/attendmarklogo.png"
+            alt="AttendMark Logo"
+            className="block dark:hidden"
+            style={{
+              width: '140px',
+              height: 'auto',
+              objectFit: 'contain'
+            }}
+          />
+          <img
+            src="/assets/atendmarkwhitelogo.png"
+            alt="AttendMark Logo"
+            className="hidden dark:block"
+            style={{
+              width: '140px',
+              height: 'auto',
+              objectFit: 'contain'
+            }}
+          />
         </div>
 
         {/* Navigation Links - Scrollable middle section */}
@@ -321,17 +317,26 @@ const Layout: React.FC = () => {
       >
         <div className="py-4 border-b border-border-light dark:border-border-dark flex items-center justify-between flex-shrink-0 px-4">
           <div className="flex items-center justify-center flex-1">
-            {organizationLogoUrl ? (
-              <img
-                src={organizationLogoUrl}
-                alt={`${organizationName} Logo`}
-                className="max-h-10 w-auto object-contain"
-              />
-            ) : (
-              <span className="text-lg font-bold text-text-primary-light dark:text-text-primary-dark px-4 text-center">
-                {organizationName}
-              </span>
-            )}
+            <img
+              src="/assets/attendmarklogo.png"
+              alt="AttendMark Logo"
+              className="block dark:hidden"
+              style={{
+                width: '140px',
+                height: 'auto',
+                objectFit: 'contain'
+              }}
+            />
+            <img
+              src="/assets/atendmarkwhitelogo.png"
+              alt="AttendMark Logo"
+              className="hidden dark:block"
+              style={{
+                width: '140px',
+                height: 'auto',
+                objectFit: 'contain'
+              }}
+            />
           </div>
           <button
             onClick={() => setIsMobileMenuOpen(false)}
@@ -511,17 +516,16 @@ const Layout: React.FC = () => {
           </button>
           {/* Logo - Absolutely Centered */}
           <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
-            {organizationLogoUrl ? (
-              <img
-                src={organizationLogoUrl}
-                alt={`${organizationName} Logo`}
-                className="h-9 w-auto object-contain"
-              />
-            ) : (
-              <span className="text-base font-bold text-text-primary-light dark:text-text-primary-dark">
-                {organizationName}
-              </span>
-            )}
+            <img
+              src="/assets/attendmarklogo.png"
+              alt="AttendMark Logo"
+              className="h-10 w-auto object-contain block dark:hidden"
+            />
+            <img
+              src="/assets/atendmarkwhitelogo.png"
+              alt="AttendMark Logo"
+              className="h-10 w-auto object-contain hidden dark:block"
+            />
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {/* 🔔 Notification Bell - Mobile */}

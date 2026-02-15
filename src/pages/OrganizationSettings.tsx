@@ -21,6 +21,41 @@ const OrganizationSettings: React.FC = () => {
     const [isLoadingSettings, setIsLoadingSettings] = useState(false);
     const [isSavingSettings, setIsSavingSettings] = useState(false);
     const [logoFile, setLogoFile] = useState<File | null>(null);
+    const [logoError, setLogoError] = useState<string | null>(null);
+
+    const allowedLogoTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const allowedRatios = [1 / 1, 3 / 4, 9 / 16];
+    const ratioTolerance = 0.03;
+
+    const validateLogoFile = async (file: File) => {
+        if (!allowedLogoTypes.includes(file.type)) {
+            return 'Only JPG, PNG, or WEBP images are allowed.';
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            return 'Logo must be less than 5MB.';
+        }
+
+        const objectUrl = URL.createObjectURL(file);
+        const img = new Image();
+
+        try {
+            await new Promise<void>((resolve, reject) => {
+                img.onload = () => resolve();
+                img.onerror = () => reject(new Error('Failed to load image'));
+                img.src = objectUrl;
+            });
+
+            const ratio = img.width / img.height;
+            const isAllowed = allowedRatios.some((allowed) => Math.abs(ratio - allowed) <= ratioTolerance);
+            if (!isAllowed) {
+                return 'Logo ratio must be 1:1, 3:4, or 9:16.';
+            }
+        } finally {
+            URL.revokeObjectURL(objectUrl);
+        }
+
+        return null;
+    };
 
     // Fetch organization settings on mount
     useEffect(() => {
@@ -100,6 +135,29 @@ const OrganizationSettings: React.FC = () => {
         }
     };
 
+    const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setLogoError(null);
+        const validationError = await validateLogoFile(file);
+        if (validationError) {
+            setLogoError(validationError);
+            setLogoFile(null);
+            return;
+        }
+
+        setLogoFile(file);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setOrganizationSettings({
+                ...organizationSettings,
+                logo: reader.result as string, // Show preview
+            });
+        };
+        reader.readAsDataURL(file);
+    };
+
     if (!user || (!isSuperAdmin && !isCompanyAdmin)) {
         return (
             <div className="flex items-center justify-center min-h-screen">
@@ -172,6 +230,7 @@ const OrganizationSettings: React.FC = () => {
                                                 onClick={() => {
                                                     setOrganizationSettings({ ...organizationSettings, logo: '' });
                                                     setLogoFile(null);
+                                                    setLogoError(null);
                                                 }}
                                                 className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-600 transition-all opacity-0 group-hover:opacity-100"
                                             >
@@ -189,27 +248,19 @@ const OrganizationSettings: React.FC = () => {
                                                 <input
                                                     type="file"
                                                     className="hidden"
-                                                    accept="image/*"
-                                                    onChange={(e) => {
-                                                        const file = e.target.files?.[0];
-                                                        if (file) {
-                                                            setLogoFile(file); // Store file for upload
-                                                            const reader = new FileReader();
-                                                            reader.onloadend = () => {
-                                                                setOrganizationSettings({
-                                                                    ...organizationSettings,
-                                                                    logo: reader.result as string, // Show preview
-                                                                });
-                                                            };
-                                                            reader.readAsDataURL(file);
-                                                        }
-                                                    }}
+                                                    accept="image/png,image/jpeg,image/webp"
+                                                    onChange={handleLogoChange}
                                                 />
                                             </label>
                                             {organizationSettings.logo && (
                                                 <p className="text-[10px] text-green-600 dark:text-green-400 font-bold flex items-center gap-1 animate-pulse">
                                                     <span className="material-symbols-outlined text-xs">check_circle</span>
                                                     Ready to Save
+                                                </p>
+                                            )}
+                                            {logoError && (
+                                                <p className="text-[11px] text-red-500 font-semibold">
+                                                    {logoError}
                                                 </p>
                                             )}
                                         </div>

@@ -192,15 +192,14 @@ const Dashboard: React.FC = () => {
             <p className="text-base font-medium text-text-primary-light dark:text-text-primary-dark">Organization</p>
           </div>
           {summary?.organization.logoUrl ? (
-            <div className="h-12 flex items-center">
+            <div className="organization-logo-wrapper">
               <img
                 src={summary.organization.logoUrl}
                 alt={summary.organization.name}
-                className="h-full w-auto object-contain max-w-full"
               />
             </div>
           ) : (
-            <p className="tracking-light text-2xl font-bold text-text-primary-light dark:text-text-primary-dark truncate" title={summary?.organization.name}>
+            <p className="tracking-light text-2xl font-bold text-text-primary-light dark:text-text-primary-dark" title={summary?.organization.name}>
               {summary?.organization.name || 'N/A'}
             </p>
           )}
