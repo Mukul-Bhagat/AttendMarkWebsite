@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import OrganizationSelector from '../components/OrganizationSelector';
 import api from '../api';
+import { Role, normalizeRole } from '../shared/roles';
 
 // Helper functions for sessionStorage (moved outside component to avoid recreation)
 const getStoredError = (): string => {
@@ -46,6 +47,14 @@ const LoginPage: React.FC = () => {
   const from = (location.state as any)?.from?.pathname || '/dashboard';
 
   const { email, password } = formData;
+
+  const isPlatformOwnerRole = (roleValue: string): boolean => {
+    try {
+      return normalizeRole(roleValue) === Role.PLATFORM_OWNER;
+    } catch {
+      return false;
+    }
+  };
 
   // Auto-focus email input on mount
   useEffect(() => {
@@ -97,7 +106,7 @@ const LoginPage: React.FC = () => {
 
       // CRITICAL: Check if user is Platform Owner at the very top and force redirect
       // Check role from organizations array (Platform Owner orgs will have role 'PLATFORM_OWNER')
-      if (orgs && orgs.length > 0 && orgs[0].role === 'PLATFORM_OWNER') {
+      if (orgs && orgs.length > 0 && isPlatformOwnerRole(orgs[0].role)) {
         // For Platform Owner, we need to select an organization to get a token
         // Use the first organization (or any organization - Platform Owner can access all)
         const selectResponse = await api.post('/api/auth/select-organization', {
@@ -108,7 +117,7 @@ const LoginPage: React.FC = () => {
         const { token: finalToken, user } = selectResponse.data;
 
         // Double-check user role from the response
-        if (user.role === 'PLATFORM_OWNER') {
+        if (isPlatformOwnerRole(user.role)) {
           localStorage.setItem('token', finalToken);
 
           // Use the login function to update context
@@ -134,7 +143,7 @@ const LoginPage: React.FC = () => {
         await login({ token: finalToken, user });
 
         // Navigate to the original destination or appropriate dashboard
-        if (user.role === 'PLATFORM_OWNER') {
+        if (isPlatformOwnerRole(user.role)) {
           navigate('/platform/dashboard', { replace: true });
         } else {
           navigate(from || '/dashboard', { replace: true });
@@ -346,4 +355,3 @@ const LoginPage: React.FC = () => {
 };
 
 export default LoginPage;
-

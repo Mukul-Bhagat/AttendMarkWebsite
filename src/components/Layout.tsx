@@ -8,6 +8,7 @@ import { useAutoBackup } from '../hooks/useAutoBackup';
 import NotificationBell from './NotificationBell';
 import RequestQueueNotification from './attendance/reporting/RequestQueueNotification';
 import { getApiUrl } from '../utils/apiUrl';
+import { getRoleDisplayLabel } from '../shared/roles';
 
 const Layout: React.FC = () => {
   const { user, isSuperAdmin, isCompanyAdmin, isManager, isSessionAdmin, isPlatformOwner, isLoading } = useAuth();
@@ -68,15 +69,7 @@ const Layout: React.FC = () => {
   // Get role display name
   const getRoleDisplay = () => {
     if (!user?.role) return 'Guest';
-    const roleMap: { [key: string]: string } = {
-      'SuperAdmin': 'Company Administrator',
-      'CompanyAdmin': 'Company Administrator',
-      'Manager': 'Manager',
-      'SessionAdmin': 'Session Administrator',
-      'EndUser': 'End User',
-      'PLATFORM_OWNER': 'Platform Owner',
-    };
-    return roleMap[user.role] || user.role;
+    return getRoleDisplayLabel(user.rawRole || user.role);
   };
 
   // Get full user name
@@ -216,7 +209,7 @@ const Layout: React.FC = () => {
                       </li>
                     )}
                     {/* Data Backup - for CompanyAdmin and Platform Owner */}
-                    {(user?.role === 'CompanyAdmin' || user?.role === 'PLATFORM_OWNER') && (
+                    {(isCompanyAdmin || isPlatformOwner) && (
                       <li>
                         <NavLinkItem to="/backup" icon="cloud_download">Data Backup</NavLinkItem>
                       </li>
@@ -419,7 +412,7 @@ const Layout: React.FC = () => {
                       </li>
                     )}
                     {/* Data Backup - for CompanyAdmin and Platform Owner */}
-                    {(user?.role === 'CompanyAdmin' || user?.role === 'PLATFORM_OWNER') && (
+                    {(isCompanyAdmin || isPlatformOwner) && (
                       <li>
                         <NavLinkItem to="/backup" icon="cloud_download">Data Backup</NavLinkItem>
                       </li>
@@ -505,7 +498,7 @@ const Layout: React.FC = () => {
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col app-layout">
         {/* Mobile Header */}
         <header className="md:hidden bg-surface-light dark:bg-surface-dark px-4 py-3 border-b border-border-light dark:border-border-dark flex items-center justify-between shadow-sm sticky top-0 z-40 relative">
           <button
@@ -554,8 +547,10 @@ const Layout: React.FC = () => {
           </div>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-          <Outlet />
+        <main className="flex-1 overflow-y-auto flex justify-center">
+          <div className="content-wrapper w-full p-4 sm:p-6 lg:p-8">
+            <Outlet />
+          </div>
         </main>
       </div>
 

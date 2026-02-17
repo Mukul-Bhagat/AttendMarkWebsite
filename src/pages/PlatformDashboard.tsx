@@ -4,6 +4,8 @@ import api from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { formatIST } from '../utils/time';
+import CreateOrganizationModal from '../components/CreateOrganizationModal';
+import Toast from '../components/Toast';
 
 interface Organization {
   id: string;
@@ -26,26 +28,30 @@ const PlatformDashboard: React.FC = () => {
   const [error, setError] = useState('');
   const [updatingStatus, setUpdatingStatus] = useState<{ [key: string]: boolean }>({});
 
+  // New state for modal and toast
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const fetchOrganizations = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      const { data } = await api.get('/api/platform/organizations');
+      setOrganizations(data.organizations || []);
+    } catch (err: any) {
+      console.error('Failed to fetch organizations:', err);
+      setError(err.response?.data?.msg || 'Failed to load organizations');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     // Redirect if not Platform Owner
     if (!isPlatformOwner) {
       navigate('/dashboard');
       return;
     }
-
-    const fetchOrganizations = async () => {
-      try {
-        setIsLoading(true);
-        setError('');
-        const { data } = await api.get('/api/platform/organizations');
-        setOrganizations(data.organizations || []);
-      } catch (err: any) {
-        console.error('Failed to fetch organizations:', err);
-        setError(err.response?.data?.msg || 'Failed to load organizations');
-      } finally {
-        setIsLoading(false);
-      }
-    };
 
     fetchOrganizations();
   }, [isPlatformOwner, navigate]);
@@ -95,13 +101,31 @@ const PlatformDashboard: React.FC = () => {
       setOrganizations(organizations.map(o =>
         o.id === org.id ? { ...o, status: newStatus } : o
       ));
+
+      setToast({
+        message: `Organization ${newStatus === 'ACTIVE' ? 'activated' : 'suspended'} successfully`,
+        type: 'success'
+      });
     } catch (err: any) {
       console.error('Failed to update organization status:', err);
-      setError(err.response?.data?.msg || 'Failed to update organization status');
-      alert(err.response?.data?.msg || 'Failed to update organization status');
+      const errorMsg = err.response?.data?.msg || 'Failed to update organization status';
+      setError(errorMsg);
+      setToast({
+        message: errorMsg,
+        type: 'error'
+      });
     } finally {
       setUpdatingStatus({ ...updatingStatus, [org.id]: false });
     }
+  };
+
+  const handleCreateSuccess = () => {
+    setIsCreateModalOpen(false);
+    setToast({
+      message: 'Organization created successfully! Welcome email sent to admin.',
+      type: 'success'
+    });
+    fetchOrganizations(); // Refresh list
   };
 
   const formatDate = (dateString: string) => {
@@ -117,7 +141,7 @@ const PlatformDashboard: React.FC = () => {
     }
   };
 
-  if (isLoading) {
+  if (isLoading && !organizations.length) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <LoadingSpinner />
@@ -125,7 +149,9 @@ const PlatformDashboard: React.FC = () => {
     );
   }
 
-  if (error) {
+  // We don't block the UI with full-screen error if there are organizations loaded (just show toast or banner)
+  // But if initial load failed, we show error screen.
+  if (error && !organizations.length) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -148,10 +174,18 @@ const PlatformDashboard: React.FC = () => {
                   Platform Dashboard
                 </h1>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-text-secondary-light dark:text-text-secondary-dark">
+              <div className="flex items-center gap-4">
+                <span className="hidden sm:inline-block text-sm text-text-secondary-light dark:text-text-secondary-dark">
                   {filteredOrganizations.length} of {organizations.length} Organization{organizations.length !== 1 ? 's' : ''}
                 </span>
+                <button
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className="flex items-center gap-2 bg-primary hover:bg-[#d63a25] text-white px-4 py-2 rounded-lg font-bold transition-colors shadow-sm"
+                >
+                  <span className="material-symbols-outlined">add_business</span>
+                  <span className="hidden sm:inline">New Organization</span>
+                  <span className="sm:hidden">New</span>
+                </button>
               </div>
             </div>
 
@@ -192,7 +226,7 @@ const PlatformDashboard: React.FC = () => {
                 </p>
               </div>
             </div>
-          ) : organizations.length === 0 ? (
+          ) : organizations.length === 0 && !isLoading ? (
             <div className="mt-8 sm:mt-12">
               <div className="bg-surface-light dark:bg-surface-dark rounded-lg border border-border-light dark:border-border-dark p-8 text-center">
                 <span className="material-symbols-outlined text-6xl text-text-secondary-light dark:text-text-secondary-dark mb-4">
@@ -201,9 +235,16 @@ const PlatformDashboard: React.FC = () => {
                 <h2 className="text-xl font-semibold text-text-primary-light dark:text-text-primary-dark mb-2">
                   No Organizations Found
                 </h2>
-                <p className="text-text-secondary-light dark:text-text-secondary-dark">
+                <p className="text-text-secondary-light dark:text-text-secondary-dark mb-6">
                   There are no organizations registered in the platform yet.
                 </p>
+                <button
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className="flex items-center gap-2 bg-primary hover:bg-[#d63a25] text-white px-6 py-3 rounded-lg font-bold transition-colors mx-auto"
+                >
+                  <span className="material-symbols-outlined">add_business</span>
+                  Create First Organization
+                </button>
               </div>
             </div>
           ) : (
@@ -327,6 +368,20 @@ const PlatformDashboard: React.FC = () => {
           )}
         </main>
       </div>
+
+      <CreateOrganizationModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={handleCreateSuccess}
+      />
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 };

@@ -1,76 +1,105 @@
 import { nowIST, istDayStart } from '../utils/time';
+import { isRoleAllowed, resolveRole, Role, RoleProfile } from '../shared/roles';
 
 /**
  * Attendance Permission Utilities
- * 
+ *
  * Centralized permission checking for attendance-related operations
  */
 
-export type AllowedRole = 'PLATFORM_OWNER' | 'SuperAdmin' | 'CompanyAdmin' | 'Manager';
-export type AdminRole = 'PLATFORM_OWNER' | 'SuperAdmin' | 'CompanyAdmin';
+export type AllowedRole = Role | RoleProfile;
+export type AdminRole = Role | RoleProfile;
 
 interface User {
     id?: string;
     email?: string;
     role?: string;
+    rawRole?: string;
+    canonicalRole?: Role;
+    roleProfile?: RoleProfile;
     organizationId?: string;
     organizationName?: string;
 }
+
+const resolveUserRoleContext = (userOrRole: User | string) => {
+    const rawRole = typeof userOrRole === 'string'
+        ? userOrRole
+        : String(userOrRole.rawRole || userOrRole.role || '');
+    const resolved = resolveRole(rawRole);
+
+    return {
+        role: typeof userOrRole === 'string'
+            ? resolved.role
+            : userOrRole.canonicalRole || resolved.role,
+        roleProfile: typeof userOrRole === 'string'
+            ? resolved.roleProfile
+            : userOrRole.roleProfile || resolved.roleProfile,
+    };
+};
 
 /**
  * Check if a role can view attendance
  */
 export function canViewAttendance(role: string): boolean {
-    const allowedRoles: string[] = ['PLATFORM_OWNER', 'SuperAdmin', 'CompanyAdmin', 'Manager'];
-    return allowedRoles.includes(role);
+    const ctx = resolveUserRoleContext(role);
+    return (
+        ctx.role === Role.PLATFORM_OWNER ||
+        ctx.roleProfile === RoleProfile.SUPER_ADMIN ||
+        ctx.roleProfile === RoleProfile.COMPANY_ADMIN ||
+        ctx.roleProfile === RoleProfile.MANAGER
+    );
 }
 
 /**
  * Check if a role can edit attendance
  */
 export function canEditAttendance(role: string): boolean {
-    const allowedRoles: string[] = ['PLATFORM_OWNER', 'SuperAdmin', 'CompanyAdmin', 'Manager'];
-    return allowedRoles.includes(role);
+    return canViewAttendance(role);
 }
 
 /**
  * Check if a role can delete attendance records
  */
 export function canDeleteAttendance(role: string): boolean {
-    const allowedRoles: string[] = ['PLATFORM_OWNER', 'SuperAdmin', 'CompanyAdmin'];
-    return allowedRoles.includes(role);
+    const ctx = resolveUserRoleContext(role);
+    return (
+        ctx.role === Role.PLATFORM_OWNER ||
+        ctx.roleProfile === RoleProfile.SUPER_ADMIN ||
+        ctx.roleProfile === RoleProfile.COMPANY_ADMIN
+    );
 }
 
 /**
  * Check if a role can manually mark attendance
  */
 export function canManuallyMarkAttendance(role: string): boolean {
-    const allowedRoles: string[] = ['PLATFORM_OWNER', 'SuperAdmin', 'CompanyAdmin', 'Manager'];
-    return allowedRoles.includes(role);
+    return canViewAttendance(role);
 }
 
 /**
  * Check if a role can view attendance reports
  */
 export function canViewAttendanceReports(role: string): boolean {
-    const allowedRoles: string[] = ['PLATFORM_OWNER', 'SuperAdmin', 'CompanyAdmin', 'Manager'];
-    return allowedRoles.includes(role);
+    return canViewAttendance(role);
 }
 
 /**
  * Check if a role can export attendance data
  */
 export function canExportAttendance(role: string): boolean {
-    const allowedRoles: string[] = ['PLATFORM_OWNER', 'SuperAdmin', 'CompanyAdmin', 'Manager'];
-    return allowedRoles.includes(role);
+    return canViewAttendance(role);
 }
 
 /**
  * Check if a role can manage attendance settings
  */
 export function canManageAttendanceSettings(role: string): boolean {
-    const allowedRoles: string[] = ['PLATFORM_OWNER', 'SuperAdmin', 'CompanyAdmin'];
-    return allowedRoles.includes(role);
+    const ctx = resolveUserRoleContext(role);
+    return (
+        ctx.role === Role.PLATFORM_OWNER ||
+        ctx.roleProfile === RoleProfile.SUPER_ADMIN ||
+        ctx.roleProfile === RoleProfile.COMPANY_ADMIN
+    );
 }
 
 // ============================================================================
@@ -79,81 +108,41 @@ export function canManageAttendanceSettings(role: string): boolean {
 
 /**
  * ⚠️ CRITICAL SECURITY FUNCTION ⚠️
- * 
+ *
  * Central permission check for attendance adjustment with full audit trail
- * 
- * SECURITY RULE:
- * - NEVER rely on component-level checks alone
- * - Permission check must be called before rendering ANY edit control
- * - Backend enforces, frontend prevents accidental access
- * 
- * ROLES WITH ADJUSTMENT PERMISSION:
- * - CompanyAdmin (own organization only)
- * - PLATFORM_OWNER (all organizations)
- * 
- * ROLES WITHOUT PERMISSION (HARD BLOCK):
- * - Manager (read-only)
- * - SessionAdmin (read-only)
- * - EndUser (no access)
- * 
- * @param user - Current authenticated user
- * @returns true if user can adjust attendance, false otherwise
- * 
- * @example
- * ```tsx
- * import { canAdjustAttendance } from '@/utils/attendancePermissions';
- * 
- * // In component (MANDATORY PATTERN):
- * {canAdjustAttendance(currentUser) && (
- *   <EditAttendanceButton />
- * )}
- * ```
  */
 export const canAdjustAttendance = (user: User | null | undefined): boolean => {
-    if (!user || !user.role) {
+    if (!user) {
         return false;
     }
 
-    // STRICT: CompanyAdmin, SuperAdmin, SUPER_ADMIN, and PLATFORM_OWNER
+    const ctx = resolveUserRoleContext(user);
     return (
-        user.role === 'CompanyAdmin' ||
-        user.role === 'SuperAdmin' ||
-        user.role === 'SUPER_ADMIN' ||
-        user.role === 'PLATFORM_OWNER'
+        ctx.role === Role.PLATFORM_OWNER ||
+        ctx.roleProfile === RoleProfile.SUPER_ADMIN ||
+        ctx.roleProfile === RoleProfile.COMPANY_ADMIN
     );
 };
 
 /**
  * Check if user can view audit trail (more permissive than adjustment)
- * 
- * @param user - Current authenticated user
- * @returns true if user can view attendance history
- * 
- * Permissions:
- * - PLATFORM_OWNER: Full access to all org audit trails
- * - CompanyAdmin: Full access to own org
- * - Manager: Read-only access to own classes
- * - SessionAdmin: Read-only access to own sessions
- * - EndUser: No access
  */
 export const canViewAuditTrail = (user: User | null | undefined): boolean => {
-    if (!user || !user.role) {
+    if (!user) {
         return false;
     }
 
+    const ctx = resolveUserRoleContext(user);
     return (
-        user.role === 'CompanyAdmin' ||
-        user.role === 'PLATFORM_OWNER' ||
-        user.role === 'Manager' ||
-        user.role === 'SessionAdmin'
+        ctx.role === Role.PLATFORM_OWNER ||
+        ctx.roleProfile === RoleProfile.COMPANY_ADMIN ||
+        ctx.roleProfile === RoleProfile.MANAGER ||
+        ctx.roleProfile === RoleProfile.SESSION_ADMIN
     );
 };
 
 /**
  * Get user-friendly permission denied message
- * 
- * @param user - Current authenticated user
- * @returns Human-readable explanation of why action is not allowed
  */
 export const getPermissionDeniedMessage = (user: User | null | undefined): string => {
     if (!user) {
@@ -164,22 +153,23 @@ export const getPermissionDeniedMessage = (user: User | null | undefined): strin
         return 'Your account role is not set. Please contact support.';
     }
 
-    const roleMessages: Record<string, string> = {
-        'Manager': 'Only Company Admins can adjust attendance. Managers have read-only access.',
-        'SessionAdmin': 'Only Company Admins can adjust attendance. You can view audit history.',
-        'EndUser': 'You do not have permission to adjust attendance.',
-        'default': 'Insufficient permissions to adjust attendance.'
-    };
+    const profile = resolveUserRoleContext(user).roleProfile;
 
-    return roleMessages[user.role] || roleMessages['default'];
+    if (profile === RoleProfile.MANAGER) {
+        return 'Only Company Admins can adjust attendance. Managers have read-only access.';
+    }
+    if (profile === RoleProfile.SESSION_ADMIN) {
+        return 'Only Company Admins can adjust attendance. You can view audit history.';
+    }
+    if (profile === RoleProfile.END_USER) {
+        return 'You do not have permission to adjust attendance.';
+    }
+
+    return 'Insufficient permissions to adjust attendance.';
 };
 
 /**
  * Validate if session can be adjusted (comprehensive check)
- * 
- * @param session - Session object
- * @param user - Current user
- * @returns { allowed: boolean, reason?: string }
  */
 export const canAdjustSession = (
     session: any,
@@ -222,13 +212,16 @@ export const canAdjustSession = (
     }
 
     // Cross-org check for CompanyAdmin
-    if (user?.role === 'CompanyAdmin') {
-        if (session.organizationId && user.organizationId) {
-            if (session.organizationId.toString() !== user.organizationId.toString()) {
-                return {
-                    allowed: false,
-                    reason: 'You can only adjust attendance for your own organization'
-                };
+    if (user) {
+        const userCtx = resolveUserRoleContext(user);
+        if (userCtx.roleProfile === RoleProfile.COMPANY_ADMIN) {
+            if (session.organizationId && user.organizationId) {
+                if (session.organizationId.toString() !== user.organizationId.toString()) {
+                    return {
+                        allowed: false,
+                        reason: 'You can only adjust attendance for your own organization'
+                    };
+                }
             }
         }
     }
@@ -240,10 +233,10 @@ export const canAdjustSession = (
  * Permission constants for easy reference
  */
 export const PERMISSION_ROLES = {
-    CAN_ADJUST: ['CompanyAdmin', 'SuperAdmin', 'SUPER_ADMIN', 'PLATFORM_OWNER'],
-    CAN_VIEW_AUDIT: ['CompanyAdmin', 'PLATFORM_OWNER', 'Manager', 'SessionAdmin'],
-    CAN_EXPORT: ['CompanyAdmin', 'PLATFORM_OWNER', 'Manager', 'SessionAdmin'],
-    NO_ACCESS: ['EndUser']
+    CAN_ADJUST: [Role.COMPANY_ADMIN, RoleProfile.SUPER_ADMIN, Role.PLATFORM_OWNER],
+    CAN_VIEW_AUDIT: [Role.COMPANY_ADMIN, Role.PLATFORM_OWNER, RoleProfile.MANAGER, RoleProfile.SESSION_ADMIN],
+    CAN_EXPORT: [Role.COMPANY_ADMIN, Role.PLATFORM_OWNER, RoleProfile.MANAGER, RoleProfile.SESSION_ADMIN],
+    NO_ACCESS: [Role.USER]
 } as const;
 
 /**
@@ -251,12 +244,11 @@ export const PERMISSION_ROLES = {
  */
 export const hasAnyRole = (
     user: User | null | undefined,
-    allowedRoles: readonly string[]
+    allowedRoles: readonly (Role | RoleProfile | string)[]
 ): boolean => {
     if (!user || !user.role) {
         return false;
     }
 
-    return allowedRoles.includes(user.role);
+    return isRoleAllowed(user.role, [...allowedRoles], user.roleProfile);
 };
-

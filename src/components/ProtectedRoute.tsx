@@ -2,8 +2,9 @@ import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingSpinner from './LoadingSpinner';
+import { Role, RoleProfile, isRoleAllowed } from '../shared/roles';
 
-type UserRole = 'SuperAdmin' | 'CompanyAdmin' | 'Manager' | 'SessionAdmin' | 'EndUser' | 'PLATFORM_OWNER';
+type UserRole = Role | RoleProfile | string;
 
 interface ProtectedRouteProps {
   allowedRoles?: UserRole[];
@@ -32,7 +33,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) => {
 
   // If allowedRoles is specified, check if user's role is in the allowed list
   if (allowedRoles && allowedRoles.length > 0) {
-    if (!allowedRoles.includes(user.role as UserRole)) {
+    if (!isRoleAllowed(user.role, allowedRoles, user.roleProfile)) {
       // User doesn't have the required role, redirect to dashboard
       return <Navigate to="/dashboard" replace />;
     }

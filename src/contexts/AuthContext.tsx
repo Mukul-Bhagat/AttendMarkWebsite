@@ -1,11 +1,15 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import api from '../api';
+import { Role, RoleProfile, resolveRole } from '../shared/roles';
 
 // Define the shape of the user object and the auth context
 export interface IUser {
   id: string;
   email: string;
-  role: 'SuperAdmin' | 'CompanyAdmin' | 'Manager' | 'SessionAdmin' | 'EndUser' | 'PLATFORM_OWNER';
+  role: string;
+  rawRole?: string;
+  canonicalRole?: Role;
+  roleProfile?: RoleProfile;
   profile: {
     firstName: string;
     lastName: string;
@@ -44,6 +48,29 @@ interface IAuthContext {
 // Create the context
 const AuthContext = createContext<IAuthContext | undefined>(undefined);
 
+const normalizeAuthUser = (user: IUser): IUser => {
+  const fallbackRawRole = String(user.rawRole || user.role || '').trim();
+
+  try {
+    const resolved = resolveRole(fallbackRawRole);
+    return {
+      ...user,
+      role: fallbackRawRole,
+      rawRole: fallbackRawRole,
+      canonicalRole: resolved.role,
+      roleProfile: resolved.roleProfile,
+    };
+  } catch {
+    return {
+      ...user,
+      role: fallbackRawRole,
+      rawRole: fallbackRawRole,
+      canonicalRole: Role.USER,
+      roleProfile: RoleProfile.END_USER,
+    };
+  }
+};
+
 // Define the provider component
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // CRITICAL: Check if we're on a public route immediately to avoid blocking
@@ -65,12 +92,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(!getIsPublicRoute());
 
   // Derived role states - helper booleans for easy role checking
-  const isSuperAdmin = user?.role === 'SuperAdmin';
-  const isCompanyAdmin = user?.role === 'CompanyAdmin';
-  const isManager = user?.role === 'Manager';
-  const isSessionAdmin = user?.role === 'SessionAdmin';
-  const isEndUser = user?.role === 'EndUser';
-  const isPlatformOwner = user?.role === 'PLATFORM_OWNER';
+  const isSuperAdmin = user?.roleProfile === RoleProfile.SUPER_ADMIN;
+  const isCompanyAdmin = user?.roleProfile === RoleProfile.COMPANY_ADMIN;
+  const isManager = user?.roleProfile === RoleProfile.MANAGER;
+  const isSessionAdmin = user?.roleProfile === RoleProfile.SESSION_ADMIN;
+  const isEndUser = user?.roleProfile === RoleProfile.END_USER;
+  const isPlatformOwner = user?.canonicalRole === Role.PLATFORM_OWNER;
 
   // On initial load, try to load user from token
   useEffect(() => {
@@ -107,7 +134,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           const { user } = response.data;
 
           // Update state with fetched user data
-          setUser(user);
+          setUser(normalizeAuthUser(user));
           setToken(storedToken);
         } catch (err: any) {
           // Token is invalid or expired, clear it
@@ -131,7 +158,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // If formDataOrAuth already has token and user, it's from the new flow
       if (formDataOrAuth.token && formDataOrAuth.user) {
         setToken(formDataOrAuth.token);
-        setUser(formDataOrAuth.user);
+        setUser(normalizeAuthUser(formDataOrAuth.user));
         localStorage.setItem('token', formDataOrAuth.token);
         setIsLoading(false);
         return;
@@ -144,7 +171,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { token, user } = response.data;
       // Save to state and localStorage
       setToken(token);
-      setUser(user);
+      setUser(normalizeAuthUser(user));
       localStorage.setItem('token', token);
 
       setIsLoading(false);
@@ -173,7 +200,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const response = await api.get('/api/auth/me');
       const { user } = response.data;
-      setUser(user);
+      setUser(normalizeAuthUser(user));
     } catch (err: any) {
       console.error('Failed to refetch user:', err);
       // If token is invalid, logout
@@ -192,7 +219,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       // Update token and user
       setToken(token);
-      setUser(user);
+      setUser(normalizeAuthUser(user));
       localStorage.setItem('token', token);
 
       // Reload the page to refresh the dashboard with new organization context

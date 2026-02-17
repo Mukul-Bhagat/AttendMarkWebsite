@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api';
 import { useNavigate } from 'react-router-dom';
+import { Role } from '../shared/roles';
 
 interface Organization {
     _id: string; // Used in component
@@ -44,7 +45,7 @@ const AdminNotifications: React.FC = () => {
 
     // Redirect if not platform owner (route protection should handle this, but extra safety)
     useEffect(() => {
-        if (user && user.role !== 'PLATFORM_OWNER') {
+        if (user && user.canonicalRole !== Role.PLATFORM_OWNER) {
             navigate('/dashboard');
         }
     }, [user, navigate]);

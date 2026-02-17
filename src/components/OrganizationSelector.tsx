@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../contexts/AuthContext';
+import { Role, RoleProfile, normalizeRole, resolveRole } from '../shared/roles';
 
 interface Organization {
   orgName: string;
@@ -30,16 +31,35 @@ const OrganizationSelector: React.FC<OrganizationSelectorProps> = ({
   const navigate = useNavigate();
   const { login, user } = useAuth();
 
+  const isPlatformOwnerRole = (roleValue: string): boolean => {
+    try {
+      return normalizeRole(roleValue) === Role.PLATFORM_OWNER;
+    } catch {
+      return false;
+    }
+  };
+
+  const resolveProfileSafe = (roleValue: string): RoleProfile | null => {
+    try {
+      return resolveRole(roleValue).roleProfile;
+    } catch {
+      return null;
+    }
+  };
+
   // Safety net: If Platform Owner somehow lands here, redirect immediately
   useEffect(() => {
-    if (user?.role === 'PLATFORM_OWNER') {
+    if (user && isPlatformOwnerRole(user.role)) {
       navigate('/platform/dashboard', { replace: true });
     }
   }, [user, navigate]);
 
   // Check if user is Platform Owner from organizations array and redirect immediately
   React.useEffect(() => {
-    const isPlatformOwner = organizations && organizations.length > 0 && organizations[0].role === 'PLATFORM_OWNER';
+    const isPlatformOwner =
+      organizations &&
+      organizations.length > 0 &&
+      isPlatformOwnerRole(organizations[0].role);
     if (isPlatformOwner) {
       // Auto-select first organization and redirect to platform dashboard
       const autoSelectAndRedirect = async () => {
@@ -79,7 +99,7 @@ const OrganizationSelector: React.FC<OrganizationSelectorProps> = ({
       await login({ token, user });
 
       // Navigate to the appropriate dashboard based on user role
-      if (user.role === 'PLATFORM_OWNER') {
+      if (isPlatformOwnerRole(user.role)) {
         navigate('/platform/dashboard', { replace: true });
       } else {
         navigate(redirectTo, { replace: true });
@@ -92,16 +112,17 @@ const OrganizationSelector: React.FC<OrganizationSelectorProps> = ({
   };
 
   const getRoleBadgeColor = (role: string) => {
-    switch (role) {
-      case 'SuperAdmin':
+    const profile = resolveProfileSafe(role);
+    switch (profile) {
+      case RoleProfile.SUPER_ADMIN:
         return 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 border-purple-300 dark:border-purple-800';
-      case 'CompanyAdmin':
+      case RoleProfile.COMPANY_ADMIN:
         return 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-800';
-      case 'Manager':
+      case RoleProfile.MANAGER:
         return 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 border-green-300 dark:border-green-800';
-      case 'SessionAdmin':
+      case RoleProfile.SESSION_ADMIN:
         return 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-800';
-      case 'EndUser':
+      case RoleProfile.END_USER:
         return 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700';
       default:
         return 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700';
@@ -109,15 +130,20 @@ const OrganizationSelector: React.FC<OrganizationSelectorProps> = ({
   };
 
   const getRoleDisplayName = (role: string) => {
-    switch (role) {
-      case 'SuperAdmin':
+    const profile = resolveProfileSafe(role);
+    switch (profile) {
+      case RoleProfile.SUPER_ADMIN:
         return 'Super Admin';
-      case 'CompanyAdmin':
+      case RoleProfile.COMPANY_ADMIN:
         return 'Company Admin';
-      case 'SessionAdmin':
+      case RoleProfile.SESSION_ADMIN:
         return 'Session Admin';
+      case RoleProfile.END_USER:
+        return 'End User';
+      case RoleProfile.PLATFORM_OWNER:
+        return 'Platform Owner';
       default:
-        return role;
+        return 'Manager';
     }
   };
 
@@ -194,4 +220,3 @@ const OrganizationSelector: React.FC<OrganizationSelectorProps> = ({
 };
 
 export default OrganizationSelector;
-

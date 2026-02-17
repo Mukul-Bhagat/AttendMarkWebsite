@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api';
 import { onMessageListener } from '../firebase/onMessageListener';
+import { Role } from '../shared/roles';
 
 interface Notification {
     _id: string;
@@ -27,7 +28,7 @@ const NotificationBell: React.FC = () => {
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Check if user is Platform Owner
-    const isPlatformOwner = user?.role === 'PLATFORM_OWNER';
+    const isPlatformOwner = user?.canonicalRole === Role.PLATFORM_OWNER;
 
     // Fetch unread count on mount and periodically
     const fetchUnreadCount = async () => {

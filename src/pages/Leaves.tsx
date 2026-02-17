@@ -2,9 +2,10 @@ import React, { useMemo, useRef, useState, useEffect } from 'react';
 import api from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import Toast from '../components/Toast';
+import SkeletonCard from '../components/SkeletonCard';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
-import { X, Trash2 } from 'lucide-react';
+import { X, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { nowIST, toISTDateString, formatIST } from '../utils/time';
 import { getApiUrl } from '../utils/apiUrl';
@@ -43,6 +44,7 @@ interface ILeaveRequest {
     };
   };
   rejectionReason?: string;
+  approvalNote?: string;
   attachment?: string; // Legacy file path/URL
   attachmentUrl?: string;
   attachmentPublicId?: string;
@@ -52,6 +54,8 @@ interface ILeaveRequest {
   organizationPrefix: string;
   createdAt: string;
   updatedAt?: string;
+  approvedAt?: string;
+  rejectedAt?: string;
   balance?: {
     quota: { pl: number; cl: number; sl: number };
     used: { Personal: number; Casual: number; Sick: number; Extra: number };
@@ -86,13 +90,28 @@ interface IActiveLeave {
   documentUrl?: string | null;
 }
 
+import relativeTime from 'dayjs/plugin/relativeTime';
+
 dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.extend(customParseFormat);
+dayjs.extend(relativeTime);
 
 const IST_TIMEZONE = 'Asia/Kolkata';
 const DATE_ONLY_FORMAT = 'YYYY-MM-DD';
 const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+// Format IST timestamp
+const formatISTTimestamp = (date: Date | string | undefined): string => {
+  if (!date) return '';
+  return dayjs(date).tz(IST_TIMEZONE).format('MMM DD, YYYY • hh:mm A');
+};
+
+// Get relative time in IST
+const getRelativeTime = (date: Date | string | undefined): string => {
+  if (!date) return '';
+  return dayjs(date).tz(IST_TIMEZONE).fromNow();
+};
 
 const toISTDateOnly = (date: Date): string =>
   dayjs(date).tz(IST_TIMEZONE).format(DATE_ONLY_FORMAT);
@@ -129,7 +148,6 @@ const Leaves: React.FC = () => {
   // Toast notification state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
-  // Rejection modal state
   const [rejectionModal, setRejectionModal] = useState<{ isOpen: boolean; leaveId: string | null; userName: string }>({
     isOpen: false,
     leaveId: null,
@@ -137,6 +155,25 @@ const Leaves: React.FC = () => {
   });
   const [rejectionReason, setRejectionReason] = useState('');
   const [isProcessingRejection, setIsProcessingRejection] = useState(false);
+
+  // Approval modal state
+  const [approvalModal, setApprovalModal] = useState<{ isOpen: boolean; leaveId: string | null; userName: string }>({
+    isOpen: false,
+    leaveId: null,
+    userName: '',
+  });
+  const [approvalNote, setApprovalNote] = useState('');
+  const [isProcessingApproval, setIsProcessingApproval] = useState(false);
+
+  // Scroll container refs
+  const pendingScrollRef = useRef<HTMLDivElement>(null);
+  const orgHistoryScrollRef = useRef<HTMLDivElement>(null);
+  const leaveHistoryScrollRef = useRef<HTMLDivElement>(null);
+
+  // Scroll button visibility state
+  const [pendingScrollState, setPendingScrollState] = useState({ showLeft: false, showRight: false });
+  const [orgHistoryScrollState, setOrgHistoryScrollState] = useState({ showLeft: false, showRight: false });
+  const [leaveHistoryScrollState, setLeaveHistoryScrollState] = useState({ showLeft: false, showRight: false });
 
   // Leave Details Modal state
   const [selectedLeave, setSelectedLeave] = useState<ILeaveRequest | null>(null);
@@ -689,7 +726,12 @@ const Leaves: React.FC = () => {
       <div
         key={leave._id}
         onClick={() => handleOpenDetails(leave)}
-        className={`min-w-[320px] max-w-[350px] flex-shrink-0 rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-background-dark p-4 cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-lg card-fade-in ${todayGlow ? 'glow-today' : ''}`}
+        style={{
+          flex: '0 0 min(320px, calc(100vw - 80px))',
+          minWidth: '280px',
+          maxWidth: '350px'
+        }}
+        className={`rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-background-dark p-4 cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-lg card-fade-in ${todayGlow ? 'glow-today' : ''}`}
       >
         {options.showUser && (
           <div className="flex items-center gap-3 mb-3">
@@ -759,6 +801,35 @@ const Leaves: React.FC = () => {
             Delete
           </button>
         )}
+        <div className="flex items-center justify-between mt-3 pt-3 border-t border-border-light dark:border-border-dark">
+          {/* Timestamp Info */}
+          <div className="flex flex-col gap-1 text-[10px] text-text-secondary-light dark:text-text-secondary-dark w-full">
+            {leave.createdAt && (
+              <div className="flex items-center justify-between">
+                <span>Requested:</span>
+                <span title={formatISTTimestamp(leave.createdAt)}>
+                  {getRelativeTime(leave.createdAt)}
+                </span>
+              </div>
+            )}
+            {leave.approvedAt && (
+              <div className="flex items-center justify-between text-green-600 dark:text-green-500">
+                <span>Approved:</span>
+                <span title={formatISTTimestamp(leave.approvedAt)}>
+                  {getRelativeTime(leave.approvedAt)}
+                </span>
+              </div>
+            )}
+            {leave.rejectedAt && (
+              <div className="flex items-center justify-between text-red-600 dark:text-red-500">
+                <span>Rejected:</span>
+                <span title={formatISTTimestamp(leave.rejectedAt)}>
+                  {getRelativeTime(leave.rejectedAt)}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     );
   };
@@ -807,6 +878,90 @@ const Leaves: React.FC = () => {
       setIsProcessingRejection(false);
     }
   };
+
+  // Handle approve click (open modal)
+  const handleApproveClick = (leaveId: string) => {
+    const leave = pendingRequests.find(l => l._id === leaveId);
+    const userName = leave ? getUserName(leave) : '';
+    setApprovalModal({
+      isOpen: true,
+      leaveId,
+      userName,
+    });
+    setApprovalNote('');
+  };
+
+  // Handle approve submit
+  const handleApproveSubmit = async () => {
+    if (!approvalModal.leaveId) return;
+
+    try {
+      setIsProcessingApproval(true);
+      await api.put(`/api/leaves/${approvalModal.leaveId}/status`, {
+        status: 'Approved',
+        approvalNote: approvalNote.trim() || undefined,
+      });
+
+      // Show success toast
+      setToast({ message: `Leave approved for ${approvalModal.userName}`, type: 'success' });
+
+      // Close modal
+      setApprovalModal({ isOpen: false, leaveId: null, userName: '' });
+      setApprovalNote('');
+
+      // Refresh data
+      await fetchLeaveData(false);
+    } catch (err: any) {
+      console.error('Failed to approve leave:', err);
+      const errorMsg = err.response?.data?.msg || 'Failed to approve leave';
+      setToast({ message: errorMsg, type: 'error' });
+    } finally {
+      setIsProcessingApproval(false);
+    }
+  };
+
+  // Handle horizontal scroll for card containers
+  const handleScroll = (ref: React.RefObject<HTMLDivElement>, direction: 'left' | 'right') => {
+    if (!ref.current) return;
+    const scrollAmount = 340; // Card width (320px) + gap (16px) + padding
+    ref.current.scrollBy({
+      left: direction === 'left' ? -scrollAmount : scrollAmount,
+      behavior: 'smooth',
+    });
+  };
+
+  // Check if scroll buttons should be visible
+  const checkScrollButtons = (ref: React.RefObject<HTMLDivElement>) => {
+    if (!ref.current) return { showLeft: false, showRight: false };
+    const { scrollLeft, scrollWidth, clientWidth } = ref.current;
+    return {
+      showLeft: scrollLeft > 0,
+      showRight: scrollLeft < scrollWidth - clientWidth - 1,
+    };
+  };
+
+  // Update scroll button states
+  const updateScrollStates = () => {
+    setPendingScrollState(checkScrollButtons(pendingScrollRef));
+    setOrgHistoryScrollState(checkScrollButtons(orgHistoryScrollRef));
+    setLeaveHistoryScrollState(checkScrollButtons(leaveHistoryScrollRef));
+  };
+
+  // Check scroll states on mount and when data changes
+  useEffect(() => {
+    // Small delay to ensure content is rendered
+    const timer = setTimeout(() => {
+      updateScrollStates();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [pendingRequests, orgHistory, leaveRequests]);
+
+  // Update button visibility on window resize  
+  useEffect(() => {
+    const handleResize = () => updateScrollStates();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Handle opening leave details modal
   const handleOpenDetails = (leave: ILeaveRequest) => {
@@ -1030,20 +1185,42 @@ const Leaves: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center">
-          <svg className="animate-spin h-8 w-8 text-primary mb-4" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
-          </svg>
-          <p className="text-text-secondary-light dark:text-text-secondary-dark">Loading...</p>
+      <div className="p-4 md:p-10">
+        {/* Header Skeleton */}
+        <div className="flex flex-wrap justify-between gap-3 mb-6">
+          <div className="flex flex-col gap-2">
+            <div className="h-10 w-64 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+            <div className="h-5 w-96 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+          </div>
+          <div className="h-12 w-40 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
+        </div>
+
+        {/* Quota Summary Skeleton */}
+        <SkeletonCard variant="grid" className="mb-6" />
+
+        {/* Pending Requests Skeleton - Only for admins */}
+        {isAdminOrStaff && (
+          <div className="w-full rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm mb-6">
+            <div className="h-7 w-48 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mb-4" />
+            <div className="flex gap-4 overflow-hidden">
+              <SkeletonCard variant="leave-card" count={3} />
+            </div>
+          </div>
+        )}
+
+        {/* Leave History Skeleton */}
+        <div className="w-full rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm">
+          <div className="h-7 w-40 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mb-4" />
+          <div className="flex gap-4 overflow-hidden">
+            <SkeletonCard variant="leave-card" count={3} />
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-10">
+    <div className="p-4 md:p-10 overflow-x-hidden w-full">
       {/* Header */}
       <div className="flex flex-wrap justify-between gap-3 mb-6">
         <div className="flex flex-col gap-2">
@@ -1135,8 +1312,36 @@ const Leaves: React.FC = () => {
             Pending Requests {pendingLeaveRequests.length > 0 && `(${pendingLeaveRequests.length})`}
           </h2>
           {pendingLeaveRequests.length > 0 ? (
-            <div className="horizontal-scroll">
-              {pendingLeaveRequests.map((leave) => renderLeaveCard(leave, { showUser: true }))}
+            <div className="scroll-wrapper">
+              <button
+                onClick={() => handleScroll(pendingScrollRef, 'left')}
+                className="scroll-btn"
+                style={{
+                  opacity: pendingScrollState.showLeft ? 1 : 0,
+                  pointerEvents: pendingScrollState.showLeft ? 'auto' : 'none',
+                }}
+                aria-label="Scroll left"
+              >
+                <ChevronLeft size={20} className="text-text-primary-light dark:text-text-primary-dark" />
+              </button>
+              <div
+                ref={pendingScrollRef}
+                className="card-track"
+                onScroll={updateScrollStates}
+              >
+                {pendingLeaveRequests.map((leave) => renderLeaveCard(leave, { showUser: true }))}
+              </div>
+              <button
+                onClick={() => handleScroll(pendingScrollRef, 'right')}
+                className="scroll-btn"
+                style={{
+                  opacity: pendingScrollState.showRight ? 1 : 0,
+                  pointerEvents: pendingScrollState.showRight ? 'auto' : 'none',
+                }}
+                aria-label="Scroll right"
+              >
+                <ChevronRight size={20} className="text-text-primary-light dark:text-text-primary-dark" />
+              </button>
             </div>
           ) : (
             <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm py-4">
@@ -1153,8 +1358,36 @@ const Leaves: React.FC = () => {
             Organization History
           </h2>
           {orgHistoryUpcoming.length > 0 ? (
-            <div className="horizontal-scroll">
-              {orgHistoryUpcoming.map((leave) => renderLeaveCard(leave, { showUser: true, showApprover: true }))}
+            <div className="scroll-wrapper">
+              <button
+                onClick={() => handleScroll(orgHistoryScrollRef, 'left')}
+                className="scroll-btn"
+                style={{
+                  opacity: orgHistoryScrollState.showLeft ? 1 : 0,
+                  pointerEvents: orgHistoryScrollState.showLeft ? 'auto' : 'none',
+                }}
+                aria-label="Scroll left"
+              >
+                <ChevronLeft size={20} className="text-text-primary-light dark:text-text-primary-dark" />
+              </button>
+              <div
+                ref={orgHistoryScrollRef}
+                className="card-track"
+                onScroll={updateScrollStates}
+              >
+                {orgHistoryUpcoming.map((leave) => renderLeaveCard(leave, { showUser: true, showApprover: true }))}
+              </div>
+              <button
+                onClick={() => handleScroll(orgHistoryScrollRef, 'right')}
+                className="scroll-btn"
+                style={{
+                  opacity: orgHistoryScrollState.showRight ? 1 : 0,
+                  pointerEvents: orgHistoryScrollState.showRight ? 'auto' : 'none',
+                }}
+                aria-label="Scroll right"
+              >
+                <ChevronRight size={20} className="text-text-primary-light dark:text-text-primary-dark" />
+              </button>
             </div>
           ) : (
             <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm py-4">
@@ -1168,8 +1401,36 @@ const Leaves: React.FC = () => {
       <div className="w-full rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm">
         <h2 className="text-xl font-bold mb-4 text-text-primary-light dark:text-text-primary-dark">Leave History</h2>
         {leaveHistoryList.length > 0 ? (
-          <div className="horizontal-scroll">
-            {leaveHistoryList.map((leave) => renderLeaveCard(leave, { showUser: isAdminOrStaff, showApprover: isAdminOrStaff, showDelete: !isAdminOrStaff }))}
+          <div className="scroll-wrapper">
+            <button
+              onClick={() => handleScroll(leaveHistoryScrollRef, 'left')}
+              className="scroll-btn"
+              style={{
+                opacity: leaveHistoryScrollState.showLeft ? 1 : 0,
+                pointerEvents: leaveHistoryScrollState.showLeft ? 'auto' : 'none',
+              }}
+              aria-label="Scroll left"
+            >
+              <ChevronLeft size={20} className="text-text-primary-light dark:text-text-primary-dark" />
+            </button>
+            <div
+              ref={leaveHistoryScrollRef}
+              className="card-track"
+              onScroll={updateScrollStates}
+            >
+              {leaveHistoryList.map((leave) => renderLeaveCard(leave, { showUser: isAdminOrStaff, showApprover: isAdminOrStaff, showDelete: !isAdminOrStaff }))}
+            </div>
+            <button
+              onClick={() => handleScroll(leaveHistoryScrollRef, 'right')}
+              className="scroll-btn"
+              style={{
+                opacity: leaveHistoryScrollState.showRight ? 1 : 0,
+                pointerEvents: leaveHistoryScrollState.showRight ? 'auto' : 'none',
+              }}
+              aria-label="Scroll right"
+            >
+              <ChevronRight size={20} className="text-text-primary-light dark:text-text-primary-dark" />
+            </button>
           </div>
         ) : (
           <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm py-4">
@@ -1185,7 +1446,7 @@ const Leaves: React.FC = () => {
           onClick={() => setIsModalOpen(false)}
         >
           <div
-            className="bg-surface-light dark:bg-surface-dark rounded-xl shadow-xl w-full max-w-5xl max-w-[95vw] mx-4 max-h-[90vh] flex flex-col overflow-hidden"
+            className="bg-surface-light dark:bg-surface-dark rounded-xl shadow-xl w-full max-w-5xl mx-4 max-h-[90vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -1642,14 +1903,14 @@ const Leaves: React.FC = () => {
             {/* Content */}
             <div className="p-6">
               <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark mb-4">
-                Rejecting leave request for <strong>{rejectionModal.userName}</strong>. Please provide a reason:
+                Rejecting leave request for <strong>{rejectionModal.userName}</strong>. You can optionally provide a reason:
               </p>
               <textarea
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
                 rows={4}
                 className="w-full px-4 py-2 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-                placeholder="Enter rejection reason..."
+                placeholder="Enter rejection reason (optional)..."
                 autoFocus
               />
             </div>
@@ -1665,7 +1926,7 @@ const Leaves: React.FC = () => {
               </button>
               <button
                 onClick={handleRejectSubmit}
-                disabled={isProcessingRejection || !rejectionReason.trim()}
+                disabled={isProcessingRejection}
                 className="btn-reject px-6 py-2 text-sm font-bold text-white flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isProcessingRejection ? (
@@ -1680,6 +1941,80 @@ const Leaves: React.FC = () => {
                   <>
                     <span className="material-symbols-outlined text-lg">close</span>
                     Reject Leave
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Approval Note Modal */}
+      {approvalModal.isOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          onClick={() => setApprovalModal({ isOpen: false, leaveId: null, userName: '' })}
+        >
+          <div
+            className="bg-surface-light dark:bg-surface-dark rounded-xl shadow-xl max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-6 border-b border-border-light dark:border-border-dark">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-text-primary-light dark:text-text-primary-dark">
+                  Approve Leave Request
+                </h2>
+                <button
+                  onClick={() => setApprovalModal({ isOpen: false, leaveId: null, userName: '' })}
+                  className="text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark transition-colors"
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark mb-4">
+                Approving leave request for <strong>{approvalModal.userName}</strong>. You can optionally add an approval message:
+              </p>
+              <textarea
+                value={approvalNote}
+                onChange={(e) => setApprovalNote(e.target.value)}
+                rows={4}
+                className="w-full px-4 py-2 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                placeholder="Enter approval message (optional)..."
+                autoFocus
+              />
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-border-light dark:border-border-dark">
+              <button
+                type="button"
+                onClick={() => setApprovalModal({ isOpen: false, leaveId: null, userName: '' })}
+                className="px-6 py-2 text-sm font-medium text-text-primary-light dark:text-text-primary-dark bg-transparent hover:bg-gray-100 dark:hover:bg-surface-dark rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApproveSubmit}
+                disabled={isProcessingApproval}
+                className="btn-approve px-6 py-2 text-sm font-bold text-white flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isProcessingApproval ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
+                    </svg>
+                    Approving...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-lg">check</span>
+                    Approve Leave
                   </>
                 )}
               </button>
@@ -1970,24 +2305,9 @@ const Leaves: React.FC = () => {
                 selectedLeave.userId._id !== user?.id ? (
                 <div className="flex justify-end gap-3">
                   <button
-                    onClick={async () => {
-                      try {
-                        await api.put(`/api/leaves/${selectedLeave._id}/status`, {
-                          status: 'Approved',
-                        });
-                        setToast({
-                          message: `Leave approved for ${getUserName(selectedLeave)}`,
-                          type: 'success'
-                        });
-                        handleCloseDetails();
-
-                        // Refresh data
-                        await fetchLeaveData(false);
-                      } catch (err: any) {
-                        console.error('Failed to approve leave:', err);
-                        const errorMsg = err.response?.data?.msg || 'Failed to approve leave';
-                        setToast({ message: errorMsg, type: 'error' });
-                      }
+                    onClick={() => {
+                      handleCloseDetails();
+                      handleApproveClick(selectedLeave._id);
                     }}
                     className="btn-approve px-4 py-2 h-10 text-sm font-bold text-white flex items-center justify-center gap-2"
                   >
