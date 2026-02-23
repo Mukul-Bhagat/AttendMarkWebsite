@@ -69,9 +69,8 @@ const OrganizationSelector: React.FC<OrganizationSelectorProps> = ({
             organizationId: organizations[0].organizationId,
           });
 
-          const { token, user } = response.data;
-          localStorage.setItem('token', token);
-          await login({ token, user });
+          const { user } = response.data;
+          await login({ user });
           navigate('/platform/dashboard', { replace: true });
         } catch (err: any) {
           const errorMessage = err.response?.data?.msg || 'Failed to select organization. Please try again.';
@@ -90,13 +89,10 @@ const OrganizationSelector: React.FC<OrganizationSelectorProps> = ({
         organizationId: org.organizationId,
       });
 
-      const { token, user } = response.data;
+      const { user } = response.data;
 
-      // Store token and update AuthContext
-      localStorage.setItem('token', token);
-
-      // Update AuthContext with the new token and user
-      await login({ token, user });
+      // Update AuthContext with the new user
+      await login({ user });
 
       // Navigate to the appropriate dashboard based on user role
       if (isPlatformOwnerRole(user.role)) {

@@ -4,6 +4,7 @@ import api from '../api';
 import { useNavigate } from 'react-router-dom';
 import { Role } from '../shared/roles';
 
+import { appLogger } from '../shared/logger';
 interface Organization {
     _id: string; // Used in component
     id?: string;
@@ -60,11 +61,11 @@ const AdminNotifications: React.FC = () => {
                 if (Array.isArray(data)) {
                     setOrganizations(data);
                 } else {
-                    console.warn('Organizations API returned non-array:', data);
+                    appLogger.warn('Organizations API returned non-array:', data);
                     setOrganizations([]);
                 }
             } catch (error) {
-                console.error('Failed to fetch organizations:', error);
+                appLogger.error('Failed to fetch organizations:', error);
                 setOrganizations([]); // Safe fallback
             }
         };
@@ -82,11 +83,11 @@ const AdminNotifications: React.FC = () => {
             if (Array.isArray(data)) {
                 setHistory(data);
             } else {
-                console.warn('Notification history API returned non-array:', data);
+                appLogger.warn('Notification history API returned non-array:', data);
                 setHistory([]);
             }
         } catch (error) {
-            console.error('Failed to fetch history:', error);
+            appLogger.error('Failed to fetch history:', error);
             setHistory([]); // Safe fallback
         } finally {
             setLoadingHistory(false);

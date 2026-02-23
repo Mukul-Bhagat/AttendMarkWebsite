@@ -5,6 +5,7 @@ import api from '../api';
 import { ISession } from '../types';
 import { nowIST, formatIST, sessionTimeToIST } from '../utils/time';
 
+import { appLogger } from '../shared/logger';
 interface DashboardSummary {
   organization: {
     name: string;
@@ -27,7 +28,7 @@ interface DashboardSummary {
 }
 
 const Dashboard: React.FC = () => {
-  const { user, isPlatformOwner } = useAuth();
+  const { user, isPlatformOwner, logout } = useAuth();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [upcomingSessions, setUpcomingSessions] = useState<ISession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -63,10 +64,10 @@ const Dashboard: React.FC = () => {
 
           }
         } catch (sessionErr) {
-          console.error('Failed to fetch sessions:', sessionErr);
+          appLogger.error('Failed to fetch sessions:', sessionErr);
         }
       } catch (err: any) {
-        console.error('Failed to fetch dashboard summary:', err);
+        appLogger.error('Failed to fetch dashboard summary:', err);
         if (err.response?.status === 404 || err.response?.status === 400) {
           setError('Organization data mismatch. Please logout and login again to refresh your session.');
         } else {
@@ -163,7 +164,7 @@ const Dashboard: React.FC = () => {
               Reload
             </button>
             {error.includes('logout') && (
-              <Link to="/login" onClick={() => localStorage.removeItem('token')} className="text-sm underline hover:text-red-800 dark:hover:text-red-300 font-bold">
+              <Link to="/login" onClick={() => logout()} className="text-sm underline hover:text-red-800 dark:hover:text-red-300 font-bold">
                 Logout
               </Link>
             )}

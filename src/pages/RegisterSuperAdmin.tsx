@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../api';
 import Toast from '../components/Toast';
 
+import { appLogger } from '../shared/logger';
 // This is the component for our /register route
 const RegisterSuperAdmin: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -97,7 +98,7 @@ const RegisterSuperAdmin: React.FC = () => {
 
       // Ensure no auth tokens exist (clean state)
       // This prevents any automatic auth checks from triggering
-      localStorage.removeItem('token');
+      // Cookies handle session directly
 
       // Redirect to login after 4 seconds to allow reading the message
       // Use window.location to ensure a clean page load without triggering React Router auth checks
@@ -163,7 +164,7 @@ const RegisterSuperAdmin: React.FC = () => {
 
       // Log error for debugging (only in development)
       if (import.meta.env.DEV) {
-        console.error('Registration error:', err);
+        appLogger.error('Registration error:', err);
       }
     } finally {
       // CRITICAL: Always reset loading state using finally block

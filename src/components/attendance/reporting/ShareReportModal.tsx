@@ -3,6 +3,7 @@ import { Share2, X, Send, User, Calendar, Building, Upload, Plus, Clock, Sparkle
 import toast from 'react-hot-toast';
 import { shareAttendanceReport, ShareReportOptions } from '../../../api/reportingApi';
 
+import { appLogger } from '../../../shared/logger';
 interface ShareReportModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -121,7 +122,7 @@ const ShareReportModal: React.FC<ShareReportModalProps> = ({
                 userId,
             };
 
-            console.log('[ShareReportModal] Submitting share request:', {
+            appLogger.info('[ShareReportModal] Submitting share request:', {
                 recipientEmail: options.recipientEmail,
                 startDate: options.startDate,
                 endDate: options.endDate,
@@ -132,35 +133,35 @@ const ShareReportModal: React.FC<ShareReportModalProps> = ({
 
             const response = await shareAttendanceReport(options);
 
-            console.log('[ShareReportModal] Full response object:', response);
-            console.log('[ShareReportModal] Response.data:', response.data);
-            console.log('[ShareReportModal] Response.data.data:', response.data?.data);
-            console.log('[ShareReportModal] needsApproval?:', response.data?.data?.needsApproval);
+            appLogger.info('[ShareReportModal] Full response object:', response);
+            appLogger.info('[ShareReportModal] Response.data:', response.data);
+            appLogger.info('[ShareReportModal] Response.data.data:', response.data?.data);
+            appLogger.info('[ShareReportModal] needsApproval?:', response.data?.data?.needsApproval);
 
             // Check if this was an approval request or direct send
             if (response.data?.data?.needsApproval) {
-                console.log('[ShareReportModal] Request requires admin approval');
-                console.log('[ShareReportModal] Request ID:', response.data.data.requestId);
-                console.log('[ShareReportModal] Calling toast.success...');
+                appLogger.info('[ShareReportModal] Request requires admin approval');
+                appLogger.info('[ShareReportModal] Request ID:', response.data.data.requestId);
+                appLogger.info('[ShareReportModal] Calling toast.success...');
 
                 const message = response.data?.message || '✅ Your report share request has been sent to the admin for approval!';
-                console.log('[ShareReportModal] Toast message:', message);
+                appLogger.info('[ShareReportModal] Toast message:', message);
 
                 toast.success(message, { id: toastId, duration: 5000 });
-                console.log('[ShareReportModal] Toast.success called successfully');
+                appLogger.info('[ShareReportModal] Toast.success called successfully');
             } else {
-                console.log('[ShareReportModal] Report sent directly (admin user)');
+                appLogger.info('[ShareReportModal] Report sent directly (admin user)');
                 toast.success(
                     response.data?.message || '✅ Report shared successfully!',
                     { id: toastId, duration: 4000 }
                 );
             }
 
-            console.log('[ShareReportModal] Closing modal...');
+            appLogger.info('[ShareReportModal] Closing modal...');
             onClose();
         } catch (err: any) {
-            console.error('[ShareReportModal] Share request failed:', err);
-            console.error('[ShareReportModal] Error response:', err.response?.data);
+            appLogger.error('[ShareReportModal] Share request failed:', err);
+            appLogger.error('[ShareReportModal] Error response:', err.response?.data);
             toast.error(err.response?.data?.message || 'Failed to share attendance report', { id: toastId });
         } finally {
             setIsSharing(false);

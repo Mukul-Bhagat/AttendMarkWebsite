@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../api';
 
+import { appLogger } from '../shared/logger';
 // Define the User shape
 interface IUser {
   _id: string;
@@ -39,7 +40,7 @@ const AddUsersModal: React.FC<IProps> = ({ onClose, onSave, initialSelectedUsers
           setError('No users found in your organization');
         }
       } catch (error: any) {
-        console.error('Failed to fetch users', error);
+        appLogger.error('Failed to fetch users', error);
         setError('Failed to load users. Please try again.');
       } finally {
         setIsLoading(false);

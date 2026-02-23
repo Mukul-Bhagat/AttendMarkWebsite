@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useOrganization } from '../contexts/OrganizationContext';
 import api from '../api';
 
+import { appLogger } from '../shared/logger';
 const OrganizationSettings: React.FC = () => {
     const { user, isSuperAdmin, isCompanyAdmin } = useAuth();
     const { refreshOrganization } = useOrganization();
@@ -74,7 +75,7 @@ const OrganizationSettings: React.FC = () => {
                         logo: data.logo || '',
                     });
                 } catch (err: any) {
-                    console.error('Failed to fetch organization settings:', err);
+                    appLogger.error('Failed to fetch organization settings:', err);
                     // Use default values if fetch fails
                 } finally {
                     setIsLoadingSettings(false);
@@ -125,7 +126,7 @@ const OrganizationSettings: React.FC = () => {
             setLogoFile(null);
             setTimeout(() => setMessage(null), 3000);
         } catch (err: any) {
-            console.error(err);
+            appLogger.error(err);
             setMessage({
                 type: 'error',
                 text: err.response?.data?.msg || 'Failed to update organization settings',

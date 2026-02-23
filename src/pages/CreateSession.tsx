@@ -9,6 +9,7 @@ import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import { nowIST, formatIST, toISTDateString, istDayStart } from '../utils/time';
 
+import { appLogger } from '../shared/logger';
 interface IUser {
   _id: string;
   email: string;
@@ -90,7 +91,7 @@ const CreateSession: React.FC = () => {
             description: data.description || '',
           }));
         } catch (err) {
-          console.error('Could not fetch class details:', err);
+          appLogger.error('Could not fetch class details:', err);
           setError('Failed to load class details. Please try again.');
         } finally {
           setIsLoadingClass(false);
@@ -116,7 +117,7 @@ const CreateSession: React.FC = () => {
           const admins = data.filter((u: IAuthUser) => u.role === 'SessionAdmin');
           setSessionAdmins(admins);
         } catch (err) {
-          console.error('Could not fetch SessionAdmins', err);
+          appLogger.error('Could not fetch SessionAdmins', err);
         }
       };
       fetchSessionAdmins();

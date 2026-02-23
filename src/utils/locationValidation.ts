@@ -14,6 +14,7 @@
 
 import { nowIST, sessionTimeToIST, formatIST } from './time';
 
+import { appLogger } from '../shared/logger';
 export interface GeolocationOptions {
   /**
    * Enable high accuracy GPS
@@ -120,10 +121,10 @@ export interface SessionLocation {
  * ```typescript
  * try {
  *   const position = await getUserLocation();
- *   console.log('Lat:', position.coords.latitude);
- *   console.log('Lng:', position.coords.longitude);
+ *   appLogger.info('Lat:', position.coords.latitude);
+ *   appLogger.info('Lng:', position.coords.longitude);
  * } catch (error) {
- *   console.error('Failed to get location:', error);
+ *   appLogger.error('Failed to get location:', error);
  * }
  * ```
  */
@@ -228,7 +229,7 @@ export function getUserLocation(
  *   19.9975, 73.7898, // Session location
  *   19.9980, 73.7900  // User location
  * );
- * console.log(`Distance: ${distance.toFixed(2)} meters`);
+ * appLogger.info(`Distance: ${distance.toFixed(2)} meters`);
  * ```
  */
 export function calculateDistance(
@@ -301,12 +302,12 @@ export function calculateDistance(
  *   });
  *   
  *   if (result.isWithinRadius) {
- *     console.log(`✅ Within radius! Distance: ${result.distance.toFixed(2)}m`);
+ *     appLogger.info(`✅ Within radius! Distance: ${result.distance.toFixed(2)}m`);
  *   } else {
- *     console.log(`❌ Outside radius! Distance: ${result.distance.toFixed(2)}m`);
+ *     appLogger.info(`❌ Outside radius! Distance: ${result.distance.toFixed(2)}m`);
  *   }
  * } catch (error) {
- *   console.error('Validation failed:', error);
+ *   appLogger.error('Validation failed:', error);
  * }
  * ```
  */

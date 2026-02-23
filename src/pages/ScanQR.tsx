@@ -15,6 +15,7 @@ import {
 } from '../utils/sessionStatusUtils';
 import { formatIST } from '../utils/time';
 
+import { appLogger } from '../shared/logger';
 const ScanQR: React.FC = () => {
   const [searchParams] = useSearchParams();
   const sessionIdFromUrl = searchParams.get('sessionId');
@@ -46,40 +47,19 @@ const ScanQR: React.FC = () => {
   } | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const qrCodeRegionId = 'qr-reader';
-  // Location permission state (set but not currently used in UI)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_locationPermissionGranted, setLocationPermissionGranted] = useState<boolean | null>(null);
-
-  // Request location permission on page load
-  useEffect(() => {
-    const requestLocationPermission = () => {
-      if (!navigator.geolocation) {
-        setLocationPermissionGranted(false);
-        setSessionError('Geolocation is not supported by your browser.');
-        return;
-      }
-
-      // Request permission by attempting to get position
-      navigator.geolocation.getCurrentPosition(
-        () => {
-          setLocationPermissionGranted(true);
-        },
-        (error) => {
-          setLocationPermissionGranted(false);
-          if (error.code === error.PERMISSION_DENIED) {
-            setSessionError('Location permission denied. Please enable location access to mark attendance.');
-          }
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 5000,
-          maximumAge: 0,
-        }
-      );
-    };
-
-    requestLocationPermission();
-  }, []);
+  const isLocationError = (reason?: string) => {
+    if (!reason) return false;
+    const locationReasons = new Set([
+      'LOCATION_REQUIRED',
+      'ACCURACY_REQUIRED',
+      'INVALID_LOCATION_COORDS',
+      'INVALID_LOCATION_ZERO',
+      'INVALID_COORDINATES',
+      'INVALID_ACCURACY',
+      'INVALID_ACCURACY_RANGE',
+    ]);
+    return locationReasons.has(reason);
+  };
 
   // Fetch all sessions on mount
   useEffect(() => {
@@ -95,7 +75,7 @@ const ScanQR: React.FC = () => {
         } else {
           setSessionError('Failed to load sessions. Please try again.');
         }
-        console.error('Error fetching sessions:', err);
+        appLogger.error('Error fetching sessions:', err);
       } finally {
         setIsLoadingSessions(false);
       }
@@ -112,7 +92,7 @@ const ScanQR: React.FC = () => {
           const { data } = await api.get(`/api/sessions/${selectedSessionId}`);
           setSessionInfo(data);
         } catch (err) {
-          console.error('Failed to fetch session info:', err);
+          appLogger.error('Failed to fetch session info:', err);
         }
       }
     };
@@ -160,7 +140,7 @@ const ScanQR: React.FC = () => {
 
         return true;
       } catch (err) {
-        console.error('Error filtering session:', err);
+        appLogger.error('Error filtering session:', err);
         return false;
       }
     });
@@ -215,7 +195,7 @@ const ScanQR: React.FC = () => {
       const currentSession = sessions.find(s => s._id === selectedSessionId);
       if (currentSession) {
         const status = getSessionStatus(currentSession, currentTime);
-        console.log('🔍 QR SCAN ELIGIBILITY CHECK:', {
+        appLogger.info('🔍 QR SCAN ELIGIBILITY CHECK:', {
           nowIST: currentTime,
           readableTime: formatIST(currentTime),
           sessionStatus: status,
@@ -273,7 +253,7 @@ const ScanQR: React.FC = () => {
       setMessageType('error');
       const errorMsg = err.message || 'Please allow camera access';
       setMessage(`Failed to start camera: ${errorMsg}. Please check your browser permissions.`);
-      console.error('Error starting QR scanner:', err);
+      appLogger.error('Error starting QR scanner:', err);
     }
   };
 
@@ -290,7 +270,7 @@ const ScanQR: React.FC = () => {
         // Clear the scanner
         await scanner.clear();
       } catch (err) {
-        console.error('Error stopping scanner:', err);
+        appLogger.error('Error stopping scanner:', err);
       } finally {
         scannerRef.current = null;
         setIsScanning(false);
@@ -340,140 +320,133 @@ const ScanQR: React.FC = () => {
 
     setIsProcessing(true);
     setMessageType('info');
-    setMessage('QR Code detected! Getting your location...');
+    setMessage('Validating session...');
 
-    // 1. Get User's Geolocation
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        // 2. Location successful
-        setMessageType('info');
-        setMessage('Location found. Verifying attendance...');
-        const userLocation = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        };
+    const timestamp = nowIST();
+    const deviceId = getOrCreateDeviceId();
+    const userAgent = navigator.userAgent;
+    const basePayload = { sessionId, deviceId, userAgent, timestamp };
 
-        // 3. Get GPS accuracy and timestamp (REQUIRED)
-        const accuracy = position.coords.accuracy; // Accuracy in meters (required)
-        if (!accuracy || accuracy <= 0 || isNaN(accuracy)) {
-          setMessageType('error');
-          setMessage('GPS accuracy data is missing. Please enable high-accuracy GPS and try again.');
-          setIsProcessing(false);
-          setIsScannerPaused(false);
-          return;
-        }
-
-        // SECURITY: Reject if accuracy > 40 meters (frontend validation)
-        if (accuracy > 40) {
-          setMessageType('error');
-          setMessage(`GPS accuracy is too low (${Math.round(accuracy)}m). Please enable high-accuracy GPS and ensure you have a clear view of the sky. Maximum allowed accuracy: 40m.`);
-          setIsProcessing(false);
-          setIsScannerPaused(false);
-          return;
-        }
-
-        const timestamp = nowIST(); // Timestamp in milliseconds (number)
-
-        // 4. Get the unique device ID and user agent
-        const deviceId = getOrCreateDeviceId();
-        const userAgent = navigator.userAgent;
-
-        // 5. Call the backend API with MapmyIndia verification data
-        markAttendance(sessionId, userLocation, deviceId, userAgent, accuracy, timestamp);
-      },
-      (error) => {
-        // Handle geolocation errors
-        let errorMessage = 'Unable to get your location. ';
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            errorMessage = 'Location permission denied. Please enable location access in your browser settings and try again.';
-            break;
-          case error.POSITION_UNAVAILABLE:
-            errorMessage = 'Location information is unavailable. Please ensure GPS is enabled and try again.';
-            break;
-          case error.TIMEOUT:
-            errorMessage = 'Location request timed out. Please try again.';
-            break;
-          default:
-            errorMessage = `Could not get location: ${error.message || 'Unknown error'}. Please enable GPS and try again.`;
-            break;
-        }
-        setMessageType('error');
-        setMessage(errorMessage);
-        setIsProcessing(false);
-        setIsScannerPaused(false);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0 // Always fetch fresh GPS, no caching
-      }
-    );
-  };
-
-  // This function sends all data to our backend
-  const markAttendance = async (
-    sessionId: string,
-    userLocation: { latitude: number; longitude: number },
-    deviceId: string,
-    userAgent: string,
-    accuracy: number,
-    timestamp: number
-  ) => {
-    // Validate location before sending
-    if (!userLocation || typeof userLocation.latitude !== 'number' || typeof userLocation.longitude !== 'number') {
-      setMessageType('error');
-      setMessage('Location data is invalid. Please enable GPS and try again.');
-      setIsProcessing(false);
-      setIsScannerPaused(false);
+    const firstAttempt = await submitAttendance(basePayload);
+    if (firstAttempt.ok) {
+      handleAttendanceResponse(firstAttempt.data);
       return;
     }
 
-    try {
-      console.log('[ATTENDANCE_SCAN] Sending request:', { sessionId, userLocation, accuracy });
-
-      const { data } = await api.post('/api/attendance/scan', {
-        sessionId,
-        userLocation,
-        deviceId,
-        userAgent,
-        accuracy,
-        timestamp,
-      });
-
-      // Handle Success (MARKED or ALREADY_MARKED)
-      if (data.status === 'MARKED' || data.status === 'ALREADY_MARKED') {
-        setMessageType('success');
-        setMessage(data.msg); // Store message for legacy use if needed
-        setIsSuccess(true);
-        setIsProcessing(false);
-
-        // Store full response for UI
-        setSessionInfo((prev: any) => ({ ...prev, ...data })); // Merge response data
-
-        // Auto-redirect after delay
-        setTimeout(() => {
-          // If we are in the main app flow, maybe go back to dashboard or session list?
-          // User asked: "Redirect to Dashboard".
-          // But if I am in "ScanQR" page, maybe I want to scan another?
-          // The prompt says "Redirect to Dashboard". OK.
-          navigate('/dashboard');
-        }, 2500);
-
-      } else {
-        // Logic Failure (FAILED status)
-        handleScanFailure(data);
-      }
-
-    } catch (err: any) {
-      if (err.response?.data) {
-        handleScanFailure(err.response.data);
-      } else {
+    if (isLocationError(firstAttempt.error?.reason)) {
+      if (!navigator.geolocation) {
         setMessageType('error');
-        setMessage('Failed to connect to server.');
+        setMessage('Geolocation is not supported by your browser.');
         setIsProcessing(false);
+        setIsScannerPaused(false);
+        return;
       }
+
+      setMessageType('info');
+      setMessage('Location required. Getting your location...');
+
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          setMessageType('info');
+          setMessage('Location found. Verifying attendance...');
+
+          const accuracy = position.coords.accuracy;
+          if (!accuracy || accuracy <= 0 || isNaN(accuracy)) {
+            setMessageType('error');
+            setMessage('GPS accuracy data is missing. Please enable high-accuracy GPS and try again.');
+            setIsProcessing(false);
+            setIsScannerPaused(false);
+            return;
+          }
+
+          if (accuracy > 40) {
+            setMessageType('error');
+            setMessage(`GPS accuracy is too low (${Math.round(accuracy)}m). Please enable high-accuracy GPS and ensure you have a clear view of the sky. Maximum allowed accuracy: 40m.`);
+            setIsProcessing(false);
+            setIsScannerPaused(false);
+            return;
+          }
+
+          const userLocation = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          };
+
+          const secondAttempt = await submitAttendance({
+            ...basePayload,
+            userLocation,
+            accuracy,
+          });
+
+          if (secondAttempt.ok) {
+            handleAttendanceResponse(secondAttempt.data);
+          } else {
+            handleScanFailure(secondAttempt.error);
+          }
+        },
+        (error) => {
+          let errorMessage = 'Unable to get your location. ';
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage = 'Location permission denied. Please enable location access in your browser settings and try again.';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage = 'Location information is unavailable. Please ensure GPS is enabled and try again.';
+              break;
+            case error.TIMEOUT:
+              errorMessage = 'Location request timed out. Please try again.';
+              break;
+            default:
+              errorMessage = `Could not get location: ${error.message || 'Unknown error'}. Please enable GPS and try again.`;
+              break;
+          }
+          setMessageType('error');
+          setMessage(errorMessage);
+          setIsProcessing(false);
+          setIsScannerPaused(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+      return;
     }
+
+    handleScanFailure(firstAttempt.error);
+  };
+
+  const submitAttendance = async (payload: Record<string, any>) => {
+    try {
+      appLogger.info('[ATTENDANCE_SCAN] Sending request:', {
+        sessionId: payload.sessionId,
+        hasLocation: !!payload.userLocation,
+        accuracy: payload.accuracy,
+      });
+      const { data } = await api.post('/api/attendance/scan', payload);
+      return { ok: true, data };
+    } catch (err: any) {
+      return { ok: false, error: err.response?.data || { msg: 'Failed to connect to server.' } };
+    }
+  };
+
+  const handleAttendanceResponse = (data: any) => {
+    if (data.status === 'MARKED' || data.status === 'ALREADY_MARKED') {
+      setMessageType('success');
+      setMessage(data.msg);
+      setIsSuccess(true);
+      setIsProcessing(false);
+
+      setSessionInfo((prev: any) => ({ ...prev, ...data }));
+
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 2500);
+      return;
+    }
+
+    handleScanFailure(data);
   };
 
   const handleScanFailure = (data: any) => {

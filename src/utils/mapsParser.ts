@@ -1,3 +1,4 @@
+import { appLogger } from '../shared/logger';
 /**
  * Google Maps Link Parser Utility
  * 
@@ -67,7 +68,7 @@ export const extractCoordinatesFromGoogleMapsLink = (url: string): { latitude: n
       }
     }
   } catch (err) {
-    console.error('Error parsing Google Maps link:', err);
+    appLogger.error('Error parsing Google Maps link:', err);
   }
 
   return null;

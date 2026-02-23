@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { streamBackup } from '../api/backupApi';
 import { saveBackup, getLastBackupDate } from '../utils/localBackup';
 
+import { appLogger } from '../shared/logger';
 /**
  * Custom hook for automatic daily backup
  * 
@@ -40,11 +41,11 @@ export const useAutoBackup = () => {
 
       // If backup was already done today, skip
       if (lastBackupDate === today) {
-        console.log('[Auto-Backup] Backup already done today');
+        appLogger.info('[Auto-Backup] Backup already done today');
         return;
       }
 
-      console.log('[Auto-Backup] Starting automatic backup...');
+      appLogger.info('[Auto-Backup] Starting automatic backup...');
       
       // Fetch backup from streaming endpoint (zero-storage, returns JSON directly)
       const backupData = await streamBackup();
@@ -52,7 +53,7 @@ export const useAutoBackup = () => {
       // Save to IndexedDB using today's date
       await saveBackup(today, backupData);
 
-      console.log('[Auto-Backup] ✅ Backup completed successfully');
+      appLogger.info('[Auto-Backup] ✅ Backup completed successfully');
       
       // Show success toast (Toast component will auto-dismiss)
       setToast({
@@ -61,7 +62,7 @@ export const useAutoBackup = () => {
       });
     } catch (error: any) {
       // Silently fail - don't interrupt user experience
-      console.error('[Auto-Backup] Failed to create automatic backup:', error.message);
+      appLogger.error('[Auto-Backup] Failed to create automatic backup:', error.message);
     }
   }, [user, getTodayDate]);
 

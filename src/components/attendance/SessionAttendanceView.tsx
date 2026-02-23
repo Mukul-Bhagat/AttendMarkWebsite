@@ -16,6 +16,7 @@ import { canAdjustAttendance } from '../../utils/attendancePermissions';
 // ✅ API
 import { adjustAttendance } from '../../api/attendanceAdjustment';
 
+import { appLogger } from '../../shared/logger';
 interface ModificationHistoryEntry {
     modifiedAt: string;
     modifiedBy: {
@@ -131,7 +132,7 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
 
     // Fetch attendance data
     const fetchAttendance = async () => {
-        console.log('🔍 [FRONTEND] fetchAttendance called', { sessionId, sessionDate });
+        appLogger.info('🔍 [FRONTEND] fetchAttendance called', { sessionId, sessionDate });
 
         try {
             setLoading(true);
@@ -140,7 +141,7 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
             // ✅ NEW: Call /manage endpoint (returns all users with attendance merged)
             // 🔥 CACHE BUSTER: Add timestamp to force fresh request
             // 🔒 CRITICAL: NO targetDate - backend uses Session.sessionDate as source of truth
-            console.log('🔍 [FRONTEND] Making API call to /api/attendance/session/.../manage', {
+            appLogger.info('🔍 [FRONTEND] Making API call to /api/attendance/session/.../manage', {
                 sessionId,
                 note: 'Backend will use session.sessionDate automatically'
             });
@@ -156,7 +157,7 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                 }
             });
 
-            console.log('🔍 [FRONTEND] API Response received', {
+            appLogger.info('🔍 [FRONTEND] API Response received', {
                 status: response.status,
                 hasData: !!response.data,
                 dataKeys: Object.keys(response.data || {})
@@ -165,14 +166,14 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
             // Response format: { success: true, data: { users: [...], summary: {...}, session: {...} } }
             const responseData = response.data?.data || response.data;
 
-            console.log('🔍 [FRONTEND] Parsed responseData', {
+            appLogger.info('🔍 [FRONTEND] Parsed responseData', {
                 hasUsers: !!responseData.users,
                 usersLength: responseData.users?.length || 0,
                 hasSummary: !!responseData.summary
             });
 
             const allUsers = responseData.users || [];
-            console.log('🔍 [FRONTEND] All users extracted', {
+            appLogger.info('🔍 [FRONTEND] All users extracted', {
                 count: allUsers.length,
                 sampleUser: allUsers[0]
             });
@@ -194,7 +195,7 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                 filteredUsers = filteredUsers.filter((user: User) => user.status === statusFilter);
             }
 
-            console.log('🔍 [FRONTEND] After filtering', {
+            appLogger.info('🔍 [FRONTEND] After filtering', {
                 allUsersCount: allUsers.length,
                 filteredUsersCount: filteredUsers.length,
                 statusFilter,
@@ -202,7 +203,7 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
             });
 
             setUsers(filteredUsers);
-            console.log('🔍 [FRONTEND] setUsers called with', filteredUsers.length, 'users');
+            appLogger.info('🔍 [FRONTEND] setUsers called with', filteredUsers.length, 'users');
 
             // Set session details from response
             setSessionDetails({
@@ -231,7 +232,7 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
             });
 
         } catch (err: any) {
-            console.error('Error fetching attendance:', err);
+            appLogger.error('Error fetching attendance:', err);
             setError(err.response?.data?.message || err.response?.data?.msg || 'Failed to load attendance data');
         } finally {
             setLoading(false);
@@ -241,7 +242,7 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
 
     // ✅ CRITICAL: Fetch attendance data on component mount and when session changes
     useEffect(() => {
-        console.log('🔍 [FRONTEND] useEffect triggered - fetching attendance', { sessionId, sessionDate });
+        appLogger.info('🔍 [FRONTEND] useEffect triggered - fetching attendance', { sessionId, sessionDate });
         if (sessionId) {
             fetchAttendance();
         }
@@ -291,7 +292,7 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
             setIsAdjustModalOpen(false);
             setSelectedUserForAdjust(null);
         } catch (err: any) {
-            console.error('Error adjusting attendance:', err);
+            appLogger.error('Error adjusting attendance:', err);
             // Error handling is done in the modal via toast
             throw err; // Re-throw so modal can handle it
         }

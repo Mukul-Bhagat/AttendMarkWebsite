@@ -5,6 +5,7 @@ import { ISession } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { formatIST } from '../utils/time';
 
+import { appLogger } from '../shared/logger';
 const MySessions: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -23,7 +24,7 @@ const MySessions: React.FC = () => {
         } else {
           setError('Failed to load classes/batches. Please try again.');
         }
-        console.error(err);
+        appLogger.error(err);
       } finally {
         setIsLoading(false);
       }

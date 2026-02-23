@@ -3,6 +3,7 @@ import { Bell, X } from 'lucide-react';
 import { getReportShareRequests } from '../../../api/reportingApi';
 import { useAuth } from '../../../contexts/AuthContext';
 
+import { appLogger } from '../../../shared/logger';
 const RequestQueueNotification: React.FC = () => {
     const { isSuperAdmin, isCompanyAdmin, isManager, isSessionAdmin, isPlatformOwner } = useAuth();
     const [pendingCount, setPendingCount] = useState(0);
@@ -26,7 +27,7 @@ const RequestQueueNotification: React.FC = () => {
                 setIsVisible(false);
             }
         } catch (err) {
-            console.error('[RequestQueueNotification] Failed to fetch count:', err);
+            appLogger.error('[RequestQueueNotification] Failed to fetch count:', err);
         }
     };
 

@@ -1,3 +1,4 @@
+import { appLogger } from '../shared/logger';
 /**
  * Session Status Utilities - IST Timestamp Based
  * 
@@ -56,7 +57,7 @@ export function getSessionStartTimeIST(session: {
 }): ISTTimestamp {
     // ENFORCEMENT: Recurring sessions MUST use occurrenceDate
     if (import.meta.env.DEV && session.frequency && session.frequency !== 'OneTime' && !session.occurrenceDate) {
-        console.error('CRITICAL: Recurring session missing occurrenceDate. Using startDate (Series Start) will cause status bugs.');
+        appLogger.error('CRITICAL: Recurring session missing occurrenceDate. Using startDate (Series Start) will cause status bugs.');
         throw new Error('Time Architecture Violation: Recurring session used startDate for status.');
     }
 
@@ -93,7 +94,7 @@ export function getSessionEndTimeIST(session: {
 }): ISTTimestamp {
     // ENFORCEMENT: Recurring sessions MUST use occurrenceDate
     if (import.meta.env.DEV && session.frequency && session.frequency !== 'OneTime' && !session.occurrenceDate) {
-        console.error('CRITICAL: Recurring session missing occurrenceDate. Using startDate (Series Start) will cause status bugs.');
+        appLogger.error('CRITICAL: Recurring session missing occurrenceDate. Using startDate (Series Start) will cause status bugs.');
         throw new Error('Time Architecture Violation: Recurring session used startDate for status.');
     }
 
@@ -155,13 +156,13 @@ export function getSessionStatus(
 ): SessionStatus {
     // PRIORITY 1: Cancelled sessions
     if (session.isCancelled) {
-        console.log('📛 Session is cancelled');
+        appLogger.info('📛 Session is cancelled');
         return 'cancelled';
     }
 
     // PRIORITY 2: Completed sessions (backend authority)
     if (session.isCompleted) {
-        console.log('✅ Session marked as completed by backend');
+        appLogger.info('✅ Session marked as completed by backend');
         return 'past';
     }
 
@@ -175,45 +176,45 @@ export function getSessionStatus(
 
     // TRACE LOGGING
     console.group('🔍 SESSION STATUS TRACE');
-    console.log('Session:', (session as any).name || 'Unknown');
-    console.log('---');
-    console.log('Input Data:');
-    console.log('  startDate:', session.startDate);
-    console.log('  startTime:', session.startTime || '(default: 00:00)');
-    console.log('  endTime:', session.endTime || '(default: 23:59)');
-    console.log('---');
-    console.log('Computed IST Timestamps:');
-    console.log('  startIST:', startIST, '→', formatIST(startIST, {
+    appLogger.info('Session:', (session as any).name || 'Unknown');
+    appLogger.info('---');
+    appLogger.info('Input Data:');
+    appLogger.info('  startDate:', session.startDate);
+    appLogger.info('  startTime:', session.startTime || '(default: 00:00)');
+    appLogger.info('  endTime:', session.endTime || '(default: 23:59)');
+    appLogger.info('---');
+    appLogger.info('Computed IST Timestamps:');
+    appLogger.info('  startIST:', startIST, '→', formatIST(startIST, {
         dateStyle: 'medium',
         timeStyle: 'medium'
     }));
-    console.log('  endIST:', endIST, '→', formatIST(endIST, {
+    appLogger.info('  endIST:', endIST, '→', formatIST(endIST, {
         dateStyle: 'medium',
         timeStyle: 'medium'
     }));
-    console.log('  cutoffIST (end + buffer):', cutoffIST, '→', formatIST(cutoffIST, {
+    appLogger.info('  cutoffIST (end + buffer):', cutoffIST, '→', formatIST(cutoffIST, {
         dateStyle: 'medium',
         timeStyle: 'medium'
     }));
-    console.log('  nowIST:', currentTime, '→', formatIST(currentTime, {
+    appLogger.info('  nowIST:', currentTime, '→', formatIST(currentTime, {
         dateStyle: 'medium',
         timeStyle: 'medium'
     }));
-    console.log('  buffer:', `${BUFFER_MINUTES} minutes`);
-    console.log('---');
-    console.log('Comparisons:');
-    console.log('  now < start?', currentTime, '<', startIST, '=', currentTime < startIST);
-    console.log('  now >= start?', currentTime, '>=', startIST, '=', currentTime >= startIST);
-    console.log('  now <= cutoff?', currentTime, '<=', cutoffIST, '=', currentTime <= cutoffIST);
-    console.log('  now > cutoff?', currentTime, '>', cutoffIST, '=', currentTime > cutoffIST);
-    console.log('---');
+    appLogger.info('  buffer:', `${BUFFER_MINUTES} minutes`);
+    appLogger.info('---');
+    appLogger.info('Comparisons:');
+    appLogger.info('  now < start?', currentTime, '<', startIST, '=', currentTime < startIST);
+    appLogger.info('  now >= start?', currentTime, '>=', startIST, '=', currentTime >= startIST);
+    appLogger.info('  now <= cutoff?', currentTime, '<=', cutoffIST, '=', currentTime <= cutoffIST);
+    appLogger.info('  now > cutoff?', currentTime, '>', cutoffIST, '=', currentTime > cutoffIST);
+    appLogger.info('---');
 
     // Determine status
     let status: SessionStatus;
 
     if (currentTime < startIST) {
         status = 'upcoming';
-        console.log('📅 Status: UPCOMING (before start time)');
+        appLogger.info('📅 Status: UPCOMING (before start time)');
     } else if (currentTime >= startIST && currentTime <= cutoffIST) {
         status = 'live';
 
@@ -226,16 +227,16 @@ export function getSessionStatus(
             const eTime = formatIST(endIST);
             if (sTime.split(' ')[0] === eTime.split(' ')[0]) { // Same day session
                 if (!isSameISTDay(currentTime, startIST)) {
-                    console.error('CRITICAL: Session is LIVE but current IST day does not match Session Start Day. Check Timezone Config.');
+                    appLogger.error('CRITICAL: Session is LIVE but current IST day does not match Session Start Day. Check Timezone Config.');
                     throw new Error('Time Architecture Violation: Live status day mismatch');
                 }
             }
         }
 
-        console.log('🟢 Status: LIVE (within session window + buffer)');
+        appLogger.info('🟢 Status: LIVE (within session window + buffer)');
     } else {
         status = 'past';
-        console.log('⏹️ Status: PAST (after cutoff time)');
+        appLogger.info('⏹️ Status: PAST (after cutoff time)');
     }
 
     console.groupEnd();

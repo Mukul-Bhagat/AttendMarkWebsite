@@ -1,3 +1,4 @@
+import { appLogger } from '../shared/logger';
 /**
  * Get the API base URL from environment variables
  * Falls back to empty string for Vite proxy in development
@@ -14,7 +15,7 @@ export const getApiUrl = (): string => {
   // or pointing to localhost (misconfiguration), force use of the production URL.
   if (import.meta.env.PROD) {
     if (!envUrl || envUrl.includes('localhost') || envUrl.includes('127.0.0.1')) {
-      console.warn('⚠️ PROD detected but VITE_API_URL is missing or localhost. Falling back to production URL.');
+      appLogger.warn('⚠️ PROD detected but VITE_API_URL is missing or localhost. Falling back to production URL.');
       return PROD_API_URL;
     }
   }

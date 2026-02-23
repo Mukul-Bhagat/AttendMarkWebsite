@@ -4,6 +4,7 @@ import { MapPin, AlertCircle, Loader2 } from 'lucide-react';
 import { getGoogleMapsApiKey, isGoogleMapsApiKeyConfigured, GOOGLE_MAPS_CONFIG } from '../utils/googleMapsConfig';
 import { trackApiUsage } from '../utils/billingSafety';
 
+import { appLogger } from '../shared/logger';
 // Google Maps libraries - only Places API needed
 // We use Places API geometry data, NOT Geocoding API
 const libraries = GOOGLE_MAPS_CONFIG.libraries;
@@ -92,7 +93,7 @@ const PlacesAutocomplete: React.FC<PlacesAutocompleteProps> = ({
     
     // Validate key format in production
     if (import.meta.env.PROD && key && !key.startsWith('AIza')) {
-      console.warn('[PRODUCTION] Google Maps API key format appears invalid');
+      appLogger.warn('[PRODUCTION] Google Maps API key format appears invalid');
     }
     
     return key;
@@ -157,7 +158,7 @@ const PlacesAutocomplete: React.FC<PlacesAutocompleteProps> = ({
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to initialize autocomplete';
       setError(errorMessage);
-      console.error('PlacesAutocomplete initialization error:', err);
+      appLogger.error('PlacesAutocomplete initialization error:', err);
     }
   }, [isLoaded, countryRestrictions]);
 
@@ -207,7 +208,7 @@ const PlacesAutocomplete: React.FC<PlacesAutocompleteProps> = ({
 
       // Log place data if enabled
       if (enableLogging) {
-        console.log('📍 Place Selected:', {
+        appLogger.info('📍 Place Selected:', {
           name: placeData.name,
           formattedAddress: placeData.formattedAddress,
           latitude: placeData.coordinates.latitude,
@@ -226,7 +227,7 @@ const PlacesAutocomplete: React.FC<PlacesAutocompleteProps> = ({
       const errorMessage = err instanceof Error ? err.message : 'Failed to process selected place';
       setError(errorMessage);
       setIsLoading(false);
-      console.error('PlacesAutocomplete place selection error:', err);
+      appLogger.error('PlacesAutocomplete place selection error:', err);
     }
   }, [onPlaceSelect, enableLogging]);
 

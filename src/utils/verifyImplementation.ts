@@ -9,6 +9,7 @@
 
 import { getGoogleMapsApiKey, isGoogleMapsApiKeyConfigured } from './googleMapsConfig';
 
+import { appLogger } from '../shared/logger';
 export interface VerificationResult {
   passed: boolean;
   message: string;
@@ -164,18 +165,18 @@ export function logVerificationResults(): void {
   const verification = verifyAll();
   
   console.group('🔍 Google Maps Implementation Verification');
-  console.log(verification.summary);
-  console.log('');
+  appLogger.info(verification.summary);
+  appLogger.info('');
   
   verification.results.forEach(result => {
     const icon = result.passed ? '✅' : result.severity === 'error' ? '❌' : '⚠️';
-    console.log(`${icon} ${result.message}`);
+    appLogger.info(`${icon} ${result.message}`);
   });
   
   console.groupEnd();
   
   if (!verification.passed) {
-    console.warn(
+    appLogger.warn(
       '\n⚠️ Some verification checks failed. ' +
       'Please review GOOGLE_CLOUD_BILLING_SAFETY.md for setup instructions.'
     );

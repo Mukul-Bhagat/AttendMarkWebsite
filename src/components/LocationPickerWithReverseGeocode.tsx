@@ -18,6 +18,7 @@ import PlacesAutocomplete, { PlaceData } from './PlacesAutocomplete';
 import { useReverseGeocode } from '../hooks/useReverseGeocode';
 import { MapPin, Loader2, AlertCircle, CheckCircle2, Globe } from 'lucide-react';
 
+import { appLogger } from '../shared/logger';
 interface LocationPickerWithReverseGeocodeProps {
   /**
    * Callback when location is selected
@@ -80,7 +81,7 @@ const LocationPickerWithReverseGeocode: React.FC<LocationPickerWithReverseGeocod
         await geocode(placeData.coordinates.latitude, placeData.coordinates.longitude);
       } catch (error) {
         // Error is handled by the hook, but we can still use Places API address
-        console.warn('Reverse geocoding failed, using Places API address:', error);
+        appLogger.warn('Reverse geocoding failed, using Places API address:', error);
       }
 
       // Call parent callback if provided

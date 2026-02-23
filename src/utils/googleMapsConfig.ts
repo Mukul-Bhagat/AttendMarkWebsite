@@ -1,3 +1,4 @@
+import { appLogger } from '../shared/logger';
 /**
  * Google Maps API Configuration Utility
  * 
@@ -21,7 +22,7 @@
  * ```typescript
  * const apiKey = getGoogleMapsApiKey();
  * if (!apiKey) {
- *   console.error('Google Maps API key is not configured');
+ *   appLogger.error('Google Maps API key is not configured');
  * }
  * ```
  */
@@ -37,7 +38,7 @@ export function getGoogleMapsApiKey(): string {
   // In production, log diagnostic info (without exposing the key)
   if (import.meta.env.PROD) {
     if (!isValidFormat) {
-      console.error(
+      appLogger.error(
         '⚠️ [PRODUCTION] Google Maps API key is missing or invalid!',
         '\n  - Check that VITE_GOOGLE_MAPS_API_KEY is set in your deployment environment',
         '\n  - For Render: Set in Environment Variables section',
@@ -46,7 +47,7 @@ export function getGoogleMapsApiKey(): string {
       );
     } else {
       // Log success (without exposing full key)
-      console.log(
+      appLogger.info(
         '✅ [PRODUCTION] Google Maps API key is configured',
         `(${apiKey.length} characters, starts with ${apiKey.substring(0, 4)})`
       );

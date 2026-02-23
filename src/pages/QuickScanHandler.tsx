@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { FullScreenAnimation } from '../components/FullScreenAnimation';
 import { nowIST } from '../utils/time';
 
+import { appLogger } from '../shared/logger';
 type Status = 'loading' | 'success' | 'error';
 
 interface ScanResponse {
@@ -25,14 +26,28 @@ const QuickScanHandler: React.FC = () => {
   const { user } = useAuth();
 
   const [status, setStatus] = useState<Status>('loading');
-  const [loadingText, setLoadingText] = useState('Verifying location...');
+  const [loadingText, setLoadingText] = useState('Validating session...');
   const [responseData, setResponseData] = useState<ScanResponse | null>(null);
   const [errorDetails, setErrorDetails] = useState<{ title: string; desc: string }>({ title: '', desc: '' });
+
+  const isLocationError = (reason?: string | null) => {
+    if (!reason) return false;
+    const locationReasons = new Set([
+      'LOCATION_REQUIRED',
+      'ACCURACY_REQUIRED',
+      'INVALID_LOCATION_COORDS',
+      'INVALID_LOCATION_ZERO',
+      'INVALID_COORDINATES',
+      'INVALID_ACCURACY',
+      'INVALID_ACCURACY_RANGE',
+    ]);
+    return locationReasons.has(reason);
+  };
 
   // Dynamic loading text effect
   useEffect(() => {
     if (status === 'loading') {
-      const texts = ['Verifying location...', 'Validating session...', 'Marking attendance...'];
+      const texts = ['Validating session...', 'Checking eligibility...', 'Marking attendance...'];
       let i = 0;
       const interval = setInterval(() => {
         i = (i + 1) % texts.length;
@@ -59,71 +74,69 @@ const QuickScanHandler: React.FC = () => {
 
     const markAttendance = async () => {
       try {
-        // Get user's current location
-        navigator.geolocation.getCurrentPosition(
-          async (position) => {
-            try {
+        const timestamp = nowIST();
+        const deviceId = getOrCreateDeviceId();
+        const userAgent = navigator.userAgent;
+        const token = searchParams.get('token');
+
+        const basePayload = {
+          sessionId,
+          deviceId,
+          userAgent,
+          timestamp,
+          ...(token && { token }),
+        };
+
+        const firstAttempt = await submitAttendance(basePayload);
+        if (firstAttempt.ok) {
+          handleResponse(firstAttempt.data);
+          return;
+        }
+
+        if (isLocationError(firstAttempt.error?.reason)) {
+          if (!navigator.geolocation) {
+            setStatus('error');
+            setErrorDetails({
+              title: 'Geolocation Not Supported',
+              desc: 'Your browser does not support location services.',
+            });
+            return;
+          }
+
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
               const { latitude, longitude } = position.coords;
               const accuracy = position.coords.accuracy;
 
-              const timestamp = nowIST();
-              const deviceId = getOrCreateDeviceId();
-              const userAgent = navigator.userAgent;
-              const token = searchParams.get('token');
-
-              console.log('[ATTENDANCE_SCAN] Sending request:', { sessionId, accuracy });
-
-              // Make API call
-              const { data } = await api.post('/api/attendance/scan', {
-                sessionId,
+              const secondAttempt = await submitAttendance({
+                ...basePayload,
                 userLocation: { latitude, longitude },
-                deviceId,
-                userAgent,
                 accuracy,
-                timestamp,
-                ...(token && { token }),
               });
 
-              // Check logic status even if HTTP 200
-              if (data.status === 'MARKED' || data.status === 'ALREADY_MARKED') {
-                setResponseData(data);
-                setStatus('success');
-
-                // Auto redirect
-                setTimeout(() => {
-                  navigate('/dashboard');
-                }, 2500);
+              if (secondAttempt.ok) {
+                handleResponse(secondAttempt.data);
               } else {
-                // Logic failure (e.g. FAILED status with 200 OK)
-                handleFailure(data);
+                handleFailure(secondAttempt.error);
               }
-
-            } catch (err: any) {
-              // Handle HTTP 400/403/500 errors
-              if (err.response?.data) {
-                handleFailure(err.response.data);
-              } else {
-                setStatus('error');
-                setErrorDetails({
-                  title: 'Connection Error',
-                  desc: 'Failed to connect to server. Please try again.'
-                });
-              }
+            },
+            () => {
+              setStatus('error');
+              setErrorDetails({
+                title: 'Location Access Denied',
+                desc: 'Please enable GPS/Location in your browser settings to mark attendance.'
+              });
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 0,
             }
-          },
-          () => {
-            setStatus('error');
-            setErrorDetails({
-              title: 'Location Access Denied',
-              desc: 'Please enable GPS/Location in your browser settings to mark attendance.'
-            });
-          },
-          {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0,
-          }
-        );
+          );
+          return;
+        }
+
+        handleFailure(firstAttempt.error);
       } catch (err: any) {
         setStatus('error');
         setErrorDetails({ title: 'Unexpected Error', desc: err.message || 'An error occurred.' });
@@ -132,6 +145,33 @@ const QuickScanHandler: React.FC = () => {
 
     markAttendance();
   }, [sessionId, user, searchParams, navigate]);
+
+  const submitAttendance = async (payload: Record<string, any>) => {
+    try {
+      appLogger.info('[ATTENDANCE_SCAN] Sending request:', {
+        sessionId: payload.sessionId,
+        hasLocation: !!payload.userLocation,
+        accuracy: payload.accuracy,
+      });
+      const { data } = await api.post('/api/attendance/scan', payload);
+      return { ok: true, data };
+    } catch (err: any) {
+      return { ok: false, error: err.response?.data || { msg: 'Failed to connect to server.' } };
+    }
+  };
+
+  const handleResponse = (data: ScanResponse) => {
+    if (data.status === 'MARKED' || data.status === 'ALREADY_MARKED') {
+      setResponseData(data);
+      setStatus('success');
+
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 2500);
+    } else {
+      handleFailure(data);
+    }
+  };
 
   const handleFailure = (data: ScanResponse) => {
     setStatus('error');

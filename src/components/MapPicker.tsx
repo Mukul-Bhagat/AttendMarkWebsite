@@ -4,6 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { X, Search, MapPin } from 'lucide-react';
 
+import { appLogger } from '../shared/logger';
 // Fix for default marker icons in React-Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -153,7 +154,7 @@ const MapPicker: React.FC<MapPickerProps> = ({
         setSearchError('Location not found. Please try a different search term.');
       }
     } catch (err: any) {
-      console.error('Location search error:', err);
+      appLogger.error('Location search error:', err);
       setSearchError('Failed to search location. Please check your internet connection and try again.');
     } finally {
       setIsSearching(false);

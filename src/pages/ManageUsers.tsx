@@ -9,6 +9,7 @@ import EntityTable from '../components/entity/EntityTable';
 import EntityFormModal from '../components/common/EntityFormModal';
 import { getOptimizedImageUrl } from '../utils/cloudinary';
 
+import { appLogger } from '../shared/logger';
 type EndUser = {
   _id?: string;
   id?: string;
@@ -97,7 +98,7 @@ const ManageUsers: React.FC = () => {
       } else {
         setError('Could not fetch users list. Please try again.');
       }
-      console.error(err);
+      appLogger.error(err);
     } finally {
       setIsLoading(false);
     }

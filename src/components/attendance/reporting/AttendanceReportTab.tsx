@@ -4,6 +4,7 @@ import { IMyAttendanceRecord } from '../../../types';
 import { formatIST } from '../../../utils/time';
 import { Table, Search, Calendar, Filter, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
+import { appLogger } from '../../../shared/logger';
 interface AttendanceReportTabProps {
     userId?: string;
     startDate?: string;
@@ -38,7 +39,7 @@ const AttendanceReportTab: React.FC<AttendanceReportTabProps> = ({
                 setRecords(data || []);
             } catch (err: any) {
                 setError('Failed to load attendance records');
-                console.error(err);
+                appLogger.error(err);
             } finally {
                 setIsLoading(false);
             }

@@ -6,6 +6,7 @@ import { getApiUrl } from '../utils/apiUrl';
 import Cropper, { Area } from 'react-easy-crop';
 import { getCroppedImageBlob, getCroppedPreviewUrl } from '../utils/imageCrop';
 
+import { appLogger } from '../shared/logger';
 interface Organization {
   orgName: string;
   organizationId: string;
@@ -72,7 +73,7 @@ const Profile: React.FC = () => {
           const { data } = await api.get('/api/auth/my-organizations');
           setOrganizations(data.organizations || []);
         } catch (err: any) {
-          console.error('Failed to fetch organizations:', err);
+          appLogger.error('Failed to fetch organizations:', err);
           setOrganizations([]);
         } finally {
           setIsLoadingOrgs(false);
@@ -88,7 +89,7 @@ const Profile: React.FC = () => {
       await switchOrganization(organizationId);
       // switchOrganization will reload the page, so we don't need to do anything else
     } catch (err: any) {
-      console.error('Failed to switch organization:', err);
+      appLogger.error('Failed to switch organization:', err);
       alert(err.response?.data?.msg || 'Failed to switch organization. Please try again.');
       setIsSwitching(false);
     }

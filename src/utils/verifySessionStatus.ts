@@ -1,3 +1,4 @@
+import { appLogger } from '../shared/logger';
 /**
  * Session Status Verification - Manual Test
  * 
@@ -9,12 +10,12 @@ import {
     nowIST
 } from './sessionStatusUtils.js';
 
-console.log('🧪 SESSION STATUS VERIFICATION\n');
-console.log('='.repeat(80));
+appLogger.info('🧪 SESSION STATUS VERIFICATION\n');
+appLogger.info('='.repeat(80));
 
 // Test 1: UPCOMING Session
-console.log('\n\n📅 TEST 1: UPCOMING SESSION');
-console.log('-'.repeat(80));
+appLogger.info('\n\n📅 TEST 1: UPCOMING SESSION');
+appLogger.info('-'.repeat(80));
 const upcomingSession = {
     name: 'Future Workshop',
     startDate: '2026-01-10T00:00:00.000Z', // Jan 10 (3 days from now)
@@ -22,12 +23,12 @@ const upcomingSession = {
     endTime: '16:00'     // 4 PM IST
 };
 const upcomingStatus = getSessionStatus(upcomingSession);
-console.log(`\n✅ Result: ${upcomingStatus.toUpperCase()}`);
-console.log(`Expected: UPCOMING ✓`);
+appLogger.info(`\n✅ Result: ${upcomingStatus.toUpperCase()}`);
+appLogger.info(`Expected: UPCOMING ✓`);
 
 // Test 2: LIVE Session
-console.log('\n\n🟢 TEST 2: LIVE SESSION');
-console.log('-'.repeat(80));
+appLogger.info('\n\n🟢 TEST 2: LIVE SESSION');
+appLogger.info('-'.repeat(80));
 
 // Create a session that's happening right now
 const now = nowIST();
@@ -52,15 +53,15 @@ const liveSession = {
     endTime: `${endHour}:${endMin}`
 };
 
-console.log(`Session times: ${liveSession.startTime} - ${liveSession.endTime} IST`);
+appLogger.info(`Session times: ${liveSession.startTime} - ${liveSession.endTime} IST`);
 
 const liveStatus = getSessionStatus(liveSession);
-console.log(`\n✅ Result: ${liveStatus.toUpperCase()}`);
-console.log(`Expected: LIVE ✓`);
+appLogger.info(`\n✅ Result: ${liveStatus.toUpperCase()}`);
+appLogger.info(`Expected: LIVE ✓`);
 
 // Test 3: PAST Session
-console.log('\n\n⏹️ TEST 3: PAST SESSION');
-console.log('-'.repeat(80));
+appLogger.info('\n\n⏹️ TEST 3: PAST SESSION');
+appLogger.info('-'.repeat(80));
 const pastSession = {
     name: 'Yesterday Workshop',
     startDate: '2026-01-06T00:00:00.000Z', // Jan 6 (yesterday)
@@ -68,12 +69,12 @@ const pastSession = {
     endTime: '12:00'     // 12 PM IST
 };
 const pastStatus = getSessionStatus(pastSession);
-console.log(`\n✅ Result: ${pastStatus.toUpperCase()}`);
-console.log(`Expected: PAST ✓`);
+appLogger.info(`\n✅ Result: ${pastStatus.toUpperCase()}`);
+appLogger.info(`Expected: PAST ✓`);
 
 // Test 4: Session at buffer boundary
-console.log('\n\n⏱️ TEST 4: BUFFER BOUNDARY (Just ended, within 10-min buffer)');
-console.log('-'.repeat(80));
+appLogger.info('\n\n⏱️ TEST 4: BUFFER BOUNDARY (Just ended, within 10-min buffer)');
+appLogger.info('-'.repeat(80));
 
 // Session that ended 5 minutes ago (within 10-min buffer = still LIVE)
 const fiveMinutesAgo = new Date(now - 5 * 60 * 1000);
@@ -87,21 +88,21 @@ const bufferSession = {
     endTime: `${bufferEndHour}:${bufferEndMin}` // Ended 5 min ago
 };
 
-console.log(`Session ended: ${bufferSession.endTime} IST (5 minutes ago)`);
-console.log(`Buffer: 10 minutes → Still within attendance window`);
+appLogger.info(`Session ended: ${bufferSession.endTime} IST (5 minutes ago)`);
+appLogger.info(`Buffer: 10 minutes → Still within attendance window`);
 
 const bufferStatus = getSessionStatus(bufferSession);
-console.log(`\n✅ Result: ${bufferStatus.toUpperCase()}`);
-console.log(`Expected: LIVE (within buffer) ✓`);
+appLogger.info(`\n✅ Result: ${bufferStatus.toUpperCase()}`);
+appLogger.info(`Expected: LIVE (within buffer) ✓`);
 
 // Summary
-console.log('\n\n' + '='.repeat(80));
-console.log('\n✅ ALL STATUS SCENARIOS VERIFIED\n');
-console.log('Key Observations:');
-console.log('  ✓ Timestamps are pure numbers (no Date objects in logic)');
-console.log('  ✓ All times displayed in IST');
-console.log('  ✓ Status calculation is timezone-independent');
-console.log('  ✓ Buffer window works correctly');
-console.log('\n📖 See TIME_ARCHITECTURE.md for architecture details\n');
+appLogger.info('\n\n' + '='.repeat(80));
+appLogger.info('\n✅ ALL STATUS SCENARIOS VERIFIED\n');
+appLogger.info('Key Observations:');
+appLogger.info('  ✓ Timestamps are pure numbers (no Date objects in logic)');
+appLogger.info('  ✓ All times displayed in IST');
+appLogger.info('  ✓ Status calculation is timezone-independent');
+appLogger.info('  ✓ Buffer window works correctly');
+appLogger.info('\n📖 See TIME_ARCHITECTURE.md for architecture details\n');
 
 export { };

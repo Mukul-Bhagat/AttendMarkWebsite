@@ -8,6 +8,7 @@ import { X, ArrowLeft } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 
+import { appLogger } from '../shared/logger';
 interface IUser {
   _id: string;
   email: string;
@@ -132,7 +133,7 @@ const EditClass: React.FC = () => {
                 initialUserIdsRef.current = new Set(userIds);
               }
             } catch (err) {
-              console.error('Error fetching users:', err);
+              appLogger.error('Error fetching users:', err);
             }
           }
         } else {
@@ -160,7 +161,7 @@ const EditClass: React.FC = () => {
         } else {
           setError('Failed to load class. Please try again.');
         }
-        console.error(err);
+        appLogger.error(err);
       } finally {
         setIsLoading(false);
       }
@@ -185,7 +186,7 @@ const EditClass: React.FC = () => {
           const admins = data.filter((u: IAuthUser) => u.role === 'SessionAdmin');
           setSessionAdmins(admins);
         } catch (err) {
-          console.error('Could not fetch SessionAdmins', err);
+          appLogger.error('Could not fetch SessionAdmins', err);
         }
       };
       fetchSessionAdmins();
@@ -315,11 +316,11 @@ const EditClass: React.FC = () => {
         } : undefined
       };
 
-      console.log('[EDIT_CLASS] Sending update payload:', JSON.stringify(updateData, null, 2));
+      appLogger.info('[EDIT_CLASS] Sending update payload:', JSON.stringify(updateData, null, 2));
 
       const response = await api.put(`/api/classes/${id}`, updateData);
 
-      console.log('[EDIT_CLASS] Update successful:', response.data);
+      appLogger.info('[EDIT_CLASS] Update successful:', response.data);
 
       // Sync class enrollments (add/remove users)
       const currentUserIds = new Set<string>(
@@ -354,10 +355,10 @@ const EditClass: React.FC = () => {
       // Store success message in history state if possible or just navigate
       navigate('/classes', { state: { message: 'Class and sessions updated successfully.' } });
     } catch (err: any) {
-      console.error('[EDIT_CLASS] Update failed:', err);
+      appLogger.error('[EDIT_CLASS] Update failed:', err);
 
       if (err.response && err.response.data) {
-        console.error('[EDIT_CLASS] Backend Error Response:', err.response.data);
+        appLogger.error('[EDIT_CLASS] Backend Error Response:', err.response.data);
 
         // Handle new error format from backend
         if (err.response.data.message) {

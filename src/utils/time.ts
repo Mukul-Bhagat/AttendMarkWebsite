@@ -1,3 +1,4 @@
+import { appLogger } from '../shared/logger';
 /**
  * IST Time Utilities - CANONICAL IMPLEMENTATION
  * 
@@ -265,7 +266,7 @@ export function debugISTTime(label: string, timestamp: ISTTimestamp): void {
         hour12: false
     });
 
-    console.log(`[${label}]`, {
+    appLogger.info(`[${label}]`, {
         timestamp,
         formattedIST: formatted,
         iso: new Date(timestamp).toISOString()

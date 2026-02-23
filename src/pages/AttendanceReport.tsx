@@ -10,6 +10,7 @@ import ActionMenu from '../components/ActionMenu';
 import { useAuth } from '../contexts/AuthContext';
 import ReportApprovalPanel from '../components/attendance/reporting/ReportApprovalPanel';
 
+import { appLogger } from '../shared/logger';
 interface AnalyticsData {
   timeline: Array<{ date: string; percentage: number; lateCount?: number }>;
   summary: { present: number; late: number; absent: number };
@@ -70,7 +71,7 @@ const AttendanceReport: React.FC = () => {
         } else {
           setError('Failed to load classes. Please try again.');
         }
-        console.error(err);
+        appLogger.error(err);
       } finally {
         setIsLoadingFilters(false);
       }
@@ -141,7 +142,7 @@ const AttendanceReport: React.FC = () => {
       } else {
         setError(err.response?.data?.msg || 'Failed to fetch data. Please try again.');
       }
-      console.error(err);
+      appLogger.error(err);
     } finally {
       setIsLoading(false);
     }
@@ -189,7 +190,7 @@ const AttendanceReport: React.FC = () => {
             } else {
               setError(err.response?.data?.msg || 'Failed to fetch data. Please try again.');
             }
-            console.error(err);
+            appLogger.error(err);
           } finally {
             setIsLoading(false);
           }
@@ -259,7 +260,7 @@ const AttendanceReport: React.FC = () => {
       link.click();
       document.body.removeChild(link);
     } catch (err: any) {
-      console.error('Failed to download CSV:', err);
+      appLogger.error('Failed to download CSV:', err);
       setError('Failed to download CSV. Please try again.');
     }
   };
@@ -386,7 +387,7 @@ const AttendanceReport: React.FC = () => {
       // Save PDF
       pdf.save(`${sessionName.replace(/[^a-z0-9]/gi, '_')}_Attendance_${date}.pdf`);
     } catch (err: any) {
-      console.error('Failed to download PDF:', err);
+      appLogger.error('Failed to download PDF:', err);
       setError('Failed to download PDF. Please try again.');
     }
   };

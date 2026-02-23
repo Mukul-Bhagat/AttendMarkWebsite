@@ -3,6 +3,7 @@ import { GoogleMap, Marker, Circle, Autocomplete, useJsApiLoader } from '@react-
 import { X, MapPin, AlertCircle } from 'lucide-react';
 import { getGoogleMapsApiKey, isGoogleMapsApiKeyConfigured, validateGoogleMapsApiKey } from '../utils/googleMapsConfig';
 
+import { appLogger } from '../shared/logger';
 // Google Maps libraries - only Places API needed
 // Note: We use Places API geometry data, NOT Geocoding API
 const libraries: ('places')[] = ['places'];
@@ -63,7 +64,7 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
     
     // Validate key format in production
     if (import.meta.env.PROD && key && !key.startsWith('AIza')) {
-      console.warn('[PRODUCTION] Google Maps API key format appears invalid');
+      appLogger.warn('[PRODUCTION] Google Maps API key format appears invalid');
     }
     
     return key;

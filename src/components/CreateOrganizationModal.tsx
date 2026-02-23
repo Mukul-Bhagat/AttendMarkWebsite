@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import api from '../api';
 
+import { appLogger } from '../shared/logger';
 interface CreateOrganizationModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -85,7 +86,7 @@ const CreateOrganizationModal: React.FC<CreateOrganizationModalProps> = ({ isOpe
             });
             onSuccess(); // Triggers refresh and close
         } catch (err: any) {
-            console.error('Failed to create organization:', err);
+            appLogger.error('Failed to create organization:', err);
 
             let errorMsg = 'Failed to create organization';
 

@@ -8,6 +8,7 @@ import EntityTable from '../components/entity/EntityTable';
 import EntityFormModal from '../components/common/EntityFormModal';
 import { getOptimizedImageUrl } from '../utils/cloudinary';
 
+import { appLogger } from '../shared/logger';
 type StaffUser = {
   _id?: string;
   id?: string;
@@ -96,7 +97,7 @@ const ManageStaff: React.FC = () => {
       } else {
         setError('Could not fetch staff list. Please try again.');
       }
-      console.error(err);
+      appLogger.error(err);
     } finally {
       setIsLoading(false);
     }
@@ -116,7 +117,7 @@ const ManageStaff: React.FC = () => {
             sl: data.yearlyQuotaSL || 10,
           });
         } catch (err) {
-          console.error('Failed to fetch organization defaults:', err);
+          appLogger.error('Failed to fetch organization defaults:', err);
         }
       };
       fetchOrgDefaults();

@@ -21,6 +21,7 @@ import { useAuth } from '../../contexts/AuthContext'; // FIX: contexts (plural)
 import { getSessionAuditTrail, exportAuditTrailCSV, type AttendanceAuditEntry } from '../../api/attendanceAdjustment';
 import toast from 'react-hot-toast';
 
+import { appLogger } from '../../shared/logger';
 interface AttendanceAuditViewerProps {
     sessionId: string;
     sessionName: string;
@@ -59,7 +60,7 @@ const AttendanceAuditViewer: React.FC<AttendanceAuditViewerProps> = ({
             setAuditLog(data);
         } catch (error: any) {
             toast.error('Failed to load audit trail');
-            console.error('Audit trail error:', error);
+            appLogger.error('Audit trail error:', error);
         } finally {
             setLoading(false);
         }

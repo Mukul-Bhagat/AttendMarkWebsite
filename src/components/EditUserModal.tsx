@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 
+import { appLogger } from '../shared/logger';
 interface User {
     _id?: string;
     id?: string;
@@ -97,7 +98,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, isOpen, onClose, on
             onSave();
             onClose();
         } catch (err: any) {
-            console.error('Failed to update user profile:', err);
+            appLogger.error('Failed to update user profile:', err);
             const errorMsg = err.response?.data?.msg || 'Failed to update user profile';
             setErrors({ submit: errorMsg });
         } finally {

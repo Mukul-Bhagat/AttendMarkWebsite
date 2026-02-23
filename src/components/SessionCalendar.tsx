@@ -2,6 +2,7 @@ import React from 'react';
 import { ISession } from '../types';
 import { getSessionStatus, getSessionStartTimeIST, nowIST } from '../utils/sessionStatusUtils';
 import { isSameISTDay } from '../utils/time';
+import { normalizeSessionMode } from '../utils/sessionMode';
 
 interface SessionCalendarProps {
   sessions: ISession[];
@@ -53,48 +54,38 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
    * CRITICAL: Does NOT compute status - uses provided sessionStatus
    * Dot color is derived from status calculated by the list logic
    */
-  const getDateIndicator = (date: Date): 'red' | 'green' | 'yellow' | null => {
+  const getDateIndicator = (date: Date): 'red' | 'green' | null => {
     const dateSessions = getSessionsForDate(date);
     if (dateSessions.length === 0) return null;
 
-    // Get current time once
     const now = nowIST();
-
-    // For each session on this date, get its status
-    const sessionStatuses: Array<'red' | 'green' | 'yellow'> = [];
-
-    for (const session of dateSessions) {
-      // Get status from canonical function (NOT computed here)
+    const hasUpcoming = dateSessions.some((session) => {
       const status = getSessionStatus(session, now);
+      return status === 'upcoming' || status === 'live';
+    });
 
-      // PRIORITY 1: Check if session is past
-      if (status === 'past') {
-        sessionStatuses.push('red');
-        continue;
-      }
+    return hasUpcoming ? 'green' : 'red';
+  };
 
-      // PRIORITY 2: Check if session was edited (YELLOW) - only if not past
-      if (session.updatedAt && session.createdAt) {
-        const updatedAt = new Date(session.updatedAt).getTime();
-        const createdAt = new Date(session.createdAt).getTime();
-        if (updatedAt > createdAt) {
-          sessionStatuses.push('yellow');
-          continue;
-        }
-      }
-
-      // PRIORITY 3: Default to GREEN (Upcoming/Live)
-      sessionStatuses.push('green');
+  const formatTime = (timeString: string) => {
+    try {
+      const [hours, minutes] = timeString.split(':');
+      const hour = parseInt(hours, 10);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour % 12 || 12;
+      return `${displayHour}:${minutes} ${ampm}`;
+    } catch {
+      return timeString;
     }
+  };
 
-    // Priority: RED > YELLOW > GREEN
-    if (sessionStatuses.some(s => s === 'red')) {
-      return 'red';
+  const getModeSummary = (dateSessions: ISession[]): string | null => {
+    if (dateSessions.length === 0) return null;
+    const modes = new Set(dateSessions.map((session) => normalizeSessionMode(session.sessionType || session.locationType)));
+    if (modes.size === 1) {
+      return Array.from(modes)[0];
     }
-    if (sessionStatuses.some(s => s === 'yellow')) {
-      return 'yellow';
-    }
-    return 'green';
+    return 'MIXED';
   };
 
   // Navigate months
@@ -196,11 +187,25 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
           // Check if this date is "today" in IST
           const dateTimestamp = date.getTime();
           const isToday = isSameISTDay(dateTimestamp, todayTimestamp);
+          const dateSessions = getSessionsForDate(date);
+          const sortedSessions = [...dateSessions].sort((a, b) => a.startTime.localeCompare(b.startTime));
+          const firstSessionTime = sortedSessions[0]?.startTime ? formatTime(sortedSessions[0].startTime) : null;
+          const modeSummary = getModeSummary(dateSessions);
+          const modeStyles: Record<string, string> = {
+            PHYSICAL: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200',
+            REMOTE: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-200',
+            HYBRID: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-200',
+            MIXED: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+          };
+          const tooltip = dateSessions.length
+            ? `${modeSummary || 'SESSION'} • ${firstSessionTime || ''}`.trim()
+            : undefined;
 
           return (
             <button
               key={date.toISOString()}
               onClick={() => handleDateClick(date)}
+              title={tooltip}
               className={`aspect-square rounded-lg text-sm font-medium transition-colors relative ${isSelected
                   ? 'bg-blue-500 text-white hover:bg-blue-600'
                   : isToday
@@ -208,15 +213,23 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
                     : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }`}
             >
-              {date.getDate()}
+              <div className="flex flex-col items-center justify-center leading-tight">
+                <span className="text-sm font-semibold">{date.getDate()}</span>
+                {firstSessionTime && (
+                  <span className="text-[9px] text-slate-500 dark:text-slate-300">{firstSessionTime}</span>
+                )}
+                {modeSummary && (
+                  <span className={`mt-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${modeStyles[modeSummary]}`}>
+                    {modeSummary}
+                  </span>
+                )}
+              </div>
               {indicator && (
                 <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2">
                   <div
                     className={`w-1.5 h-1.5 rounded-full ${indicator === 'red'
                         ? 'bg-red-500'
-                        : indicator === 'yellow'
-                          ? 'bg-yellow-500'
-                          : 'bg-green-500'
+                        : 'bg-green-500'
                       }`}
                   />
                 </div>
@@ -236,10 +249,6 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-green-500" />
             <span className="text-slate-600 dark:text-slate-400">Upcoming/Live Session</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-yellow-500" />
-            <span className="text-slate-600 dark:text-slate-400">Edited Session</span>
           </div>
         </div>
       </div>

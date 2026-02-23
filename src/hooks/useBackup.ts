@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import api from '../api';
 import { saveBackup, isBackupNeeded } from '../utils/backupStorage';
 
+import { appLogger } from '../shared/logger';
 /**
  * Custom hook for automatic backup management
  * Implements "catch-up strategy" - creates backup when app is opened if needed
@@ -40,7 +41,7 @@ export const useBackup = () => {
         return null;
       }
     } catch (error) {
-      console.error('Error fetching organization ID:', error);
+      appLogger.error('Error fetching organization ID:', error);
       return null;
     }
   }, [user, isPlatformOwner]);
@@ -56,10 +57,10 @@ export const useBackup = () => {
       // Save to IndexedDB
       await saveBackup(orgId, response.data);
       
-      console.log(`✅ Backup created successfully for organization ${orgId}`);
+      appLogger.info(`✅ Backup created successfully for organization ${orgId}`);
     } catch (error: any) {
       // Silently fail - don't interrupt user experience
-      console.error('Failed to create automatic backup:', error);
+      appLogger.error('Failed to create automatic backup:', error);
     }
   }, []);
 
@@ -94,7 +95,7 @@ export const useBackup = () => {
         }
       } catch (error) {
         // Silently fail - don't interrupt user experience
-        console.error('Error in backup check:', error);
+        appLogger.error('Error in backup check:', error);
       }
     };
 

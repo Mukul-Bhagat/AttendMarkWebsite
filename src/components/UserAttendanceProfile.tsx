@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../api';
 
+import { appLogger } from '../shared/logger';
 // ============================================
 // TYPE DEFINITIONS  
 // ============================================
@@ -107,7 +108,7 @@ const UserAttendanceProfile: React.FC<UserAttendanceProfileProps> = ({
 
                 setData(response);
             } catch (err: any) {
-                console.error('Error fetching user attendance profile:', err);
+                appLogger.error('Error fetching user attendance profile:', err);
                 setError(err.response?.data?.msg || 'Failed to load attendance profile');
             } finally {
                 setIsLoading(false);

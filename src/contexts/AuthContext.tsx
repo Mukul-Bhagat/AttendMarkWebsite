@@ -2,6 +2,7 @@ import { createContext, useContext, useState, ReactNode, useEffect } from 'react
 import api from '../api';
 import { Role, RoleProfile, resolveRole } from '../shared/roles';
 
+import { appLogger } from '../shared/logger';
 // Define the shape of the user object and the auth context
 export interface IUser {
   id: string;
@@ -87,7 +88,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const [user, setUser] = useState<IUser | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+  const [token, setToken] = useState<string | null>(null);
   // Start with isLoading: false on public routes to prevent blocking
   const [isLoading, setIsLoading] = useState(!getIsPublicRoute());
 
@@ -116,94 +117,69 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Set loading to false immediately to prevent blocking
       if (isPublicRoute) {
         setIsLoading(false);
-        // Clear any stale tokens on public routes to ensure clean state
-        if (localStorage.getItem('token')) {
-          localStorage.removeItem('token');
-          setToken(null);
-          setUser(null);
-        }
+        setUser(null);
         return;
       }
 
-      const storedToken = localStorage.getItem('token');
+      try {
+        // With HttpOnly cookies, we just hit the endpoint to see if session is valid
+        const response = await api.get('/api/auth/me');
+        const { user } = response.data;
 
-      if (storedToken) {
-        try {
-          // Verify the token and fetch user data from the backend
-          const response = await api.get('/api/auth/me');
-          const { user } = response.data;
-
-          // Update state with fetched user data
-          setUser(normalizeAuthUser(user));
-          setToken(storedToken);
-        } catch (err: any) {
-          // Token is invalid or expired, clear it
-          console.error('Failed to verify token:', err);
-          localStorage.removeItem('token');
-          setToken(null);
-          setUser(null);
-        }
+        setUser(normalizeAuthUser(user));
+        setToken('cookie-auth');
+      } catch (err: any) {
+        appLogger.error('Failed to verify session:', err);
+        setToken(null);
+        setUser(null);
       }
-
       setIsLoading(false);
     };
 
     initAuth();
   }, []);
 
-  // Login function - can accept formData (for old flow) or { token, user } (for new flow)
+  // Login function - can accept formData (for old flow) or { user } (for new flow)
   const login = async (formDataOrAuth: any) => {
     setIsLoading(true);
     try {
-      // If formDataOrAuth already has token and user, it's from the new flow
-      if (formDataOrAuth.token && formDataOrAuth.user) {
-        setToken(formDataOrAuth.token);
+      if (formDataOrAuth.user) {
+        setToken('cookie-auth');
         setUser(normalizeAuthUser(formDataOrAuth.user));
-        localStorage.setItem('token', formDataOrAuth.token);
         setIsLoading(false);
         return;
       }
 
-      // Otherwise, it's the old flow (shouldn't happen with new login, but kept for compatibility)
       const response = await api.post('/api/auth/login', formDataOrAuth);
+      const { user } = response.data;
 
-      // Get token and user from response
-      const { token, user } = response.data;
-      // Save to state and localStorage
-      setToken(token);
+      setToken('cookie-auth');
       setUser(normalizeAuthUser(user));
-      localStorage.setItem('token', token);
-
       setIsLoading(false);
     } catch (error: any) {
       setIsLoading(false);
-      // Re-throw the error so LoginPage can catch it and display the message
       throw error;
     }
   };
 
   // Logout function
   const logout = () => {
-    // Clear everything
     setToken(null);
     setUser(null);
-    localStorage.removeItem('token');
+    api.post('/api/auth/logout').catch(console.error);
   };
 
   // Refetch user data from the backend
   const refetchUser = async () => {
-    const storedToken = localStorage.getItem('token');
-    if (!storedToken) {
-      return;
-    }
+    if (!token) return;
 
     try {
       const response = await api.get('/api/auth/me');
       const { user } = response.data;
       setUser(normalizeAuthUser(user));
     } catch (err: any) {
-      console.error('Failed to refetch user:', err);
-      // If token is invalid, logout
+      appLogger.error('Failed to refetch user:', err);
+      // If session is invalid, logout
       logout();
     }
   };
@@ -215,17 +191,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         organizationId,
       });
 
-      const { token, user } = response.data;
+      const { user } = response.data;
 
-      // Update token and user
-      setToken(token);
+      // Update user state
+      setToken('cookie-auth');
       setUser(normalizeAuthUser(user));
-      localStorage.setItem('token', token);
 
       // Reload the page to refresh the dashboard with new organization context
       window.location.href = '/dashboard';
     } catch (err: any) {
-      console.error('Failed to switch organization:', err);
+      appLogger.error('Failed to switch organization:', err);
       throw err;
     }
   };

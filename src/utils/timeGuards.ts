@@ -1,3 +1,4 @@
+import { appLogger } from '../shared/logger';
 /**
  * TIME GUARDS - REGRESSION PREVENTION
  * 
@@ -53,7 +54,7 @@ if (ENABLE_GUARDS) {
 
                 if (!isDisplayFile && !isTimeUtil) {
                     // Not from approved location - issue warning
-                    console.warn(
+                    appLogger.warn(
                         '⚠️ TIME GUARD WARNING: new Date() called outside display layer',
                         '\nStack trace:',
                         stack.split('\n').slice(1, 4).join('\n'),
@@ -88,7 +89,7 @@ if (ENABLE_GUARDS) {
             !stack.includes('node_modules');
 
         if (isBusinessLogic) {
-            console.error(
+            appLogger.error(
                 '🚨 TIME GUARD ERROR: getTimezoneOffset() called in business logic!',
                 '\nThis creates browser-timezone dependency',
                 '\nStack trace:',
@@ -122,7 +123,7 @@ if (ENABLE_GUARDS) {
             !stack.includes('Profile');
 
         if (isLogicFile) {
-            console.warn(
+            appLogger.warn(
                 `⚠️ TIME GUARD WARNING: ${methodName}() called in business logic`,
                 '\nThis method is locale/timezone dependent',
                 '\nStack trace:',
@@ -154,7 +155,7 @@ if (ENABLE_GUARDS) {
  * Log guard initialization
  */
 if (ENABLE_GUARDS) {
-    console.log(
+    appLogger.info(
         '%c🛡️ TIME GUARDS ACTIVE',
         'background: #ff6b6b; color: white; padding: 4px 8px; border-radius: 3px; font-weight: bold;',
         '\n\n⚠️ Feature freeze in effect - time-related changes monitored',
@@ -178,7 +179,7 @@ if (ENABLE_GUARDS) {
         const isTimeUtil = stack.includes('time.ts');
 
         if (!isTimeUtil) {
-            console.warn(
+            appLogger.warn(
                 '⚠️ TIME GUARD WARNING: Date.now() called',
                 '\nConsider using nowIST() for IST timestamp',
                 '\nStack trace:',
@@ -208,13 +209,13 @@ export function isDisplayOnlyFile(filename: string): boolean {
  * Export function to temporarily disable guards (for testing)
  */
 export function disableTimeGuards() {
-    console.warn('⚠️ Time guards temporarily disabled');
+    appLogger.warn('⚠️ Time guards temporarily disabled');
     // Note: This won't restore original Date in current implementation
     // For production use, this would need a more sophisticated approach
 }
 
 if (ENABLE_GUARDS) {
-    console.log(
+    appLogger.info(
         '%c📋 TIME ARCHITECTURE FREEZE',
         'background: #ffa502; color: white; padding: 4px 8px; border-radius: 3px; font-weight: bold;',
         '\n\n🚫 Feature Development Frozen',

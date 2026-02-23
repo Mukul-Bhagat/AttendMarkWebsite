@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { reverseGeocode, ReverseGeocodeResult, ReverseGeocodeOptions } from '../utils/reverseGeocode';
 
+import { appLogger } from '../shared/logger';
 interface UseReverseGeocodeReturn {
   /**
    * Reverse geocode coordinates to address
@@ -68,7 +69,7 @@ export function useReverseGeocode(
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to reverse geocode coordinates';
         setError(errorMessage);
-        console.error('Reverse geocoding error:', err);
+        appLogger.error('Reverse geocoding error:', err);
       } finally {
         setIsLoading(false);
       }

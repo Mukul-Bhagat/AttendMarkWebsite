@@ -92,6 +92,7 @@ interface IActiveLeave {
 
 import relativeTime from 'dayjs/plugin/relativeTime';
 
+import { appLogger } from '../shared/logger';
 dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.extend(customParseFormat);
@@ -232,7 +233,7 @@ const Leaves: React.FC = () => {
             });
           }
         } catch (err) {
-          console.log('Using default quota values');
+          appLogger.info('Using default quota values');
         }
       }
 
@@ -258,13 +259,13 @@ const Leaves: React.FC = () => {
           // Actually, showing all organization history (including mine) is fine for admins
           setOrgHistory(normalizeLeaves(historyData));
         } catch (err) {
-          console.error('Failed to fetch org data:', err);
+          appLogger.error('Failed to fetch org data:', err);
           setPendingRequests([]);
           setOrgHistory([]);
         }
       }
     } catch (err) {
-      console.error('Failed to fetch leaves:', err);
+      appLogger.error('Failed to fetch leaves:', err);
       setLeaveRequests(prev => Array.isArray(prev) ? prev : []);
     } finally {
       if (showLoading) setIsLoading(false);
@@ -291,7 +292,7 @@ const Leaves: React.FC = () => {
         );
         setStaffUsers(staff);
       } catch (err) {
-        console.error('Failed to fetch staff:', err);
+        appLogger.error('Failed to fetch staff:', err);
       }
     };
 
@@ -513,7 +514,7 @@ const Leaves: React.FC = () => {
       setFormErrors({});
       setIsModalOpen(false);
     } catch (err: any) {
-      console.error('Failed to submit leave request:', err);
+      appLogger.error('Failed to submit leave request:', err);
       const errorMsg = err.response?.data?.msg || err.response?.data?.errors?.[0]?.msg || 'Failed to submit leave request';
       setFormErrors({ submit: errorMsg });
       setToast({ message: errorMsg, type: 'error' });
@@ -871,7 +872,7 @@ const Leaves: React.FC = () => {
       // Refresh data
       await fetchLeaveData(false);
     } catch (err: any) {
-      console.error('Failed to reject leave:', err);
+      appLogger.error('Failed to reject leave:', err);
       const errorMsg = err.response?.data?.msg || 'Failed to reject leave';
       setToast({ message: errorMsg, type: 'error' });
     } finally {
@@ -912,7 +913,7 @@ const Leaves: React.FC = () => {
       // Refresh data
       await fetchLeaveData(false);
     } catch (err: any) {
-      console.error('Failed to approve leave:', err);
+      appLogger.error('Failed to approve leave:', err);
       const errorMsg = err.response?.data?.msg || 'Failed to approve leave';
       setToast({ message: errorMsg, type: 'error' });
     } finally {
@@ -1177,7 +1178,7 @@ const Leaves: React.FC = () => {
       // Refresh all data to ensure consistency
       await fetchLeaveData(false);
     } catch (err: any) {
-      console.error('Failed to delete leave:', err);
+      appLogger.error('Failed to delete leave:', err);
       const errorMsg = err.response?.data?.msg || 'Failed to delete leave request';
       setToast({ message: errorMsg, type: 'error' });
     }

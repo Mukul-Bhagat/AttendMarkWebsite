@@ -5,6 +5,7 @@ import api from '../api';
 import { onMessageListener } from '../firebase/onMessageListener';
 import { Role } from '../shared/roles';
 
+import { appLogger } from '../shared/logger';
 interface Notification {
     _id: string;
     title: string;
@@ -44,7 +45,7 @@ const NotificationBell: React.FC = () => {
 
             setUnreadCount(newCount);
         } catch (error) {
-            console.error('Failed to fetch unread count:', error);
+            appLogger.error('Failed to fetch unread count:', error);
             setUnreadCount(0); // Safe fallback
         }
     };
@@ -60,11 +61,11 @@ const NotificationBell: React.FC = () => {
             if (Array.isArray(data)) {
                 setNotifications(data);
             } else {
-                console.warn('Notifications API returned non-array:', data);
+                appLogger.warn('Notifications API returned non-array:', data);
                 setNotifications([]);
             }
         } catch (error) {
-            console.error('Failed to fetch notifications:', error);
+            appLogger.error('Failed to fetch notifications:', error);
             setNotifications([]); // Safe fallback
         } finally {
             setLoading(false);
@@ -86,7 +87,7 @@ const NotificationBell: React.FC = () => {
             // Decrease unread count
             setUnreadCount(prev => Math.max(0, prev - 1));
         } catch (error) {
-            console.error('Failed to mark notification as read:', error);
+            appLogger.error('Failed to mark notification as read:', error);
         }
     };
 
@@ -96,7 +97,7 @@ const NotificationBell: React.FC = () => {
 
         // Real-time updates from FCM
         onMessageListener().then((payload: any) => {
-            console.log('[Foreground] Notification received:', payload);
+            appLogger.info('[Foreground] Notification received:', payload);
 
             // Increment unread count and trigger animation
             setUnreadCount(prev => prev + 1);
@@ -110,7 +111,7 @@ const NotificationBell: React.FC = () => {
                     icon: '/logo192.png'
                 });
             }
-        }).catch(err => console.error('Error in foreground listener:', err));
+        }).catch(err => appLogger.error('Error in foreground listener:', err));
 
         // Refresh unread count every 60 seconds
         const interval = setInterval(fetchUnreadCount, 60000);

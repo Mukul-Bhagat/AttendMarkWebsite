@@ -1,3 +1,4 @@
+import { appLogger } from '../shared/logger';
 /**
  * Reverse Geocoding Utility using OpenStreetMap Nominatim API
  * 
@@ -135,7 +136,7 @@ function extractAddressComponents(address: any): ReverseGeocodeResult['component
  * @example
  * ```typescript
  * const result = await reverseGeocode(19.9975, 73.7898);
- * console.log(result.address); // "College Road, Nashik, Maharashtra, 422005, India"
+ * appLogger.info(result.address); // "College Road, Nashik, Maharashtra, 422005, India"
  * ```
  */
 export async function reverseGeocode(
@@ -197,7 +198,7 @@ export async function reverseGeocode(
       const retryAfter = response.headers.get('Retry-After');
       const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 2000;
       
-      console.warn(`Nominatim rate limit hit. Waiting ${waitTime}ms before retry...`);
+      appLogger.warn(`Nominatim rate limit hit. Waiting ${waitTime}ms before retry...`);
       await new Promise(resolve => setTimeout(resolve, waitTime));
       
       // Retry once after waiting

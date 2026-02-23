@@ -1,3 +1,4 @@
+import { appLogger } from '../shared/logger';
 /**
  * Billing Safety Utilities
  * 
@@ -69,7 +70,7 @@ function getUsageTracking(): UsageTracking {
       return data;
     }
   } catch (error) {
-    console.warn('Failed to load usage tracking:', error);
+    appLogger.warn('Failed to load usage tracking:', error);
   }
   
   // Default tracking
@@ -97,7 +98,7 @@ function saveUsageTracking(tracking: UsageTracking): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tracking));
   } catch (error) {
-    console.warn('Failed to save usage tracking:', error);
+    appLogger.warn('Failed to save usage tracking:', error);
   }
 }
 
@@ -122,7 +123,7 @@ export function trackApiUsage(apiType: 'mapsJavaScript' | 'places'): boolean {
   
   // Check minute limit
   if (api.minuteCount >= quotas.requestsPerMinute) {
-    console.warn(
+    appLogger.warn(
       `⚠️ ${apiType} API: Minute limit exceeded (${quotas.requestsPerMinute}/min). ` +
       'Requests will be blocked by Google Cloud quotas.'
     );
@@ -131,7 +132,7 @@ export function trackApiUsage(apiType: 'mapsJavaScript' | 'places'): boolean {
   
   // Check daily limit
   if (api.count >= quotas.requestsPerDay) {
-    console.warn(
+    appLogger.warn(
       `⚠️ ${apiType} API: Daily limit exceeded (${quotas.requestsPerDay}/day). ` +
       'Requests will be blocked by Google Cloud quotas.'
     );
@@ -145,7 +146,7 @@ export function trackApiUsage(apiType: 'mapsJavaScript' | 'places'): boolean {
   // Warn at 80% of daily limit
   const warningThreshold = quotas.requestsPerDay * 0.8;
   if (api.count >= warningThreshold && api.count < quotas.requestsPerDay) {
-    console.warn(
+    appLogger.warn(
       `⚠️ ${apiType} API: Approaching daily limit (${api.count}/${quotas.requestsPerDay}). ` +
       'Consider reducing usage.'
     );

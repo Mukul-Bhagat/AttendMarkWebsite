@@ -9,6 +9,7 @@ const DB_VERSION = 1;
 const STORE_NAME = 'attendmark-backups';
 import { nowIST, toISTDateString } from './time';
 
+import { appLogger } from '../shared/logger';
 interface BackupSnapshot {
   id: string; // Composite key: `${orgId}_${dateKey}`
   orgId: string;
@@ -85,7 +86,7 @@ export const saveBackup = async (orgId: string, blob: Blob): Promise<void> => {
 
     db.close();
   } catch (error) {
-    console.error('Error saving backup to IndexedDB:', error);
+    appLogger.error('Error saving backup to IndexedDB:', error);
     throw error;
   }
 };
@@ -115,7 +116,7 @@ export const getBackups = async (orgId: string): Promise<BackupSnapshot[]> => {
       };
     });
   } catch (error) {
-    console.error('Error retrieving backups from IndexedDB:', error);
+    appLogger.error('Error retrieving backups from IndexedDB:', error);
     return [];
   }
 };
@@ -138,7 +139,7 @@ export const deleteBackup = async (id: string): Promise<void> => {
 
     db.close();
   } catch (error) {
-    console.error('Error deleting backup from IndexedDB:', error);
+    appLogger.error('Error deleting backup from IndexedDB:', error);
     throw error;
   }
 };
@@ -168,7 +169,7 @@ export const isBackupNeeded = async (orgId: string): Promise<boolean> => {
       };
     });
   } catch (error) {
-    console.error('Error checking if backup is needed:', error);
+    appLogger.error('Error checking if backup is needed:', error);
     // On error, assume backup is needed
     return true;
   }

@@ -8,6 +8,7 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { nowIST, toISTDateString } from './time';
 
+import { appLogger } from '../shared/logger';
 interface BackupData {
   date: string; // Format: YYYY-MM-DD
   data: object; // The backup JSON data
@@ -71,9 +72,9 @@ export const saveBackup = async (date: string = getTodayDate(), data: object): P
     };
 
     await db.put(STORE_NAME, backupData);
-    console.log(`[LocalBackup] Backup saved for date: ${date}`);
+    appLogger.info(`[LocalBackup] Backup saved for date: ${date}`);
   } catch (error) {
-    console.error('[LocalBackup] Error saving backup:', error);
+    appLogger.error('[LocalBackup] Error saving backup:', error);
     throw error;
   }
 };
@@ -89,7 +90,7 @@ export const getBackup = async (date: string): Promise<BackupData | null> => {
     const backup = await db.get(STORE_NAME, date);
     return backup || null;
   } catch (error) {
-    console.error('[LocalBackup] Error getting backup:', error);
+    appLogger.error('[LocalBackup] Error getting backup:', error);
     return null;
   }
 };
@@ -112,7 +113,7 @@ export const getLastBackupDate = async (): Promise<string | null> => {
 
     return null;
   } catch (error) {
-    console.error('[LocalBackup] Error getting last backup date:', error);
+    appLogger.error('[LocalBackup] Error getting last backup date:', error);
     return null;
   }
 };

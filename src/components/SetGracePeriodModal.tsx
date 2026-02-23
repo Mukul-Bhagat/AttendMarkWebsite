@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
 
+import { appLogger } from '../shared/logger';
 interface IUser {
     _id?: string;
     id?: string;
@@ -87,7 +88,7 @@ const SetGracePeriodModal: React.FC<SetGracePeriodModalProps> = ({ isOpen, onClo
             setHasOverride(overrideMap);
 
         } catch (err: any) {
-            console.error('[SetGracePeriodModal] Error fetching data:', err);
+            appLogger.error('[SetGracePeriodModal] Error fetching data:', err);
             // alert(`Error loading data: ${errorMsg}`); // Suppress alert to avoid UI clutter
         } finally {
             setLoading(false);
@@ -107,7 +108,7 @@ const SetGracePeriodModal: React.FC<SetGracePeriodModalProps> = ({ isOpen, onClo
             });
             await fetchUserClasses();
         } catch (err: any) {
-            console.error('Error saving grace period:', err);
+            appLogger.error('Error saving grace period:', err);
             alert(err.response?.data?.msg || 'Failed to update grace period');
         } finally {
             setSaving(null);
@@ -124,7 +125,7 @@ const SetGracePeriodModal: React.FC<SetGracePeriodModalProps> = ({ isOpen, onClo
             await api.delete(`/api/grace-period/${userId}/grace-period/${classBatchId}`);
             await fetchUserClasses();
         } catch (err: any) {
-            console.error('Error removing override:', err);
+            appLogger.error('Error removing override:', err);
             alert(err.response?.data?.msg || 'Failed to remove override');
         } finally {
             setSaving(null);
@@ -143,7 +144,7 @@ const SetGracePeriodModal: React.FC<SetGracePeriodModalProps> = ({ isOpen, onClo
             });
             await fetchUserClasses();
         } catch (err: any) {
-            console.error('Error saving global grace period:', err);
+            appLogger.error('Error saving global grace period:', err);
             alert(err.response?.data?.msg || 'Failed to update global grace period');
         } finally {
             setSaving(null);
@@ -160,7 +161,7 @@ const SetGracePeriodModal: React.FC<SetGracePeriodModalProps> = ({ isOpen, onClo
             await api.delete(`/api/grace-period/${userId}/global-grace-period`);
             await fetchUserClasses();
         } catch (err: any) {
-            console.error('Error removing global override:', err);
+            appLogger.error('Error removing global override:', err);
             alert(err.response?.data?.msg || 'Failed to remove global override');
         } finally {
             setSaving(null);

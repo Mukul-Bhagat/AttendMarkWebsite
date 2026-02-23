@@ -1,3 +1,4 @@
+import { appLogger } from '../shared/logger';
 /**
  * Manual Test Runner for time.ts
  * 
@@ -17,8 +18,8 @@ import {
     debugISTTime
 } from './time.js';
 
-console.log('🧪 TIME UTILITIES - VERIFICATION TESTS\n');
-console.log('='.repeat(60));
+appLogger.info('🧪 TIME UTILITIES - VERIFICATION TESTS\n');
+appLogger.info('='.repeat(60));
 
 let passCount = 0;
 let failCount = 0;
@@ -27,25 +28,25 @@ function test(name: string, fn: () => boolean) {
     try {
         const result = fn();
         if (result) {
-            console.log(`✅ PASS: ${name}`);
+            appLogger.info(`✅ PASS: ${name}`);
             passCount++;
         } else {
-            console.log(`❌ FAIL: ${name}`);
+            appLogger.info(`❌ FAIL: ${name}`);
             failCount++;
         }
     } catch (error) {
-        console.log(`❌ ERROR: ${name}`, error);
+        appLogger.info(`❌ ERROR: ${name}`, error);
         failCount++;
     }
 }
 
 // Test 1: Constants
-console.log('\n📋 Testing Constants...');
+appLogger.info('\n📋 Testing Constants...');
 test('IST_OFFSET_MS = 19,800,000 ms', () => IST_OFFSET_MS === 19800000);
 test('BUSINESS_TIMEZONE = Asia/Kolkata', () => BUSINESS_TIMEZONE === 'Asia/Kolkata');
 
 // Test 2: nowIST()
-console.log('\n⏰ Testing nowIST()...');
+appLogger.info('\n⏰ Testing nowIST()...');
 test('nowIST returns a number', () => typeof nowIST() === 'number');
 test('nowIST returns recent timestamp', () => {
     const now = nowIST();
@@ -54,7 +55,7 @@ test('nowIST returns recent timestamp', () => {
 });
 
 // Test 3: istDayStart()
-console.log('\n🌅 Testing istDayStart()...');
+appLogger.info('\n🌅 Testing istDayStart()...');
 test('Jan 7, 2026 00:00 IST = Jan 6, 2026 18:30 UTC', () => {
     const timestamp = istDayStart('2026-01-07');
     const date = new Date(timestamp);
@@ -80,7 +81,7 @@ test('Year boundary: Jan 1 midnight IST = Dec 31 previous year UTC', () => {
 });
 
 // Test 4: istDayEnd()
-console.log('\n🌆 Testing istDayEnd()...');
+appLogger.info('\n🌆 Testing istDayEnd()...');
 test('Jan 7, 2026 23:59:59.999 IST = Jan 7, 2026 18:29:59.999 UTC', () => {
     const timestamp = istDayEnd('2026-01-07');
     const date = new Date(timestamp);
@@ -98,7 +99,7 @@ test('Day end is 1ms before next day start', () => {
 });
 
 // Test 5: sessionTimeToIST()
-console.log('\n🎯 Testing sessionTimeToIST()...');
+appLogger.info('\n🎯 Testing sessionTimeToIST()...');
 test('Jan 7, 11:00 IST = Jan 7, 05:30 UTC', () => {
     const timestamp = sessionTimeToIST('2026-01-07', '11:00');
     const date = new Date(timestamp);
@@ -120,7 +121,7 @@ test('Midnight: Jan 7, 00:00 IST = Jan 6, 18:30 UTC', () => {
 });
 
 // Test 6: isSameISTDay()
-console.log('\n📅 Testing isSameISTDay()...');
+appLogger.info('\n📅 Testing isSameISTDay()...');
 test('Morning and evening of same IST day', () => {
     const morning = sessionTimeToIST('2026-01-07', '09:00');
     const evening = sessionTimeToIST('2026-01-07', '21:00');
@@ -142,12 +143,12 @@ test('Same IST day despite different UTC days', () => {
     const inSameMorning = new Date(earlyMorning);
     const eveningDate = new Date(evening);
 
-    console.log(`   Early: ${inSameMorning.getUTCDate()} UTC, Evening: ${eveningDate.getUTCDate()} UTC`);
+    appLogger.info(`   Early: ${inSameMorning.getUTCDate()} UTC, Evening: ${eveningDate.getUTCDate()} UTC`);
     return isSameISTDay(evening, earlyMorning) === true;
 });
 
 // Test 7: Real-World Scenarios
-console.log('\n🌍 Testing Real-World Scenarios...');
+appLogger.info('\n🌍 Testing Real-World Scenarios...');
 test('Live session detection (Jan 7, 15:15 IST during 11:00-19:00 session)', () => {
     const sessionStart = sessionTimeToIST('2026-01-07', '11:00');
     const sessionEnd = sessionTimeToIST('2026-01-07', '19:00');
@@ -182,7 +183,7 @@ test('Date filtering: Select Jan 8, filter out Jan 7 and Jan 9', () => {
 });
 
 // Test 8: Deprecated Functions
-console.log('\n🚫 Testing Deprecated Functions...');
+appLogger.info('\n🚫 Testing Deprecated Functions...');
 test('istDateFromYMD throws error', () => {
     try {
         // @ts-ignore
@@ -194,29 +195,29 @@ test('istDateFromYMD throws error', () => {
 });
 
 // Summary
-console.log('\n' + '='.repeat(60));
-console.log(`\n📊 RESULTS: ${passCount} passed, ${failCount} failed\n`);
+appLogger.info('\n' + '='.repeat(60));
+appLogger.info(`\n📊 RESULTS: ${passCount} passed, ${failCount} failed\n`);
 
 if (failCount === 0) {
-    console.log('✅ All tests PASSED! Time utilities are correct.\n');
-    console.log('🎯 Key Validations:');
-    console.log('   ✓ IST midnight = UTC previous day 18:30');
-    console.log('   ✓ Day boundaries work correctly');
-    console.log('   ✓ Session time conversion accurate');
-    console.log('   ✓ Same-day detection works across UTC boundaries');
-    console.log('   ✓ Real-world scenarios validated');
-    console.log('\n📖 See TIME_ARCHITECTURE.md for migration plan');
+    appLogger.info('✅ All tests PASSED! Time utilities are correct.\n');
+    appLogger.info('🎯 Key Validations:');
+    appLogger.info('   ✓ IST midnight = UTC previous day 18:30');
+    appLogger.info('   ✓ Day boundaries work correctly');
+    appLogger.info('   ✓ Session time conversion accurate');
+    appLogger.info('   ✓ Same-day detection works across UTC boundaries');
+    appLogger.info('   ✓ Real-world scenarios validated');
+    appLogger.info('\n📖 See TIME_ARCHITECTURE.md for migration plan');
 } else {
-    console.log('❌ Some tests FAILED. Review implementation.\n');
+    appLogger.info('❌ Some tests FAILED. Review implementation.\n');
     process.exit(1);
 }
 
 // Demo output
-console.log('\n🔍 DEMO OUTPUT:\n');
+appLogger.info('\n🔍 DEMO OUTPUT:\n');
 const demoTimestamp = sessionTimeToIST('2026-01-07', '15:15');
-console.log('Session: Jan 7, 2026, 15:15 IST');
+appLogger.info('Session: Jan 7, 2026, 15:15 IST');
 debugISTTime('Demo timestamp', demoTimestamp);
-console.log('Formatted:', formatIST(demoTimestamp, {
+appLogger.info('Formatted:', formatIST(demoTimestamp, {
     dateStyle: 'full',
     timeStyle: 'long'
 }));

@@ -3,6 +3,7 @@ import { Mail, Save, Edit2, Power, Trash2, Upload, X, PlusCircle, User, Briefcas
 import api from '../api';
 import toast from 'react-hot-toast';
 
+import { appLogger } from '../shared/logger';
 interface EmailConfig {
     _id?: string;
     recipientName: string;
@@ -61,7 +62,7 @@ const EmailAutomationSettings: React.FC = () => {
                 setCurrentConfigId(null);
             }
         } catch (error: any) {
-            console.error('Error fetching configs:', error);
+            appLogger.error('Error fetching configs:', error);
             toast.error('Failed to load configurations');
         } finally {
             setLoading(false);
@@ -144,7 +145,7 @@ const EmailAutomationSettings: React.FC = () => {
             setIsEditing(false);
             fetchConfigs();
         } catch (error: any) {
-            console.error('Error saving config:', error);
+            appLogger.error('Error saving config:', error);
             toast.error(error.response?.data?.msg || 'Failed to save configuration');
         } finally {
             setSaving(false);

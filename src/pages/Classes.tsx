@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Eye, Calendar, Users, Edit, Trash2 } from 'lucide-react';
 import { nowIST, formatIST, sessionTimeToIST, istDayEnd } from '../utils/time';
 
+import { appLogger } from '../shared/logger';
 const Classes: React.FC = () => {
   const navigate = useNavigate();
   const { isSuperAdmin, isCompanyAdmin, isManager, isSessionAdmin, isEndUser, isPlatformOwner } = useAuth();
@@ -42,9 +43,9 @@ const Classes: React.FC = () => {
         );
         setSessionCounts(counts);
       } catch (err: any) {
-        console.error('[ERROR] Failed to fetch classes:', err);
-        console.error('[ERROR] Response status:', err.response?.status);
-        console.error('[ERROR] Response data:', err.response?.data);
+        appLogger.error('[ERROR] Failed to fetch classes:', err);
+        appLogger.error('[ERROR] Response status:', err.response?.status);
+        appLogger.error('[ERROR] Response data:', err.response?.data);
 
         if (err.response?.status === 401) {
           setError('You are not authorized. Please log in again.');
@@ -76,7 +77,7 @@ const Classes: React.FC = () => {
       setClasses(classes.filter(c => c._id !== classBatch._id));
       setDeleteConfirmClass(null);
     } catch (err: any) {
-      console.error('Error deleting class:', err);
+      appLogger.error('Error deleting class:', err);
       setError(err.response?.data?.msg || 'Failed to delete class. Please try again.');
     } finally {
       setIsDeleting(false);
@@ -282,7 +283,8 @@ const Classes: React.FC = () => {
                                 navigate(`/classes/edit/${classBatch._id}`);
                               }}
                               className="p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                              title="Edit Class"
+                              title="Configure Class"
+                              aria-label="Configure Class"
                             >
                               <Edit className="w-4 h-4" />
                             </button>

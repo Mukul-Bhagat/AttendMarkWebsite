@@ -14,6 +14,7 @@
 
 import api from '../api';
 
+import { appLogger } from '../shared/logger';
 const API_BASE = '/api/attendance';
 
 export interface AdjustAttendancePayload {
@@ -100,9 +101,9 @@ export interface AttendanceAuditEntry {
  *     newStatus: 'PRESENT',
  *     reason: 'Student forgot to scan QR code',
  *   });
- *   console.log('Adjusted:', result.modification);
+ *   appLogger.info('Adjusted:', result.modification);
  * } catch (error) {
- *   console.error('Failed:', error.response?.data?.message);
+ *   appLogger.error('Failed:', error.response?.data?.message);
  * }
  * ```
  */

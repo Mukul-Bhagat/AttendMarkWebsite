@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import { nowIST, toISTDateString } from '../utils/time';
 
+import { appLogger } from '../shared/logger';
 // ============================================
 // TYPE DEFINITIONS
 // ============================================
@@ -82,7 +83,7 @@ const OrganizationUsersReport: React.FC = () => {
 
                 setData(response);
             } catch (err: any) {
-                console.error('Error fetching organization users report:', err);
+                appLogger.error('Error fetching organization users report:', err);
                 setError(err.response?.data?.msg || 'Failed to load attendance report');
             } finally {
                 setIsLoading(false);

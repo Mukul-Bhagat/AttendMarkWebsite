@@ -1,16 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate, useParams, Navigate } from 'react-router-dom';
+import { Link, useNavigate, useParams, Navigate, useLocation } from 'react-router-dom';
 import api from '../api';
 import { ISession, IClassBatch } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { Eye, Edit, ArrowLeft } from 'lucide-react';
 import SessionCalendar from '../components/SessionCalendar';
+import ModeBadge from '../components/ModeBadge';
+import Toast from '../components/Toast';
 import { getSessionStatus, getSessionStartTimeIST, nowIST } from '../utils/sessionStatusUtils';
 import { isSameISTDay, toISTDateString } from '../utils/time';
+import { normalizeSessionMode } from '../utils/sessionMode';
 
+import { appLogger } from '../shared/logger';
 const Sessions: React.FC = () => {
   const navigate = useNavigate();
   const { classId } = useParams<{ classId?: string }>();
+  const location = useLocation();
   const { user, isSuperAdmin, isCompanyAdmin, isManager, isSessionAdmin, isEndUser } = useAuth();
 
   // Safety Check: If no classId in URL, redirect to /classes
@@ -22,6 +27,7 @@ const Sessions: React.FC = () => {
   const [classBatch, setClassBatch] = useState<IClassBatch | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [showPastSessions, setShowPastSessions] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
@@ -63,14 +69,14 @@ const Sessions: React.FC = () => {
         } else {
           setError('Failed to load sessions. Please try again.');
         }
-        console.error(err);
+        appLogger.error(err);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchSessions();
-  }, [classId, currentViewDate]);
+  }, [classId, currentViewDate, location.search]);
 
   // Refresh data when component comes into focus (e.g., navigating back from edit)
   useEffect(() => {
@@ -86,7 +92,7 @@ const Sessions: React.FC = () => {
             setSessions(data.sessions || []);
             setClassBatch(data.classBatch || null);
           } catch (err) {
-            console.error('Error refreshing sessions:', err);
+            appLogger.error('Error refreshing sessions:', err);
           }
         };
         fetchSessions();
@@ -107,6 +113,14 @@ const Sessions: React.FC = () => {
 
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const state = location.state as { toast?: { message: string; type: 'success' | 'error' | 'info' } } | null;
+    if (state?.toast) {
+      setToast(state.toast);
+      navigate(`${location.pathname}${location.search}`, { replace: true, state: {} });
+    }
+  }, [location.state, location.pathname, location.search, navigate]);
 
 
 
@@ -183,10 +197,10 @@ const Sessions: React.FC = () => {
     const calculationDate = toISTDateString(sessionStartIST);
 
     if (displayedDateOnly !== calculationDate) {
-      console.error('🚨 DATE MISMATCH DETECTED!');
-      console.error('  UI shows:', displayedDateOnly);
-      console.error('  Status calculated using:', calculationDate);
-      console.error('  Session:', session);
+      appLogger.error('🚨 DATE MISMATCH DETECTED!');
+      appLogger.error('  UI shows:', displayedDateOnly);
+      appLogger.error('  Status calculated using:', calculationDate);
+      appLogger.error('  Session:', session);
       throw new Error(
         `TIME_GUARD_VIOLATION: Session date mismatch! ` +
         `UI shows "${displayedDateOnly}" but status uses "${calculationDate}". ` +
@@ -312,6 +326,13 @@ const Sessions: React.FC = () => {
 
   return (
     <div className="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden bg-background-light dark:bg-background-dark">
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
       <div className="layout-container flex h-full grow flex-col">
         <main className="flex-1 p-4 md:p-6 lg:p-8">
           <header className="mb-4 md:mb-8">
@@ -461,6 +482,7 @@ const Sessions: React.FC = () => {
                       const isUpcoming = sessionStatus === 'upcoming';
                       const isToday = isSessionToday(session);
                       const showScanButton = isEndUser && isToday;
+                      const sessionMode = normalizeSessionMode(session.sessionType || session.locationType);
 
                       // Fix 2: Date-Based Title (en-GB for "Thu, 8 Jan 2026")
                       const dateTitle = formatTitleDate(session);
@@ -549,6 +571,7 @@ const Sessions: React.FC = () => {
                               ) : null}
                             </div>
                             <div className="flex flex-col gap-2 items-end">
+                              <ModeBadge mode={sessionMode} />
                               {session.isCancelled && (
                                 <span className="whitespace-nowrap rounded-full bg-orange-100 dark:bg-orange-900/30 px-3 py-1 text-xs font-medium text-orange-600 dark:text-orange-400 border border-orange-300 dark:border-orange-800">
                                   ⚠️ Cancelled
@@ -650,7 +673,7 @@ const Sessions: React.FC = () => {
                                 }}
                               >
                                 <Edit className="w-4 h-4 md:w-5 md:h-5 flex-shrink-0" />
-                                <span className="truncate whitespace-normal">Edit</span>
+                                <span className="truncate whitespace-normal">Override</span>
                               </button>
                             )}
                           </div>

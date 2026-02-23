@@ -15,6 +15,7 @@ import { AutomationIndicator } from '../components/attendance/reporting/Automati
 import { getEmailAutomationConfigs, toggleEmailAutomation, deleteEmailAutomation } from '../api/reportingApi';
 import toast from 'react-hot-toast';
 
+import { appLogger } from '../shared/logger';
 const MyAttendance: React.FC = () => {
   const { userId } = useParams<{ userId?: string }>();
   const [userName, setUserName] = useState<string>('');
@@ -52,7 +53,7 @@ const MyAttendance: React.FC = () => {
           }
         }
       } catch (err: any) {
-        console.error('Error fetching attendance info:', err);
+        appLogger.error('Error fetching attendance info:', err);
       }
     };
 
@@ -61,7 +62,7 @@ const MyAttendance: React.FC = () => {
         const data = await getMySessions(userId);
         setSessions(data || []);
       } catch (err) {
-        console.error('Error fetching sessions:', err);
+        appLogger.error('Error fetching sessions:', err);
       }
     };
 
@@ -97,7 +98,7 @@ const MyAttendance: React.FC = () => {
       });
       setAnalyticsData(data);
     } catch (err) {
-      console.error('Error fetching analytics:', err);
+      appLogger.error('Error fetching analytics:', err);
     } finally {
       setAnalyticsLoading(false);
     }
@@ -116,7 +117,7 @@ const MyAttendance: React.FC = () => {
       const response = await getEmailAutomationConfigs();
       setAutomationConfigs(response.data.data || []);
     } catch (err: any) {
-      console.error('Error fetching automation configs:', err);
+      appLogger.error('Error fetching automation configs:', err);
     }
   };
 

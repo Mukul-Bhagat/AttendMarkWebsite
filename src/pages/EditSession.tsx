@@ -7,6 +7,7 @@ import AddUsersModal from '../components/AddUsersModal';
 import GoogleMapPicker from '../components/GoogleMapPicker';
 import { ArrowLeft, X } from 'lucide-react';
 
+import { appLogger } from '../shared/logger';
 interface IUser {
   _id: string;
   email: string;
@@ -33,7 +34,7 @@ const EditSession: React.FC = () => {
       const query = new URLSearchParams(location.search);
       const date = query.get('date') || legacyDate;
 
-      console.warn(
+      appLogger.warn(
         '[LEGACY ROUTE AUTO-FIXED]',
         paramId,
         '→',
@@ -182,7 +183,7 @@ const EditSession: React.FC = () => {
         } else {
           setError('Failed to fetch session data');
         }
-        console.error(err);
+        appLogger.error(err);
       } finally {
         setIsLoading(false);
       }
@@ -200,7 +201,7 @@ const EditSession: React.FC = () => {
           const admins = data.filter((u: IAuthUser) => u.role === 'SessionAdmin');
           setSessionAdmins(admins);
         } catch (err) {
-          console.error('Could not fetch SessionAdmins', err);
+          appLogger.error('Could not fetch SessionAdmins', err);
         }
       };
       fetchSessionAdmins();

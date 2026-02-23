@@ -114,14 +114,12 @@ const LoginPage: React.FC = () => {
           organizationId: orgs[0].organizationId,
         });
 
-        const { token: finalToken, user } = selectResponse.data;
+        const { user } = selectResponse.data;
 
         // Double-check user role from the response
         if (isPlatformOwnerRole(user.role)) {
-          localStorage.setItem('token', finalToken);
-
           // Use the login function to update context
-          await login({ token: finalToken, user });
+          await login({ user });
 
           // Force redirect to platform dashboard immediately
           navigate('/platform/dashboard', { replace: true });
@@ -136,11 +134,10 @@ const LoginPage: React.FC = () => {
           organizationId: orgs[0].organizationId,
         });
 
-        const { token: finalToken, user } = selectResponse.data;
-        localStorage.setItem('token', finalToken);
+        const { user } = selectResponse.data;
 
         // Use the login function to update context
-        await login({ token: finalToken, user });
+        await login({ user });
 
         // Navigate to the original destination or appropriate dashboard
         if (isPlatformOwnerRole(user.role)) {

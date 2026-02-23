@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import api from '../api';
 
+import { appLogger } from '../shared/logger';
 interface Organization {
   name: string;
   prefix: string;
@@ -52,7 +53,7 @@ const OrgSelector: React.FC<OrgSelectorProps> = ({
         const { data } = await api.get('/api/auth/organizations');
         setOrganizations(data);
       } catch (err) {
-        console.error('Failed to fetch organizations:', err);
+        appLogger.error('Failed to fetch organizations:', err);
         setOrganizations([]);
       } finally {
         setIsLoading(false);

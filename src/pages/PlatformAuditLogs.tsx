@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { formatIST } from '../utils/time';
 
+import { appLogger } from '../shared/logger';
 interface AuditLog {
   id: string;
   time: string;
@@ -49,7 +50,7 @@ const PlatformAuditLogs: React.FC = () => {
         setAuditLogs(logs);
         setFilteredLogs(logs);
       } catch (err: any) {
-        console.error('Failed to fetch audit logs:', err);
+        appLogger.error('Failed to fetch audit logs:', err);
         setError(err.response?.data?.msg || 'Failed to load audit logs');
       } finally {
         setIsLoading(false);

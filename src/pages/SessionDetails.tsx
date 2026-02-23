@@ -6,7 +6,10 @@ import { QRCodeSVG } from 'qrcode.react';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { formatIST } from '../utils/time';
+import ModeBadge from '../components/ModeBadge';
+import { normalizeSessionMode } from '../utils/sessionMode';
 
+import { appLogger } from '../shared/logger';
 const SessionDetails: React.FC = () => {
   const [session, setSession] = useState<ISession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -30,7 +33,7 @@ const SessionDetails: React.FC = () => {
   // 🛡️ DEV GUARD: Warn about legacy composite routes
   useEffect(() => {
     if (process.env.NODE_ENV === 'development' && paramId?.includes('_')) {
-      console.warn(
+      appLogger.warn(
         '🚨 [LEGACY ROUTE DETECTED] Composite sessionId used:',
         paramId,
         '\n👉 Please use /sessions/:id?date=YYYY-MM-DD instead.'
@@ -61,7 +64,7 @@ const SessionDetails: React.FC = () => {
       const query = new URLSearchParams(location.search); // Use fresh search params
       const date = query.get('date') || legacyDate;
 
-      console.warn(
+      appLogger.warn(
         '[LEGACY ROUTE AUTO-FIXED]',
         paramId,
         '→',
@@ -111,7 +114,7 @@ const SessionDetails: React.FC = () => {
         } else {
           setError('Failed to load class/batch. Please try again.');
         }
-        console.error(err);
+        appLogger.error(err);
       } finally {
         setIsLoading(false);
       }
@@ -344,7 +347,10 @@ const SessionDetails: React.FC = () => {
                 </div>
               )}
               <div className="flex min-w-72 flex-col gap-2 mb-6">
-                <p className="text-[#181511] dark:text-white text-3xl font-black leading-tight tracking-[-0.033em]">{session.name}</p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="text-[#181511] dark:text-white text-3xl font-black leading-tight tracking-[-0.033em]">{session.name}</p>
+                  <ModeBadge mode={normalizeSessionMode(session.sessionType || session.locationType)} size="md" />
+                </div>
                 {session.description && (
                   <p className="text-[#8a7b60] dark:text-gray-400 text-base font-normal leading-normal">{session.description}</p>
                 )}

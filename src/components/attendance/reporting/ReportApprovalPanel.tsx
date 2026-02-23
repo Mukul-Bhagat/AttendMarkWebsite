@@ -4,28 +4,29 @@ import { getReportShareRequests, approveReportShareRequest, rejectReportShareReq
 import toast from 'react-hot-toast';
 import { formatIST } from '../../../utils/time';
 
+import { appLogger } from '../../../shared/logger';
 const ReportApprovalPanel: React.FC = () => {
     const [requests, setRequests] = useState<ReportShareRequest[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState<string | null>(null);
 
     const fetchRequests = async () => {
-        console.log('[ReportApprovalPanel] Fetching share requests...');
+        appLogger.info('[ReportApprovalPanel] Fetching share requests...');
         try {
             setIsLoading(true);
             const response = await getReportShareRequests();
-            console.log('[ReportApprovalPanel] API response:', response);
-            console.log('[ReportApprovalPanel] Response.data:', response.data);
-            console.log('[ReportApprovalPanel] Requests array:', response.data?.data);
+            appLogger.info('[ReportApprovalPanel] API response:', response);
+            appLogger.info('[ReportApprovalPanel] Response.data:', response.data);
+            appLogger.info('[ReportApprovalPanel] Requests array:', response.data?.data);
 
             const requestsArray = response.data?.data || [];
-            console.log('[ReportApprovalPanel] Total requests:', requestsArray.length);
-            console.log('[ReportApprovalPanel] Pending requests:', requestsArray.filter((r: any) => r.status === 'PENDING').length);
+            appLogger.info('[ReportApprovalPanel] Total requests:', requestsArray.length);
+            appLogger.info('[ReportApprovalPanel] Pending requests:', requestsArray.filter((r: any) => r.status === 'PENDING').length);
 
             setRequests(requestsArray);
         } catch (err: any) {
-            console.error('[ReportApprovalPanel] Failed to fetch requests:', err);
-            console.error('[ReportApprovalPanel] Error response:', err.response?.data);
+            appLogger.error('[ReportApprovalPanel] Failed to fetch requests:', err);
+            appLogger.error('[ReportApprovalPanel] Error response:', err.response?.data);
             toast.error('Failed to load pending requests');
         } finally {
             setIsLoading(false);
@@ -45,7 +46,7 @@ const ReportApprovalPanel: React.FC = () => {
             fetchRequests();
         } catch (err: any) {
             toast.error('Approval failed');
-            console.error(err);
+            appLogger.error(err);
         } finally {
             setIsProcessing(null);
         }
@@ -63,7 +64,7 @@ const ReportApprovalPanel: React.FC = () => {
             fetchRequests();
         } catch (err: any) {
             toast.error('Rejection failed');
-            console.error(err);
+            appLogger.error(err);
         } finally {
             setIsProcessing(null);
         }
@@ -82,7 +83,7 @@ const ReportApprovalPanel: React.FC = () => {
             fetchRequests();
         } catch (err: any) {
             toast.error(err.response?.data?.message || 'Failed to delete request');
-            console.error(err);
+            appLogger.error(err);
         } finally {
             setIsProcessing(null);
         }
@@ -101,7 +102,7 @@ const ReportApprovalPanel: React.FC = () => {
             fetchRequests();
         } catch (err: any) {
             toast.error(err.response?.data?.message || 'Failed to clear history');
-            console.error(err);
+            appLogger.error(err);
         } finally {
             setIsProcessing(null);
         }
@@ -126,7 +127,7 @@ const ReportApprovalPanel: React.FC = () => {
             toast.dismiss(toastId);
         } catch (err: any) {
             toast.error('Failed to generate preview');
-            console.error(err);
+            appLogger.error(err);
         }
     };
 
@@ -313,7 +314,7 @@ const ReportApprovalPanel: React.FC = () => {
                                     </span>
                                     <button
                                         onClick={() => {
-                                            console.log('[ReportApprovalPanel] Requesting delete for:', request._id);
+                                            appLogger.info('[ReportApprovalPanel] Requesting delete for:', request._id);
                                             handleDelete(request._id);
                                         }}
                                         disabled={!!isProcessing}

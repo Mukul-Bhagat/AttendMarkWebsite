@@ -6,6 +6,7 @@ import { getBackups, deleteBackup as deleteBackupFromStorage } from '../utils/ba
 import { nowIST, formatIST } from '../utils/time';
 import LoadingSpinner from '../components/LoadingSpinner';
 
+import { appLogger } from '../shared/logger';
 interface BackupItem {
   id: string;
   dateKey: string;
@@ -49,7 +50,7 @@ const DataBackup: React.FC = () => {
           setOrgId(org.id);
         }
       } catch (err) {
-        console.warn('Could not fetch organization ID from platform endpoint');
+        appLogger.warn('Could not fetch organization ID from platform endpoint');
       } finally {
         setIsLoading(false);
       }
@@ -75,7 +76,7 @@ const DataBackup: React.FC = () => {
           }))
         );
       } catch (err) {
-        console.error('Error loading local backups:', err);
+        appLogger.error('Error loading local backups:', err);
       }
     };
 
@@ -138,7 +139,7 @@ const DataBackup: React.FC = () => {
       setSuccessMessage(`Backup downloaded successfully! (Date: ${formattedDate})`);
       setShowSuccessModal(true);
     } catch (err: any) {
-      console.error('Error downloading backup:', err);
+      appLogger.error('Error downloading backup:', err);
       setError(err.response?.data?.msg || err.message || 'Failed to download backup');
     } finally {
       setIsDownloading(false);
@@ -241,7 +242,7 @@ const DataBackup: React.FC = () => {
         window.location.reload();
       }, 2000);
     } catch (err: any) {
-      console.error('Error restoring backup:', err);
+      appLogger.error('Error restoring backup:', err);
       setError(err.response?.data?.msg || 'Failed to restore backup');
     } finally {
       setIsRestoring(false);
@@ -264,7 +265,7 @@ const DataBackup: React.FC = () => {
       setShowSuccessModal(true);
     } catch (err: any) {
       setError('Failed to download backup');
-      console.error('Error downloading local backup:', err);
+      appLogger.error('Error downloading local backup:', err);
     }
   };
 
@@ -300,7 +301,7 @@ const DataBackup: React.FC = () => {
       setSuccessMessage('Backup deleted successfully!');
       setShowSuccessModal(true);
     } catch (err: any) {
-      console.error('Error deleting backup:', err);
+      appLogger.error('Error deleting backup:', err);
       setError('Failed to delete backup');
     } finally {
       setIsDeleting(null);

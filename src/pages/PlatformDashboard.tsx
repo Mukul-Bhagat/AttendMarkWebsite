@@ -7,6 +7,7 @@ import { formatIST } from '../utils/time';
 import CreateOrganizationModal from '../components/CreateOrganizationModal';
 import Toast from '../components/Toast';
 
+import { appLogger } from '../shared/logger';
 interface Organization {
   id: string;
   name: string;
@@ -39,7 +40,7 @@ const PlatformDashboard: React.FC = () => {
       const { data } = await api.get('/api/platform/organizations');
       setOrganizations(data.organizations || []);
     } catch (err: any) {
-      console.error('Failed to fetch organizations:', err);
+      appLogger.error('Failed to fetch organizations:', err);
       setError(err.response?.data?.msg || 'Failed to load organizations');
     } finally {
       setIsLoading(false);
@@ -74,7 +75,7 @@ const PlatformDashboard: React.FC = () => {
       await switchOrganization(org.id);
       // Navigation will happen automatically via switchOrganization
     } catch (err: any) {
-      console.error('Failed to switch organization:', err);
+      appLogger.error('Failed to switch organization:', err);
       alert(err.response?.data?.msg || 'Failed to switch organization');
     }
   };
@@ -107,7 +108,7 @@ const PlatformDashboard: React.FC = () => {
         type: 'success'
       });
     } catch (err: any) {
-      console.error('Failed to update organization status:', err);
+      appLogger.error('Failed to update organization status:', err);
       const errorMsg = err.response?.data?.msg || 'Failed to update organization status';
       setError(errorMsg);
       setToast({

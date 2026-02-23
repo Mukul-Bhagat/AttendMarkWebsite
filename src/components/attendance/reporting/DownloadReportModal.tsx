@@ -3,6 +3,7 @@ import { X, Calendar, Building, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { downloadAttendanceReport, DownloadReportOptions } from '../../../api/reportingApi';
 
+import { appLogger } from '../../../shared/logger';
 interface DownloadReportModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -97,7 +98,7 @@ const DownloadReportModal: React.FC<DownloadReportModalProps> = ({
             onClose();
         } catch (err: any) {
             toast.error(`Failed to generate ${format.toUpperCase()}`, { id: toastId });
-            console.error(err);
+            appLogger.error(err);
         } finally {
             setIsDownloading(false);
         }
