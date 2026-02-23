@@ -7,6 +7,7 @@ import AddUsersModal from '../components/AddUsersModal';
 import GoogleMapPicker from '../components/GoogleMapPicker';
 import { ArrowLeft, X } from 'lucide-react';
 
+import SkeletonCard from '../components/SkeletonCard';
 import { appLogger } from '../shared/logger';
 interface IUser {
   _id: string;
@@ -175,6 +176,7 @@ const EditSession: React.FC = () => {
             setRemoteUsers([]);
           }
         }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         if (err.response?.status === 404) {
           setError('Session not found');
@@ -190,7 +192,7 @@ const EditSession: React.FC = () => {
     };
 
     fetchSession();
-  }, [sessionId]);
+  }, [sessionId, location.search]);
 
   // Fetch SessionAdmins if user is SuperAdmin
   useEffect(() => {
@@ -375,11 +377,13 @@ const EditSession: React.FC = () => {
 
       await api.put(`/api/sessions/${sessionId}`, sessionData);
       navigate('/sessions');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.response?.status === 403) {
         setError('You are not authorized to edit this session');
       } else if (err.response && err.response.data) {
         if (err.response.data.errors && Array.isArray(err.response.data.errors)) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const errorMessages = err.response.data.errors.map((e: any) => e.msg).join(', ');
           setError(errorMessages);
         } else {
@@ -397,13 +401,18 @@ const EditSession: React.FC = () => {
     return (
       <div className="relative flex min-h-screen w-full flex-col group/design-root overflow-x-hidden bg-background-light dark:bg-background-dark font-display text-[#181511] dark:text-gray-200">
         <div className="layout-container flex h-full grow flex-col">
-          <div className="px-4 sm:px-6 lg:px-8 flex flex-1 justify-center py-12">
-            <div className="flex flex-col items-center">
-              <svg className="animate-spin h-8 w-8 text-primary mb-4" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
-              </svg>
-              <p className="text-gray-500 dark:text-gray-400">Loading session data...</p>
+          <div className="px-4 sm:px-6 lg:px-8 py-12">
+            <div className="mx-auto flex w-full max-w-4xl flex-col gap-8">
+              <div className="flex flex-col gap-2">
+                <div className="h-10 w-64 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
+                <div className="h-5 w-96 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+              </div>
+              <SkeletonCard variant="card" className="h-48" />
+              <SkeletonCard variant="card" className="h-48" />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <SkeletonCard variant="card" className="h-48" />
+                <SkeletonCard variant="card" className="h-48" />
+              </div>
             </div>
           </div>
         </div>

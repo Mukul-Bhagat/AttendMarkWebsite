@@ -28,9 +28,58 @@ const api = axios.create({
   baseURL: API_BASE_URL, withCredentials: true,
 });
 
+const csrfClient = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true,
+});
+
+let csrfToken: string | null = null;
+let csrfTokenPromise: Promise<string> | null = null;
+
+const fetchCsrfToken = async (): Promise<string> => {
+  if (csrfToken) {
+    return csrfToken;
+  }
+
+  if (csrfTokenPromise) {
+    return csrfTokenPromise;
+  }
+
+  csrfTokenPromise = csrfClient
+    .get('/api/csrf-token')
+    .then((response) => {
+      const token = response.data?.csrfToken;
+      if (!token) {
+        throw new Error('CSRF token missing from response');
+      }
+      csrfToken = token;
+      return token;
+    })
+    .finally(() => {
+      csrfTokenPromise = null;
+    });
+
+  return csrfTokenPromise;
+};
+
+if (typeof window !== 'undefined') {
+  fetchCsrfToken().catch((error) => {
+    appLogger.warn('Failed to prefetch CSRF token', error);
+  });
+}
+
 // Request interceptor - add auth token if available
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    const method = (config.method || 'get').toLowerCase();
+    const requiresCsrf = ['post', 'put', 'patch', 'delete'].includes(method);
+
+    if (requiresCsrf) {
+      const token = await fetchCsrfToken();
+      config.headers = config.headers ?? {};
+      config.headers['X-CSRF-Token'] = token;
+    }
+
     // HttpOnly cookies automatically sent
     if (false) {
       config.headers.Authorization = `Bearer ${token}`;

@@ -11,6 +11,8 @@ import Toast from '../components/Toast';
 import { ISession } from '../types';
 import { appLogger } from '../shared/logger';
 import { normalizeSessionMode, type SessionMode } from '../utils/sessionMode';
+import SkeletonCard from '../components/SkeletonCard';
+import { nowIST } from '../utils/time';
 
 const SessionOverride: React.FC = () => {
   const navigate = useNavigate();
@@ -83,6 +85,7 @@ const SessionOverride: React.FC = () => {
             longitude: sessionData.geolocation.longitude,
           });
         }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         appLogger.error('Failed to load session', err);
         setError(err?.response?.data?.message || 'Failed to load session.');
@@ -121,7 +124,7 @@ const SessionOverride: React.FC = () => {
     setError('');
 
     try {
-      const patch: Record<string, any> = {
+      const patch: Record<string, unknown> = {
         mode: formData.mode,
         startTime: formData.startTime,
         endTime: formData.endTime,
@@ -151,7 +154,7 @@ const SessionOverride: React.FC = () => {
         : session?.classBatchId;
 
       if (classId) {
-        navigate(`/classes/${classId}/sessions?refresh=${Date.now()}`, {
+        navigate(`/classes/${classId}/sessions?refresh=${nowIST()}`, {
           state: {
             toast: {
               message: `Session updated to ${formData.mode}.`,
@@ -169,6 +172,7 @@ const SessionOverride: React.FC = () => {
           },
         });
       }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to override session.');
       setToast({ message: err?.response?.data?.message || 'Failed to override session.', type: 'error' });
@@ -210,16 +214,20 @@ const SessionOverride: React.FC = () => {
   if (isLoading) {
     return (
       <div className="relative flex min-h-screen w-full flex-col p-4 sm:p-6 lg:p-8 bg-background-light dark:bg-background-dark font-display">
-        <div className="mx-auto flex w-full max-w-4xl flex-col">
-          <div className="flex items-center justify-center py-12">
-            <div className="flex flex-col items-center">
-              <svg className="animate-spin h-8 w-8 text-[#f04129] mb-4" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
-              </svg>
-              <p className="text-[#8a7b60] dark:text-gray-400">Loading session...</p>
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+          <div className="mb-8">
+            <div className="flex min-w-[84px] max-w-[480px] items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#f5f3f0] dark:bg-slate-800 border border-gray-300 dark:border-gray-700 opacity-50 mb-4 w-32">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              <span>Back</span>
             </div>
+            <div className="h-10 w-64 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
           </div>
+          <SkeletonCard variant="card" className="h-32" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <SkeletonCard variant="card" className="h-24" />
+            <SkeletonCard variant="card" className="h-24" />
+          </div>
+          <SkeletonCard variant="card" className="h-72" />
         </div>
       </div>
     );

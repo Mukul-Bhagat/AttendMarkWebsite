@@ -4,6 +4,7 @@ import api from '../api';
 import { ISession } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { formatIST } from '../utils/time';
+import SkeletonCard from '../components/SkeletonCard';
 
 import { appLogger } from '../shared/logger';
 const MySessions: React.FC = () => {
@@ -87,14 +88,8 @@ const MySessions: React.FC = () => {
                 <h1 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white leading-tight tracking-[-0.033em]">My Classes/Batches</h1>
               </div>
             </header>
-            <div className="flex items-center justify-center py-12">
-              <div className="flex flex-col items-center">
-                <svg className="animate-spin h-8 w-8 text-primary mb-4" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
-                </svg>
-                <p className="text-[#8a7b60] dark:text-gray-400">Loading classes/batches...</p>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <SkeletonCard variant="card" className="h-64" count={6} />
             </div>
           </main>
         </div>
@@ -213,4 +208,3 @@ const MySessions: React.FC = () => {
 };
 
 export default MySessions;
-

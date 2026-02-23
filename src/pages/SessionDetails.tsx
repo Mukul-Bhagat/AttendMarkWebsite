@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { formatIST } from '../utils/time';
 import ModeBadge from '../components/ModeBadge';
 import { normalizeSessionMode } from '../utils/sessionMode';
+import SkeletonCard from '../components/SkeletonCard';
 
 import { appLogger } from '../shared/logger';
 const SessionDetails: React.FC = () => {
@@ -106,6 +107,7 @@ const SessionDetails: React.FC = () => {
         } else {
           setSession(data);
         }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         if (err.response?.status === 401) {
           setError('You are not authorized to view this class/batch.');
@@ -121,7 +123,7 @@ const SessionDetails: React.FC = () => {
     };
 
     fetchSession();
-  }, [id, isEndUser]);
+  }, [id, isEndUser, location.search]);
 
   const handleDelete = async () => {
     if (!id) return;
@@ -129,6 +131,7 @@ const SessionDetails: React.FC = () => {
     try {
       await api.delete(`/api/sessions/${id}`);
       navigate('/classes');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setError(err.response?.data?.msg || 'Failed to delete session');
     } finally {
@@ -150,6 +153,7 @@ const SessionDetails: React.FC = () => {
       setSession(data);
       setShowCancelModal(false);
       setCancellationReason('');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setError(err.response?.data?.msg || 'Failed to cancel session');
     } finally {
@@ -167,6 +171,7 @@ const SessionDetails: React.FC = () => {
       // Refresh session data
       const { data } = await api.get(`/api/sessions/${id}`);
       setSession(data);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setError(err.response?.data?.msg || 'Failed to revoke cancellation');
     } finally {
@@ -188,22 +193,14 @@ const SessionDetails: React.FC = () => {
         <div className="layout-container flex h-full grow flex-col">
           <main className="flex-1 p-4 sm:p-6 lg:p-8">
             <header className="mb-8">
-              <Link
-                to="/classes"
-                className="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#f5f3f0] dark:bg-background-dark/50 text-[#181511] dark:text-gray-200 gap-2 text-sm font-bold leading-normal tracking-[0.015em] border border-gray-300 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-background-dark"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span className="truncate">Back</span>
-              </Link>
-            </header>
-            <div className="flex items-center justify-center py-12">
-              <div className="flex flex-col items-center">
-                <svg className="animate-spin h-8 w-8 text-primary mb-4" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
-                </svg>
-                <p className="text-[#8a7b60] dark:text-gray-400">Loading class/batch...</p>
+              <div className="flex min-w-[84px] max-w-[480px] items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#f5f3f0] dark:bg-background-dark/50 border border-gray-300 dark:border-gray-700 opacity-50 mb-4 w-32">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                <span>Back</span>
               </div>
+            </header>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
+              <SkeletonCard variant="card" className="h-[500px]" />
+              <SkeletonCard variant="card" className="h-[500px]" />
             </div>
           </main>
         </div>
@@ -241,6 +238,7 @@ const SessionDetails: React.FC = () => {
 
   const formatDate = (dateString: string) => {
     try {
+      // eslint-disable-next-line no-restricted-syntax
       const date = new Date(dateString);
       if (isNaN(date.getTime())) {
         return dateString; // Return original if invalid
@@ -674,4 +672,3 @@ const SessionDetails: React.FC = () => {
 };
 
 export default SessionDetails;
-

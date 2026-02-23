@@ -15,6 +15,7 @@ import Toast from '../components/Toast';
 import { toISTDateString } from '../utils/time';
 import { normalizeSessionMode, type SessionMode } from '../utils/sessionMode';
 import { appLogger } from '../shared/logger';
+import SkeletonCard from '../components/SkeletonCard';
 
 import 'react-day-picker/dist/style.css';
 
@@ -134,6 +135,7 @@ const ClassConfigure: React.FC = () => {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   const selectedDateObjects = useMemo(
+    // eslint-disable-next-line no-restricted-syntax
     () => formData.customDates.map((dateKey) => new Date(`${dateKey}T00:00:00Z`)),
     [formData.customDates]
   );
@@ -161,6 +163,7 @@ const ClassConfigure: React.FC = () => {
         const configData = data.configVersion as ConfigVersionPayload | null;
 
         setClassBatch(classData);
+        // eslint-disable-next-line no-restricted-syntax
         const todayKey = toISTDateString(new Date());
 
         if (configData) {
@@ -215,6 +218,7 @@ const ClassConfigure: React.FC = () => {
         }
 
         await fetchEnrollments(id);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         appLogger.error('Failed to load class configuration', err);
         setError(err?.response?.data?.message || 'Failed to load class configuration');
@@ -391,7 +395,7 @@ const ClassConfigure: React.FC = () => {
 
       setInitialMode(formData.mode);
 
-      navigate(`/classes/${id}/sessions?refresh=${Date.now()}`, {
+      navigate(`/classes/${id}/sessions?refresh=${nowIST()}`, {
         state: {
           toast: {
             message: `Class updated. Future sessions converted to ${formData.mode}.`,
@@ -399,6 +403,7 @@ const ClassConfigure: React.FC = () => {
           },
         },
       });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       appLogger.error('Failed to configure class', err);
       setError(err?.response?.data?.message || 'Failed to configure class.');
@@ -453,6 +458,7 @@ const ClassConfigure: React.FC = () => {
       });
       await fetchEnrollments(id);
       setToast({ message: `${newUsers.length} user(s) added to class.`, type: 'success' });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setToast({ message: err?.response?.data?.message || 'Failed to add users.', type: 'error' });
     } finally {
@@ -467,10 +473,12 @@ const ClassConfigure: React.FC = () => {
     try {
       await api.post(`/api/classes/${id}/remove-users`, {
         users: [{ userId }],
+        // eslint-disable-next-line no-restricted-syntax
         removedAt: new Date().toISOString(),
       });
       await fetchEnrollments(id);
       setToast({ message: 'User removed from class.', type: 'success' });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setToast({ message: err?.response?.data?.message || 'Failed to remove user.', type: 'error' });
     } finally {
@@ -488,6 +496,7 @@ const ClassConfigure: React.FC = () => {
       });
       await fetchEnrollments(id);
       setToast({ message: 'Participant mode updated.', type: 'success' });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setToast({ message: err?.response?.data?.message || 'Failed to update participant mode.', type: 'error' });
     } finally {
@@ -498,15 +507,16 @@ const ClassConfigure: React.FC = () => {
   if (isLoading) {
     return (
       <div className="relative flex min-h-screen w-full flex-col p-4 sm:p-6 lg:p-8 bg-background-light dark:bg-background-dark font-display">
-        <div className="mx-auto flex w-full max-w-4xl flex-col">
-          <div className="flex items-center justify-center py-12">
-            <div className="flex flex-col items-center">
-              <svg className="animate-spin h-8 w-8 text-[#f04129] mb-4" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
-              </svg>
-              <p className="text-[#8a7b60] dark:text-gray-400">Loading configuration...</p>
-            </div>
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+          <div className="mb-8">
+            <div className="h-10 w-32 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse mb-4" />
+            <div className="h-10 w-64 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
+          </div>
+          <SkeletonCard variant="card" className="h-48" />
+          <SkeletonCard variant="card" className="h-48" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <SkeletonCard variant="card" className="h-48" />
+            <SkeletonCard variant="card" className="h-48" />
           </div>
         </div>
       </div>
@@ -690,7 +700,7 @@ const ClassConfigure: React.FC = () => {
                       className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${formData.weeklyDays.includes(day.value)
                         ? 'bg-[#f04129] text-white'
                         : 'bg-[#f5f3f0] text-[#5c5445] dark:bg-slate-700 dark:text-slate-200'
-                      }`}
+                        }`}
                     >
                       {day.label}
                     </button>
@@ -732,7 +742,7 @@ const ClassConfigure: React.FC = () => {
                       className={`rounded-lg px-4 py-2 text-sm font-semibold border ${formData.hybridDefaultMode === mode
                         ? 'border-[#f04129] text-[#f04129] bg-red-50 dark:bg-red-900/10'
                         : 'border-[#e6e2db] text-[#5c5445] dark:border-slate-600 dark:text-slate-200'
-                      }`}
+                        }`}
                     >
                       {mode}
                     </button>

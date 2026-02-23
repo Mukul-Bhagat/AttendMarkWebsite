@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import api from '../api';
 import { ISession } from '../types';
 import { nowIST, formatIST, sessionTimeToIST } from '../utils/time';
+import SkeletonCard from '../components/SkeletonCard';
 
 import { appLogger } from '../shared/logger';
 interface DashboardSummary {
@@ -134,13 +135,24 @@ const Dashboard: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center">
-          <svg className="animate-spin h-8 w-8 text-primary mb-4" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
-          </svg>
-          <p className="text-text-secondary-light dark:text-text-secondary-dark">Loading dashboard...</p>
+      <div className="p-4 md:p-10">
+        <div className="flex flex-wrap justify-between gap-3 mb-6">
+          <div className="flex flex-col gap-2">
+            <div className="h-10 w-64 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
+            <div className="h-5 w-80 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4 mb-6">
+          <SkeletonCard variant="quota" count={4} />
+        </div>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <SkeletonCard variant="card" className="h-full min-h-[400px]" />
+          </div>
+          <div className="flex flex-col gap-6">
+            <SkeletonCard variant="card" className="h-32" />
+            <SkeletonCard variant="card" className="h-[240px]" />
+          </div>
         </div>
       </div>
     );
@@ -187,23 +199,29 @@ const Dashboard: React.FC = () => {
       {/* Stats Grid - 4 Cards */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4 mb-6">
         {/* Organization Name/Logo Card */}
-        <div className="flex min-w-[200px] flex-1 flex-col gap-2 rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm justify-center">
-          <div className="flex items-center gap-2 mb-1">
+        <div className="flex min-w-[200px] flex-1 flex-col rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm justify-between">
+          <div className="flex items-center gap-2 mb-4">
             <span className="material-symbols-outlined text-[#f04129] text-xl">business</span>
             <p className="text-base font-medium text-text-primary-light dark:text-text-primary-dark">Organization</p>
           </div>
-          {summary?.organization.logoUrl ? (
-            <div className="organization-logo-wrapper">
+          <div className="flex flex-col items-center justify-center flex-1 w-full">
+            {summary?.organization.logoUrl ? (
               <img
                 src={summary.organization.logoUrl}
                 alt={summary.organization.name}
+                className="max-h-20 max-w-full object-contain drop-shadow-sm"
               />
-            </div>
-          ) : (
-            <p className="tracking-light text-2xl font-bold text-text-primary-light dark:text-text-primary-dark" title={summary?.organization.name}>
-              {summary?.organization.name || 'N/A'}
-            </p>
-          )}
+            ) : (
+              <p className="tracking-light text-2xl font-bold text-text-primary-light dark:text-text-primary-dark text-center" title={summary?.organization.name}>
+                {summary?.organization.name || 'N/A'}
+              </p>
+            )}
+            {summary?.organization.logoUrl && (
+              <p className="text-sm font-semibold text-text-secondary-light dark:text-text-secondary-dark mt-3 text-center truncate w-full" title={summary.organization.name}>
+                {summary.organization.name}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Active Classes Card */}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrganization } from '../contexts/OrganizationContext';
 import api from '../api';
+import ImageCropper from '../components/ImageCropper';
 
 import { appLogger } from '../shared/logger';
 const OrganizationSettings: React.FC = () => {
@@ -23,6 +24,7 @@ const OrganizationSettings: React.FC = () => {
     const [isSavingSettings, setIsSavingSettings] = useState(false);
     const [logoFile, setLogoFile] = useState<File | null>(null);
     const [logoError, setLogoError] = useState<string | null>(null);
+    const [cropFile, setCropFile] = useState<File | null>(null);
 
     const allowedLogoTypes = ['image/jpeg', 'image/png', 'image/webp'];
     const allowedRatios = [1 / 1, 3 / 4, 9 / 16];
@@ -35,26 +37,6 @@ const OrganizationSettings: React.FC = () => {
         if (file.size > 5 * 1024 * 1024) {
             return 'Logo must be less than 5MB.';
         }
-
-        const objectUrl = URL.createObjectURL(file);
-        const img = new Image();
-
-        try {
-            await new Promise<void>((resolve, reject) => {
-                img.onload = () => resolve();
-                img.onerror = () => reject(new Error('Failed to load image'));
-                img.src = objectUrl;
-            });
-
-            const ratio = img.width / img.height;
-            const isAllowed = allowedRatios.some((allowed) => Math.abs(ratio - allowed) <= ratioTolerance);
-            if (!isAllowed) {
-                return 'Logo ratio must be 1:1, 3:4, or 9:16.';
-            }
-        } finally {
-            URL.revokeObjectURL(objectUrl);
-        }
-
         return null;
     };
 
@@ -145,10 +127,16 @@ const OrganizationSettings: React.FC = () => {
         if (validationError) {
             setLogoError(validationError);
             setLogoFile(null);
+            e.target.value = '';
             return;
         }
 
-        setLogoFile(file);
+        setCropFile(file);
+        e.target.value = ''; // Reset so the same file can be selected again
+    };
+
+    const handleCropComplete = (croppedFile: File) => {
+        setLogoFile(croppedFile);
         const reader = new FileReader();
         reader.onloadend = () => {
             setOrganizationSettings({
@@ -156,7 +144,8 @@ const OrganizationSettings: React.FC = () => {
                 logo: reader.result as string, // Show preview
             });
         };
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(croppedFile);
+        setCropFile(null);
     };
 
     if (!user || (!isSuperAdmin && !isCompanyAdmin)) {
@@ -189,6 +178,14 @@ const OrganizationSettings: React.FC = () => {
                 >
                     {message.text}
                 </div>
+            )}
+
+            {cropFile && (
+                <ImageCropper
+                    imageFile={cropFile}
+                    onCropComplete={handleCropComplete}
+                    onCancel={() => setCropFile(null)}
+                />
             )}
 
             {/* Settings Form */}
@@ -466,10 +463,11 @@ const OrganizationSettings: React.FC = () => {
                                 </button>
                             </div>
                         </form>
-                    )}
-                </div>
-            </div>
-        </div>
+                    )
+                    }
+                </div >
+            </div >
+        </div >
     );
 };
 

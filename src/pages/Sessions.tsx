@@ -10,6 +10,7 @@ import Toast from '../components/Toast';
 import { getSessionStatus, getSessionStartTimeIST, nowIST } from '../utils/sessionStatusUtils';
 import { isSameISTDay, toISTDateString } from '../utils/time';
 import { normalizeSessionMode } from '../utils/sessionMode';
+import SkeletonCard from '../components/SkeletonCard';
 
 import { appLogger } from '../shared/logger';
 const Sessions: React.FC = () => {
@@ -121,8 +122,6 @@ const Sessions: React.FC = () => {
       navigate(`${location.pathname}${location.search}`, { replace: true, state: {} });
     }
   }, [location.state, location.pathname, location.search, navigate]);
-
-
 
   const formatFrequency = (frequency: string) => {
     const freqMap: { [key: string]: string } = {
@@ -256,8 +255,6 @@ const Sessions: React.FC = () => {
 
   const pastSessions = relevantSessionsForCount.filter(s => getSessionStatusSafe(s) === 'past');
 
-
-
   // Scroll to calendar function
   const scrollToCalendar = () => {
     if (calendarRef.current) {
@@ -273,22 +270,22 @@ const Sessions: React.FC = () => {
             <header className="flex flex-wrap items-center justify-between gap-4 mb-8">
               <h1 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white leading-tight tracking-[-0.033em]">Classes/Batches</h1>
               {canCreateSession && (
-                <Link
-                  to="/sessions/create"
-                  className="flex min-w-[84px] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-5 bg-gradient-to-r from-orange-500 to-[#f04129] text-white text-sm font-bold leading-normal tracking-[0.015em] hover:from-orange-600 hover:to-[#d63a25] transition-all"
+                <div
+                  className="flex min-w-[84px] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-5 bg-gradient-to-r from-orange-500 to-[#f04129] text-white text-sm font-bold leading-normal tracking-[0.015em] opacity-50"
                 >
                   <span className="material-symbols-outlined text-xl">add</span>
                   <span className="truncate">Create New Class</span>
-                </Link>
+                </div>
               )}
             </header>
-            <div className="flex items-center justify-center py-12">
-              <div className="flex flex-col items-center">
-                <svg className="animate-spin h-8 w-8 text-[#f04129] mb-4" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
-                </svg>
-                <p className="text-[#8a7b60] dark:text-gray-400">Loading classes/batches...</p>
+            <div className="flex flex-col md:grid md:grid-cols-12 gap-4 md:gap-8 items-start">
+              <div className="w-full md:col-span-4 md:order-2">
+                <SkeletonCard variant="card" className="h-[430px]" />
+              </div>
+              <div className="w-full md:col-span-8 md:order-1">
+                <div className="grid grid-cols-1 gap-4 md:gap-6 w-full">
+                  <SkeletonCard variant="card" className="h-48" count={6} />
+                </div>
               </div>
             </div>
           </main>
@@ -473,7 +470,7 @@ const Sessions: React.FC = () => {
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 w-full">
+                  <div className="grid grid-cols-1 gap-4 md:gap-6 w-full">
                     {displayedSessions.slice(0, 7).map((session) => {
                       // Get status using guarded function
                       const sessionStatus = getSessionStatusSafe(session);
