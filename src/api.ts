@@ -81,9 +81,6 @@ api.interceptors.request.use(
     }
 
     // HttpOnly cookies automatically sent
-    if (false) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
     return config;
   },
   (error) => {

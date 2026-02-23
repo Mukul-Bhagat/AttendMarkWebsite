@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import React from 'react';
 import { render, screen } from '@testing-library/react';
 import SessionCalendar from '../SessionCalendar';
 import { ISession } from '../../types';
@@ -24,8 +23,8 @@ const buildSession = (overrides: Partial<ISession> = {}): ISession => ({
 
 describe('SessionCalendar', () => {
   it('renders mode label based on sessions', () => {
-    const onDateSelect = () => {};
-    const onMonthChange = () => {};
+    const onDateSelect = () => { };
+    const onMonthChange = () => { };
     const currentMonth = new Date('2026-02-01T00:00:00.000Z');
 
     const { rerender } = render(

@@ -14,7 +14,6 @@
 
 import api from '../api';
 
-import { appLogger } from '../shared/logger';
 const API_BASE = '/api/attendance';
 
 export interface AdjustAttendancePayload {

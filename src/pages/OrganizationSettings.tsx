@@ -27,8 +27,6 @@ const OrganizationSettings: React.FC = () => {
     const [cropFile, setCropFile] = useState<File | null>(null);
 
     const allowedLogoTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    const allowedRatios = [1 / 1, 3 / 4, 9 / 16];
-    const ratioTolerance = 0.03;
 
     const validateLogoFile = async (file: File) => {
         if (!allowedLogoTypes.includes(file.type)) {

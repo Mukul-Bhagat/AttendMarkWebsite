@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { nowIST, toISTDateString, formatIST } from '../utils/time';
-import { IClassBatch, ISession } from '../types';
+import { IClassBatch } from '../types';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts';
 import jsPDF from 'jspdf';
 import { useAuth } from '../contexts/AuthContext';
-import ReportApprovalPanel from '../components/ReportApprovalPanel';
-import SessionAttendanceView from '../components/SessionAttendanceView';
+import ReportApprovalPanel from '../components/attendance/reporting/ReportApprovalPanel';
+import SessionAttendanceView from '../components/attendance/SessionAttendanceView';
 import SkeletonCard from '../components/SkeletonCard';
 import { appLogger } from '../shared/logger';
 

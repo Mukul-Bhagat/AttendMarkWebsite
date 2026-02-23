@@ -14,7 +14,6 @@
 
 import { nowIST, sessionTimeToIST, formatIST } from './time';
 
-import { appLogger } from '../shared/logger';
 export interface GeolocationOptions {
   /**
    * Enable high accuracy GPS

@@ -12,7 +12,7 @@ import ModeSelector from '../components/ModeSelector';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import ModeBadge from '../components/ModeBadge';
 import Toast from '../components/Toast';
-import { toISTDateString } from '../utils/time';
+import { toISTDateString, nowIST } from '../utils/time';
 import { normalizeSessionMode, type SessionMode } from '../utils/sessionMode';
 import { appLogger } from '../shared/logger';
 import SkeletonCard from '../components/SkeletonCard';
