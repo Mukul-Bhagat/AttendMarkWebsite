@@ -21,6 +21,10 @@ const SessionDetails: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showUsersModal, setShowUsersModal] = useState(false);
   const [userSearch, setUserSearch] = useState('');
+  const [qrToken, setQrToken] = useState('');
+  const [qrExpiresAt, setQrExpiresAt] = useState<string | null>(null);
+  const [qrTokenError, setQrTokenError] = useState('');
+  const [isQrLoading, setIsQrLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isSuperAdmin, isSessionAdmin, isEndUser } = useAuth();
@@ -124,6 +128,38 @@ const SessionDetails: React.FC = () => {
 
     fetchSession();
   }, [id, isEndUser, location.search]);
+
+  useEffect(() => {
+    if (!id || isEndUser || !session || session.isCancelled) {
+      return;
+    }
+
+    const fetchQrToken = async () => {
+      try {
+        setIsQrLoading(true);
+        setQrTokenError('');
+
+        const query = new URLSearchParams(location.search);
+        const dateParam = query.get('date');
+        const requestUrl = dateParam
+          ? `/api/sessions/${id}/qr-token?date=${encodeURIComponent(dateParam)}`
+          : `/api/sessions/${id}/qr-token`;
+
+        const { data } = await api.get(requestUrl);
+        setQrToken(data?.token || '');
+        setQrExpiresAt(data?.expiresAt || null);
+      } catch (err: any) {
+        setQrToken('');
+        setQrExpiresAt(null);
+        setQrTokenError('Unable to generate secure QR token. Falling back to legacy QR.');
+        appLogger.error('Failed to fetch QR token:', err);
+      } finally {
+        setIsQrLoading(false);
+      }
+    };
+
+    fetchQrToken();
+  }, [id, isEndUser, session, location.search]);
 
   const handleDelete = async () => {
     if (!id) return;
@@ -234,7 +270,11 @@ const SessionDetails: React.FC = () => {
 
   // The value of the QR code will be a deep link URL to the scan page
   // This allows students to scan with their system camera or Google Lens
-  const qrValue = session._id ? `${window.location.origin}/scan/${session._id}` : '';
+  const qrValue = qrToken
+    ? `${window.location.origin}/scan?token=${encodeURIComponent(qrToken)}`
+    : session._id
+      ? `${window.location.origin}/scan?sessionId=${session._id}`
+      : '';
 
   const formatDate = (dateString: string) => {
     try {
@@ -510,6 +550,17 @@ const SessionDetails: React.FC = () => {
                       includeMargin={true}
                     />
                   </div>
+                  {isQrLoading && (
+                    <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">Generating secure QR token...</p>
+                  )}
+                  {!isQrLoading && qrExpiresAt && (
+                    <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                      Expires at {new Date(qrExpiresAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  )}
+                  {qrTokenError && (
+                    <p className="mt-3 text-xs text-orange-600 dark:text-orange-400">{qrTokenError}</p>
+                  )}
                 </div>
                 <footer className="mt-6 w-full">
                   <span className="inline-block bg-gray-100 dark:bg-background-dark text-[#181511] dark:text-gray-300 px-3 py-1 rounded-md font-mono text-sm mb-3 break-all">

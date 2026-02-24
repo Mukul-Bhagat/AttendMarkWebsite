@@ -3,7 +3,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { getOrCreateDeviceId } from '../utils/deviceId';
-import { extractSessionIdFromQR } from '../utils/qrParser';
+import { parseQrContent } from '../utils/qrParser';
 import { RefreshCw, ArrowLeft } from 'lucide-react';
 import { ISession } from '../types';
 import { FullScreenAnimation } from '../components/FullScreenAnimation';
@@ -18,12 +18,16 @@ import { formatIST } from '../utils/time';
 import { appLogger } from '../shared/logger';
 const ScanQR: React.FC = () => {
   const [searchParams] = useSearchParams();
+  const qrTokenFromUrl = searchParams.get('token') || searchParams.get('qrToken');
   const sessionIdFromUrl = searchParams.get('sessionId');
 
   const navigate = useNavigate();
 
   // View State Management
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(sessionIdFromUrl || null);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
+    qrTokenFromUrl ? null : (sessionIdFromUrl || null)
+  );
+  const [directQrToken, setDirectQrToken] = useState<string | null>(qrTokenFromUrl || null);
   const [sessions, setSessions] = useState<ISession[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [sessionError, setSessionError] = useState('');
@@ -47,6 +51,21 @@ const ScanQR: React.FC = () => {
   } | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const qrCodeRegionId = 'qr-reader';
+  const hasAutoSubmittedRef = useRef(false);
+
+  useEffect(() => {
+    if (qrTokenFromUrl) {
+      setDirectQrToken(qrTokenFromUrl);
+      setSelectedSessionId(null);
+      hasAutoSubmittedRef.current = false;
+      return;
+    }
+
+    setDirectQrToken(null);
+    if (sessionIdFromUrl) {
+      setSelectedSessionId(sessionIdFromUrl);
+    }
+  }, [qrTokenFromUrl, sessionIdFromUrl]);
   const isLocationError = (reason?: string) => {
     if (!reason) return false;
     const locationReasons = new Set([
@@ -87,7 +106,7 @@ const ScanQR: React.FC = () => {
   // Fetch session info when selectedSessionId changes
   useEffect(() => {
     const fetchSessionInfo = async () => {
-      if (selectedSessionId) {
+      if (selectedSessionId && !directQrToken) {
         try {
           const { data } = await api.get(`/api/sessions/${selectedSessionId}`);
           setSessionInfo(data);
@@ -98,10 +117,15 @@ const ScanQR: React.FC = () => {
     };
 
     fetchSessionInfo();
-  }, [selectedSessionId]);
+  }, [selectedSessionId, directQrToken]);
 
   // Start scanning when selectedSessionId is set
   useEffect(() => {
+    if (directQrToken) {
+      stopScanning();
+      return;
+    }
+
     if (selectedSessionId) {
       startScanning();
     } else {
@@ -112,7 +136,7 @@ const ScanQR: React.FC = () => {
     return () => {
       stopScanning();
     };
-  }, [selectedSessionId]);
+  }, [selectedSessionId, directQrToken]);
 
   // State for current time - used to trigger re-renders and calculations
   const [currentTime, setCurrentTime] = useState(nowIST());
@@ -182,7 +206,7 @@ const ScanQR: React.FC = () => {
 
   const startScanning = async () => {
     // Prevent starting if already scanning or if scanner is paused
-    if (isScanning || scannerRef.current || isScannerPaused || !selectedSessionId) {
+    if (directQrToken || isScanning || scannerRef.current || isScannerPaused || !selectedSessionId) {
       return;
     }
 
@@ -287,10 +311,10 @@ const ScanQR: React.FC = () => {
     // Stop scanning immediately
     await stopScanning();
 
-    // Parse sessionId from QR content (handles both URL and raw sessionId)
-    const extractedSessionId = extractSessionIdFromQR(scannedQRContent);
+    // Parse qrToken/sessionId from QR content (handles URL, raw token, legacy)
+    const { qrToken, sessionId: extractedSessionId } = parseQrContent(scannedQRContent);
 
-    if (!extractedSessionId) {
+    if (!qrToken && !extractedSessionId) {
       setMessageType('error');
       setMessage('Invalid QR code. Please scan a valid session QR code.');
       setIsProcessing(false);
@@ -299,7 +323,7 @@ const ScanQR: React.FC = () => {
     }
 
     // Validate that scanned QR matches selected session (if one is selected)
-    if (selectedSessionId && extractedSessionId !== selectedSessionId) {
+    if (selectedSessionId && extractedSessionId && extractedSessionId !== selectedSessionId) {
       setMessageType('error');
       setMessage('QR code does not match the selected session. Please scan the correct QR code.');
       setIsProcessing(false);
@@ -307,10 +331,9 @@ const ScanQR: React.FC = () => {
       return;
     }
 
-    // Use extracted sessionId (from QR) or selectedSessionId as fallback
-    const sessionId = extractedSessionId || selectedSessionId;
+    const resolvedSessionId = qrToken ? undefined : (extractedSessionId || selectedSessionId);
 
-    if (!sessionId) {
+    if (!qrToken && !resolvedSessionId) {
       setMessageType('error');
       setMessage('Could not determine session ID. Please try again.');
       setIsProcessing(false);
@@ -325,7 +348,12 @@ const ScanQR: React.FC = () => {
     const timestamp = nowIST();
     const deviceId = getOrCreateDeviceId();
     const userAgent = navigator.userAgent;
-    const basePayload = { sessionId, deviceId, userAgent, timestamp };
+    const basePayload = {
+      deviceId,
+      userAgent,
+      timestamp,
+      ...(qrToken ? { qrToken } : { sessionId: resolvedSessionId }),
+    };
 
     const firstAttempt = await submitAttendance(basePayload);
     if (firstAttempt.ok) {
@@ -417,10 +445,20 @@ const ScanQR: React.FC = () => {
     handleScanFailure(firstAttempt.error);
   };
 
+  useEffect(() => {
+    if (!directQrToken || hasAutoSubmittedRef.current) {
+      return;
+    }
+
+    hasAutoSubmittedRef.current = true;
+    handleScan(directQrToken);
+  }, [directQrToken]);
+
   const submitAttendance = async (payload: Record<string, any>) => {
     try {
       appLogger.info('[ATTENDANCE_SCAN] Sending request:', {
         sessionId: payload.sessionId,
+        hasQrToken: !!payload.qrToken,
         hasLocation: !!payload.userLocation,
         accuracy: payload.accuracy,
       });
@@ -461,6 +499,8 @@ const ScanQR: React.FC = () => {
       setMessage('Device Mismatch: Attendance must be marked from the same device/browser used earlier.');
     } else if (data.reason === 'INVALID_QR') {
       setMessage('Invalid QR Code. Please scan the correct code.');
+    } else if (data.reason === 'ORG_MISMATCH') {
+      setMessage('This QR code does not belong to your organization.');
     } else if (data.reason === 'USER_NOT_ASSIGNED') {
       setMessage('Access Denied: You are not assigned to this session.');
     } else if (data.type === 'TOO_EARLY' || data.reason === 'ATTENDANCE_WINDOW_CLOSED') {
@@ -482,6 +522,12 @@ const ScanQR: React.FC = () => {
     // Stop any existing scanner
     await stopScanning();
 
+    if (directQrToken) {
+      hasAutoSubmittedRef.current = false;
+      handleScan(directQrToken);
+      return;
+    }
+
     // Small delay to ensure cleanup, then restart
     setTimeout(() => {
       startScanning();
@@ -496,11 +542,16 @@ const ScanQR: React.FC = () => {
     setIsProcessing(false);
     setCameraError(false);
     setIsScannerPaused(false);
+    setDirectQrToken(null);
+    hasAutoSubmittedRef.current = false;
     stopScanning();
+    if (qrTokenFromUrl) {
+      navigate('/scan', { replace: true });
+    }
   };
 
-  // If selectedSessionId is set, show the Scanner View
-  if (selectedSessionId) {
+  // If selectedSessionId or direct token is set, show the Scanner View
+  if (selectedSessionId || directQrToken) {
     // Success State
     if (isSuccess) {
       const isAlreadyMarked = sessionInfo?.status === 'ALREADY_MARKED';

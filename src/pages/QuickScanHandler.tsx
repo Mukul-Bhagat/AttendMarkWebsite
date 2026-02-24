@@ -77,14 +77,13 @@ const QuickScanHandler: React.FC = () => {
         const timestamp = nowIST();
         const deviceId = getOrCreateDeviceId();
         const userAgent = navigator.userAgent;
-        const token = searchParams.get('token');
+        const qrToken = searchParams.get('token') || searchParams.get('qrToken');
 
         const basePayload = {
-          sessionId,
           deviceId,
           userAgent,
           timestamp,
-          ...(token && { token }),
+          ...(qrToken ? { qrToken } : { sessionId }),
         };
 
         const firstAttempt = await submitAttendance(basePayload);
@@ -150,6 +149,7 @@ const QuickScanHandler: React.FC = () => {
     try {
       appLogger.info('[ATTENDANCE_SCAN] Sending request:', {
         sessionId: payload.sessionId,
+        hasQrToken: !!payload.qrToken,
         hasLocation: !!payload.userLocation,
         accuracy: payload.accuracy,
       });
@@ -192,6 +192,11 @@ const QuickScanHandler: React.FC = () => {
       setErrorDetails({
         title: 'Invalid or Expired QR Code',
         desc: 'Please scan the QR displayed by the instructor.'
+      });
+    } else if (data.reason === 'ORG_MISMATCH') {
+      setErrorDetails({
+        title: 'Organization Mismatch',
+        desc: 'This QR code does not belong to your organization.'
       });
     } else {
       setErrorDetails({

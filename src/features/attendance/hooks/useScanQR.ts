@@ -3,14 +3,15 @@ import { useCallback, useMemo, useState } from 'react';
 import api from '../../../api';
 
 export interface ScanAttendancePayload {
-  sessionId: string;
-  userLocation: {
+  sessionId?: string;
+  qrToken?: string;
+  userLocation?: {
     latitude: number;
     longitude: number;
   };
   deviceId: string;
   userAgent: string;
-  accuracy: number;
+  accuracy?: number;
   timestamp: number;
 }
 
@@ -59,6 +60,12 @@ export const useScanQR = ({
     async (payload: ScanAttendancePayload): Promise<ScanAttendanceResponse | null> => {
       if (!canScan(role)) {
         setError('Not authorized to scan attendance.');
+        setResult(null);
+        return null;
+      }
+
+      if (!payload.sessionId && !payload.qrToken) {
+        setError('Session ID or QR token is required.');
         setResult(null);
         return null;
       }

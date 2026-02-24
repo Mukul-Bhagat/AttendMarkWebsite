@@ -193,6 +193,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const { user } = response.data;
 
+      // Clear org-scoped UI state/cache before applying new context
+      try {
+        sessionStorage.clear();
+      } catch {
+        // Ignore storage errors (private mode / disabled storage)
+      }
+
       // Update user state
       setToken('cookie-auth');
       setUser(normalizeAuthUser(user));
