@@ -125,6 +125,25 @@ api.interceptors.response.use(
     const originalRequest = error.config;
     const url = originalRequest?.url || '';
 
+    // Handle invalid CSRF token once per request by refetching token and retrying.
+    if (
+      error.response?.status === 403 &&
+      (error.response?.data?.msg === 'Invalid CSRF token' ||
+        error.response?.data?.message === 'Invalid CSRF token') &&
+      !originalRequest?._csrfRetry
+    ) {
+      originalRequest._csrfRetry = true;
+      csrfToken = null;
+      try {
+        const token = await fetchCsrfToken();
+        originalRequest.headers = originalRequest.headers ?? {};
+        originalRequest.headers['X-CSRF-Token'] = token;
+        return api(originalRequest);
+      } catch (csrfErr) {
+        return Promise.reject(csrfErr);
+      }
+    }
+
     // Skip auth error handling for public routes
     const isPublicRoute =
       url.includes('/api/auth/register') ||
