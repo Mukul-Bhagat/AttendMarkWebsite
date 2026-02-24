@@ -6,11 +6,9 @@
  * Full transparency component for viewing attendance modification history
  * 
  * Access Control:
- * - CompanyAdmin: Full access to own org
+ * - CompanyAdmin/SuperAdmin: Full access to own org
  * - PLATFORM_OWNER: Full access to all orgs
- * - Manager: Read-only access to own sessions
- * - SessionAdmin: Read-only access to own sessions
- * - EndUser: NO ACCESS
+ * - Manager/SessionAdmin/EndUser: NO ACCESS
  * 
  * ============================================================================
  */
@@ -83,7 +81,7 @@ const AttendanceAuditViewer: React.FC<AttendanceAuditViewerProps> = ({
                 <div className="bg-white dark:bg-slate-800 rounded-lg shadow-2xl p-6 max-w-md">
                     <h3 className="text-xl font-bold text-red-600 mb-4">Access Denied</h3>
                     <p className="text-gray-700 dark:text-gray-300">
-                        You do not have permission to view the audit trail.
+                        Audit trails are restricted to Company Admins and Platform Owners.
                     </p>
                     <button
                         onClick={onClose}

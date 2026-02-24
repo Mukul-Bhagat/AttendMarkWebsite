@@ -28,6 +28,7 @@ const Layout: React.FC = () => {
     const path = location.pathname;
     if (path === '/platform/dashboard') return 'Platform Dashboard';
     if (path === '/platform/audit-logs') return 'Audit Logs';
+    if (path === '/admin/audit-logs') return 'Audit Logs';
     if (path === '/dashboard') return 'Dashboard';
     if (path.startsWith('/classes')) return 'Classes/Batches';
     if (path.startsWith('/sessions')) return 'Sessions';
@@ -212,6 +213,12 @@ const Layout: React.FC = () => {
                     {(isCompanyAdmin || isPlatformOwner) && (
                       <li>
                         <NavLinkItem to="/backup" icon="cloud_download">Data Backup</NavLinkItem>
+                      </li>
+                    )}
+
+                    {(isCompanyAdmin || isSuperAdmin || isPlatformOwner) && (
+                      <li>
+                        <NavLinkItem to="/admin/audit-logs" icon="history">Audit Logs</NavLinkItem>
                       </li>
                     )}
 
@@ -415,6 +422,12 @@ const Layout: React.FC = () => {
                     {(isCompanyAdmin || isPlatformOwner) && (
                       <li>
                         <NavLinkItem to="/backup" icon="cloud_download">Data Backup</NavLinkItem>
+                      </li>
+                    )}
+
+                    {(isCompanyAdmin || isSuperAdmin || isPlatformOwner) && (
+                      <li>
+                        <NavLinkItem to="/admin/audit-logs" icon="history">Audit Logs</NavLinkItem>
                       </li>
                     )}
 

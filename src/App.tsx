@@ -22,6 +22,7 @@ import Leaves from './pages/Leaves';
 import QuickScanHandler from './pages/QuickScanHandler';
 import PlatformDashboard from './pages/PlatformDashboard';
 import PlatformAuditLogs from './pages/PlatformAuditLogs';
+import AdminAuditLogs from './pages/AdminAuditLogs';
 import AdminNotifications from './pages/AdminNotifications';
 import DataBackup from './pages/DataBackup';
 import EmailAutomationSettings from './pages/EmailAutomationSettings';
@@ -205,6 +206,7 @@ function App() {
         >
           <Route element={<Layout />}>
             <Route path="/manage-users" element={<ManageUsers />} />
+            <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
           </Route>
         </Route>
 
