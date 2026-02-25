@@ -501,6 +501,10 @@ const ScanQR: React.FC = () => {
       setMessage('Invalid QR Code. Please scan the correct code.');
     } else if (data.reason === 'ORG_MISMATCH') {
       setMessage('This QR code does not belong to your organization.');
+    } else if (data.reason === 'ORG_FORBIDDEN') {
+      setMessage('You do not have access to the organization that issued this QR code.');
+    } else if (data.reason === 'SECURE_QR_REQUIRED') {
+      setMessage('Secure QR required. Please scan the latest QR displayed by the instructor.');
     } else if (data.reason === 'USER_NOT_ASSIGNED') {
       setMessage('Access Denied: You are not assigned to this session.');
     } else if (data.type === 'TOO_EARLY' || data.reason === 'ATTENDANCE_WINDOW_CLOSED') {
@@ -557,12 +561,13 @@ const ScanQR: React.FC = () => {
       const isAlreadyMarked = sessionInfo?.status === 'ALREADY_MARKED';
       const subText = isAlreadyMarked ? '\n(Attendance was already recorded earlier)' : '';
       const sessionDate = sessionInfo?.sessionDate || '';
+      const orgLine = sessionInfo?.organizationName ? `\nOrganization: ${sessionInfo.organizationName}` : '';
 
       return (
         <FullScreenAnimation
           src="/animations/success.lottie"
           title={isAlreadyMarked ? 'Attendance Already Marked' : 'Attendance Marked Successfully'}
-          description={`Class: ${sessionInfo?.className || 'Class'}\nSession: ${sessionInfo?.name || sessionInfo?.sessionName || 'Session'}\nDate: ${sessionDate}${subText}`}
+          description={`Class: ${sessionInfo?.className || 'Class'}\nSession: ${sessionInfo?.name || sessionInfo?.sessionName || 'Session'}\nDate: ${sessionDate}${orgLine}${subText}`}
           loop={false}
         />
       );

@@ -23,6 +23,8 @@ export interface ScanAttendanceResponse {
   className: string;
   sessionDate: string;
   distanceMeters: number;
+  organizationId?: string;
+  organizationName?: string;
 }
 
 type ScanAttendanceFn = (

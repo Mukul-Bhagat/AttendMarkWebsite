@@ -141,9 +141,11 @@ const SessionDetails: React.FC = () => {
 
         const query = new URLSearchParams(location.search);
         const dateParam = query.get('date');
-        const requestUrl = dateParam
-          ? `/api/sessions/${id}/qr-token?date=${encodeURIComponent(dateParam)}`
-          : `/api/sessions/${id}/qr-token`;
+        const resolvedDate = session?.occurrenceDate || dateParam || undefined;
+        const qrSessionId = session?._id || id;
+        const requestUrl = resolvedDate
+          ? `/api/sessions/${qrSessionId}/qr-token?date=${encodeURIComponent(resolvedDate)}`
+          : `/api/sessions/${qrSessionId}/qr-token`;
 
         const { data } = await api.get(requestUrl);
         setQrToken(data?.token || '');
@@ -151,7 +153,7 @@ const SessionDetails: React.FC = () => {
       } catch (err: any) {
         setQrToken('');
         setQrExpiresAt(null);
-        setQrTokenError('Unable to generate secure QR token. Falling back to legacy QR.');
+        setQrTokenError('Unable to generate secure QR token.');
         appLogger.error('Failed to fetch QR token:', err);
       } finally {
         setIsQrLoading(false);
@@ -270,11 +272,13 @@ const SessionDetails: React.FC = () => {
 
   // The value of the QR code will be a deep link URL to the scan page
   // This allows students to scan with their system camera or Google Lens
+  const allowLegacyQr = import.meta.env.VITE_ALLOW_LEGACY_QR === 'true';
   const qrValue = qrToken
     ? `${window.location.origin}/scan?token=${encodeURIComponent(qrToken)}`
-    : session._id
+    : (allowLegacyQr && session._id)
       ? `${window.location.origin}/scan?sessionId=${session._id}`
       : '';
+  const hasQrValue = Boolean(qrValue);
 
   const formatDate = (dateString: string) => {
     try {
@@ -542,14 +546,26 @@ const SessionDetails: React.FC = () => {
                 )}
                 <div className="w-full">
                   <h2 className="text-xl font-semibold text-[#181511] dark:text-white mb-6">Scan this code for attendance</h2>
-                  <div className="w-64 h-64 sm:w-80 sm:h-80 border border-gray-200 dark:border-gray-700 rounded-lg flex items-center justify-center p-4 mx-auto bg-gray-50 dark:bg-background-dark">
-                    <QRCodeSVG
-                      value={qrValue}
-                      size={256}
-                      level={'H'}
-                      includeMargin={true}
-                    />
-                  </div>
+                  {hasQrValue ? (
+                    <div className="w-64 h-64 sm:w-80 sm:h-80 border border-gray-200 dark:border-gray-700 rounded-lg flex items-center justify-center p-4 mx-auto bg-gray-50 dark:bg-background-dark">
+                      <QRCodeSVG
+                        value={qrValue}
+                        size={256}
+                        level={'H'}
+                        includeMargin={true}
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-64 h-64 sm:w-80 sm:h-80 border border-red-200 dark:border-red-800 rounded-lg flex flex-col items-center justify-center p-4 mx-auto bg-red-50 dark:bg-red-900/20 text-center">
+                      <span className="material-symbols-outlined text-4xl text-red-500 dark:text-red-400 mb-2">error</span>
+                      <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+                        Secure QR unavailable
+                      </p>
+                      <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+                        Please refresh or contact support. Legacy QR is disabled for security.
+                      </p>
+                    </div>
+                  )}
                   {isQrLoading && (
                     <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">Generating secure QR token...</p>
                   )}

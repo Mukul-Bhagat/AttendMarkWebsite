@@ -62,6 +62,26 @@ const fetchCsrfToken = async (): Promise<string> => {
   return csrfTokenPromise;
 };
 
+const normalizeRequestPath = (url?: string): string => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    try {
+      return new URL(url).pathname;
+    } catch {
+      return url;
+    }
+  }
+  return url.startsWith('/') ? url : `/${url}`;
+};
+
+const isCsrfExempt = (url?: string): boolean => {
+  const path = normalizeRequestPath(url);
+  if (!path) return false;
+  if (path.startsWith('/api/auth/')) return true;
+  if (path === '/api/attendance/scan' || path === '/api/v1/attendance/scan') return true;
+  return false;
+};
+
 if (typeof window !== 'undefined') {
   fetchCsrfToken().catch((error) => {
     appLogger.warn('Failed to prefetch CSRF token', error);
@@ -74,7 +94,7 @@ api.interceptors.request.use(
     const method = (config.method || 'get').toLowerCase();
     const requiresCsrf = ['post', 'put', 'patch', 'delete'].includes(method);
 
-    if (requiresCsrf) {
+    if (requiresCsrf && !isCsrfExempt(config.url)) {
       const token = await fetchCsrfToken();
       config.headers = config.headers ?? {};
       config.headers['X-CSRF-Token'] = token;

@@ -17,6 +17,8 @@ interface ScanResponse {
   className?: string;
   sessionDate?: string;
   distanceMeters?: number;
+  organizationId?: string;
+  organizationName?: string;
 }
 
 const QuickScanHandler: React.FC = () => {
@@ -193,6 +195,16 @@ const QuickScanHandler: React.FC = () => {
         title: 'Invalid or Expired QR Code',
         desc: 'Please scan the QR displayed by the instructor.'
       });
+    } else if (data.reason === 'SECURE_QR_REQUIRED') {
+      setErrorDetails({
+        title: 'Secure QR Required',
+        desc: 'This QR code is no longer supported. Please scan the latest QR displayed by the instructor.'
+      });
+    } else if (data.reason === 'ORG_FORBIDDEN') {
+      setErrorDetails({
+        title: 'Organization Access Denied',
+        desc: 'You do not have access to the organization that issued this QR code.'
+      });
     } else if (data.reason === 'ORG_MISMATCH') {
       setErrorDetails({
         title: 'Organization Mismatch',
@@ -221,12 +233,13 @@ const QuickScanHandler: React.FC = () => {
   if (status === 'success' && responseData) {
     const isAlreadyMarked = responseData.status === 'ALREADY_MARKED';
     const subText = isAlreadyMarked ? '\n(Attendance was already recorded earlier)' : '';
+    const orgLine = responseData.organizationName ? `\nOrganization: ${responseData.organizationName}` : '';
 
     return (
       <FullScreenAnimation
         src="/animations/success.lottie"
         title={isAlreadyMarked ? 'Attendance Already Marked' : 'Attendance Marked Successfully'}
-        description={`Class: ${responseData.className || 'Unknown'}\nSession: ${responseData.sessionName || 'Unknown'}\nDate: ${responseData.sessionDate || ''}${subText}`}
+        description={`Class: ${responseData.className || 'Unknown'}\nSession: ${responseData.sessionName || 'Unknown'}\nDate: ${responseData.sessionDate || ''}${orgLine}${subText}`}
         loop={false}
       />
     );
