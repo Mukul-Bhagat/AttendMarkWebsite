@@ -470,7 +470,7 @@ const AuditLogsPage: React.FC<AuditLogsPageProps> = ({ scope }) => {
                   <p className="text-sm text-text-primary-light dark:text-white">None</p>
                 ) : (
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {diffData.changedFields.map((field) => (
+                    {diffData.changedFields.map((field: string) => (
                       <span
                         key={field}
                         className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200"
