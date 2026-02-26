@@ -52,6 +52,12 @@ const ScanQR: React.FC = () => {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const qrCodeRegionId = 'qr-reader';
   const hasAutoSubmittedRef = useRef(false);
+  const isProcessingRef = useRef(false);
+  const isScannerPausedRef = useRef(false);
+
+  // Keep refs in sync with state for use in scanner closure callbacks
+  useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
+  useEffect(() => { isScannerPausedRef.current = isScannerPaused; }, [isScannerPaused]);
 
   useEffect(() => {
     if (qrTokenFromUrl) {
@@ -260,7 +266,7 @@ const ScanQR: React.FC = () => {
         },
         (decodedText) => {
           // QR code detected - only process if scanner is not paused
-          if (!isScannerPaused && !isProcessing) {
+          if (!isScannerPausedRef.current && !isProcessingRef.current) {
             handleScan(decodedText);
           }
         },
@@ -303,10 +309,11 @@ const ScanQR: React.FC = () => {
   };
 
   const handleScan = async (scannedQRContent: string) => {
-    if (isProcessing || !scannedQRContent || isScannerPaused) return;
+    if (isProcessingRef.current || !scannedQRContent || isScannerPausedRef.current) return;
 
     // PAUSE SCANNER IMMEDIATELY to prevent multiple scans
     setIsScannerPaused(true);
+    isScannerPausedRef.current = true;
 
     // Stop scanning immediately
     await stopScanning();
@@ -342,6 +349,7 @@ const ScanQR: React.FC = () => {
     }
 
     setIsProcessing(true);
+    isProcessingRef.current = true;
     setMessageType('info');
     setMessage('Validating session...');
 
@@ -387,11 +395,13 @@ const ScanQR: React.FC = () => {
             return;
           }
 
-          if (accuracy > 40) {
+          if (accuracy > 200) {
             setMessageType('error');
-            setMessage(`GPS accuracy is too low (${Math.round(accuracy)}m). Please enable high-accuracy GPS and ensure you have a clear view of the sky. Maximum allowed accuracy: 40m.`);
+            setMessage(`GPS accuracy is too low (${Math.round(accuracy)}m). Please enable high-accuracy GPS and ensure you have a clear view of the sky. Maximum allowed accuracy: 200m.`);
             setIsProcessing(false);
+            isProcessingRef.current = false;
             setIsScannerPaused(false);
+            isScannerPausedRef.current = false;
             return;
           }
 
