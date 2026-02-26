@@ -100,6 +100,13 @@ api.interceptors.request.use(
       config.headers['X-CSRF-Token'] = token;
     }
 
+    // Add Authorization header
+    const authToken = localStorage.getItem('token');
+    if (authToken) {
+      config.headers = config.headers ?? {};
+      config.headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
     // HttpOnly cookies automatically sent
     return config;
   },

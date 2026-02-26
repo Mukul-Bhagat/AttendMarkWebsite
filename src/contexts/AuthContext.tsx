@@ -113,8 +113,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         currentPath.startsWith('/reset-password') ||
         currentPath === '/landing';
 
-      // If on a public route, skip auth initialization completely
-      // Set loading to false immediately to prevent blocking
       if (isPublicRoute) {
         setIsLoading(false);
         setUser(null);
@@ -127,11 +125,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const { user } = response.data;
 
         setUser(normalizeAuthUser(user));
-        setToken('cookie-auth');
+        setToken(localStorage.getItem('token') || 'cookie-auth');
       } catch (err: any) {
         appLogger.error('Failed to verify session:', err);
         setToken(null);
         setUser(null);
+        localStorage.removeItem('token');
       }
       setIsLoading(false);
     };
@@ -144,7 +143,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(true);
     try {
       if (formDataOrAuth.user) {
-        setToken('cookie-auth');
+        setToken(localStorage.getItem('token') || 'cookie-auth');
         setUser(normalizeAuthUser(formDataOrAuth.user));
         setIsLoading(false);
         return;
@@ -166,6 +165,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     setToken(null);
     setUser(null);
+    localStorage.removeItem('token');
     api.post('/api/auth/logout').catch(console.error);
   };
 
@@ -191,9 +191,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         organizationId,
       });
 
-      const { user } = response.data;
+      const { user, token: newAccessToken } = response.data;
 
       // Clear org-scoped UI state/cache before applying new context
+      localStorage.removeItem('token'); // Clears token on org switch
       try {
         sessionStorage.clear();
       } catch {
@@ -201,7 +202,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       // Update user state
-      setToken('cookie-auth');
+      if (newAccessToken) {
+        setToken(newAccessToken);
+        localStorage.setItem('token', newAccessToken);
+      } else {
+        setToken('cookie-auth');
+      }
       setUser(normalizeAuthUser(user));
 
       // Reload the page to refresh the dashboard with new organization context
