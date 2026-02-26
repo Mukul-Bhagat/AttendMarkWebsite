@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { getOrCreateDeviceId } from '../utils/deviceId';
@@ -255,14 +255,22 @@ const ScanQR: React.FC = () => {
         }
       }
 
-      const html5QrCode = new Html5Qrcode(qrCodeRegionId);
+      const html5QrCode = new Html5Qrcode(qrCodeRegionId, {
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+        verbose: false,
+        useBarCodeDetectorIfSupported: true,
+      });
       scannerRef.current = html5QrCode;
 
       await html5QrCode.start(
         { facingMode: 'environment' }, // Use back camera
         {
-          fps: 10, // Frames per second
-          qrbox: { width: 250, height: 250 }, // Scanning box size
+          fps: 5, // Lower fps = more processing time per frame for dense QR codes
+          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+            const minDim = Math.min(viewfinderWidth, viewfinderHeight);
+            const size = Math.floor(minDim * 0.85); // 85% of smallest dimension
+            return { width: size, height: size };
+          },
         },
         (decodedText) => {
           // QR code detected - only process if scanner is not paused
@@ -271,7 +279,7 @@ const ScanQR: React.FC = () => {
           }
         },
         (_errorMessage) => {
-          // Error handling is done in onScanFailure callback
+          // Scan attempt failed (no QR found in frame) - this is normal, no action needed
         }
       );
 
@@ -520,7 +528,8 @@ const ScanQR: React.FC = () => {
     } else if (data.type === 'TOO_EARLY' || data.reason === 'ATTENDANCE_WINDOW_CLOSED') {
       setMessage(data.msg || 'Attendance is not open yet.');
     } else {
-      setMessage(data.msg || 'Attendance Failed');
+      const debugInfo = data.debug ? `\n[Debug: ${data.debug}]` : '';
+      setMessage((data.msg || 'Attendance Failed') + debugInfo);
     }
   };
 
