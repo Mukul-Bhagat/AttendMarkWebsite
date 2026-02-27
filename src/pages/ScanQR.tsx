@@ -581,12 +581,14 @@ const ScanQR: React.FC = () => {
       const subText = isAlreadyMarked ? '\n(Attendance was already recorded earlier)' : '';
       const sessionDate = sessionInfo?.sessionDate || '';
       const orgLine = sessionInfo?.organizationName ? `\nOrganization: ${sessionInfo.organizationName}` : '';
+      const statusLine = sessionInfo?.attendanceStatus ? `\nStatus: ${sessionInfo.attendanceStatus}${sessionInfo.attendanceStatus === 'Late' && sessionInfo.lateByMinutes ? ` (${sessionInfo.lateByMinutes}m late)` : ''}` : '';
+      const checkInLine = sessionInfo?.checkInTime ? `\nTime: ${new Date(sessionInfo.checkInTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` : '';
 
       return (
         <FullScreenAnimation
           src="/animations/success.lottie"
           title={isAlreadyMarked ? 'Attendance Already Marked' : 'Attendance Marked Successfully'}
-          description={`Class: ${sessionInfo?.className || 'Class'}\nSession: ${sessionInfo?.name || sessionInfo?.sessionName || 'Session'}\nDate: ${sessionDate}${orgLine}${subText}`}
+          description={`Class: ${sessionInfo?.className || 'Class'}\nSession: ${sessionInfo?.name || sessionInfo?.sessionName || 'Session'}\nDate: ${sessionDate}${orgLine}${statusLine}${checkInLine}${subText}`}
           loop={false}
         />
       );

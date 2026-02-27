@@ -52,7 +52,10 @@ const Dashboard: React.FC = () => {
             const upcoming = sessions
               .filter((session: ISession) => {
                 const sessionDate = sessionTimeToIST(session.startDate, session.startTime);
-                return sessionDate >= now;
+                const endDate = session.endTime
+                  ? sessionTimeToIST(session.endDate || session.startDate, session.endTime)
+                  : sessionDate + 60 * 60 * 1000; // fallback to 1 hr duration
+                return endDate >= now;
               })
               .sort((a: ISession, b: ISession) => {
                 const dateA = sessionTimeToIST(a.startDate, a.startTime);
@@ -108,6 +111,15 @@ const Dashboard: React.FC = () => {
     if (percentage >= 75) return 'text-orange-500 dark:text-orange-400';
     if (percentage > 0) return 'text-red-500 dark:text-red-400';
     return 'text-text-secondary-light dark:text-text-secondary-dark'; // No data or 0 assigned
+  };
+
+  const isSessionOngoing = (session: ISession) => {
+    const now = nowIST();
+    const startDate = sessionTimeToIST(session.startDate, session.startTime);
+    const endDate = session.endTime
+      ? sessionTimeToIST(session.endDate || session.startDate, session.endTime)
+      : startDate + 60 * 60 * 1000;
+    return now >= startDate && now <= endDate;
   };
 
   const getRoleDisplay = () => {
@@ -269,30 +281,50 @@ const Dashboard: React.FC = () => {
             <h2 className="text-xl font-bold mb-4 text-text-primary-light dark:text-text-primary-dark">Upcoming Classes/Batches</h2>
             <div className="flex flex-col gap-4">
               {upcomingSessions.length > 0 ? (
-                upcomingSessions.map((session) => (
-                  <Link
-                    key={session._id}
-                    to={`/sessions/${session._id}`}
-                    className="flex items-center justify-between p-4 rounded-lg hover:bg-[#f04129]/10 transition-colors bg-background-light dark:bg-background-dark border border-gray-100 dark:border-gray-800"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[#f04129]/20 text-[#f04129]">
-                        <span className="material-symbols-outlined text-[#f04129]">event</span>
+                upcomingSessions.map((session) => {
+                  const ongoing = isSessionOngoing(session);
+                  return (
+                    <Link
+                      key={session._id}
+                      to={`/sessions/${session._id}`}
+                      className={`flex items-center justify-between p-4 rounded-lg transition-colors bg-background-light dark:bg-background-dark ${ongoing
+                          ? 'border border-green-500 hover:bg-green-500/10'
+                          : 'border border-gray-100 dark:border-gray-800 hover:bg-[#f04129]/10'
+                        }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${ongoing ? 'bg-green-500/20 text-green-600' : 'bg-[#f04129]/20 text-[#f04129]'
+                          }`}>
+                          <span className="material-symbols-outlined">
+                            {ongoing ? 'play_circle' : 'event'}
+                          </span>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-text-primary-light dark:text-text-primary-dark">
+                              {session.classBatchId && typeof session.classBatchId === 'object'
+                                ? (session.classBatchId as any).name
+                                : session.name}
+                            </p>
+                            {ongoing && (
+                              <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                <span className="relative flex h-2 w-2">
+                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"></span>
+                                  <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500"></span>
+                                </span>
+                                Ongoing
+                              </span>
+                            )}
+                          </div>
+                          <p className={`text-sm ${ongoing ? 'text-green-700 dark:text-green-400 font-medium' : 'text-text-secondary-light dark:text-text-secondary-dark'}`}>
+                            {formatSessionDate(session.startDate, session.startTime)}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-semibold text-text-primary-light dark:text-text-primary-dark">
-                          {session.classBatchId && typeof session.classBatchId === 'object'
-                            ? session.classBatchId.name
-                            : session.name}
-                        </p>
-                        <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark">
-                          {formatSessionDate(session.startDate, session.startTime)}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark">chevron_right</span>
-                  </Link>
-                ))
+                      <span className="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark">chevron_right</span>
+                    </Link>
+                  );
+                })
               ) : (
                 <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm py-4">No upcoming classes/batches scheduled.</p>
               )}

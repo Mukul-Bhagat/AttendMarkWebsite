@@ -9,6 +9,8 @@ import Classes from './pages/Classes';
 import Sessions from './pages/Sessions';
 import CreateSession from './pages/CreateSession';
 import ClassConfigure from './pages/ClassConfigure';
+import EditClass from './pages/EditClass';
+import EditSession from './pages/EditSession';
 import SessionDetails from './pages/SessionDetails';
 import ScanQR from './pages/ScanQR';
 import MyAttendance from './pages/MyAttendance';
@@ -149,7 +151,8 @@ function App() {
           element={<ProtectedRoute allowedRoles={[Role.PLATFORM_OWNER, Role.COMPANY_ADMIN, Role.STAFF]} />}
         >
           <Route element={<Layout />}>
-            <Route path="/classes/edit/:id" element={<ClassConfigure />} />
+            <Route path="/classes/edit/:id" element={<EditClass />} />
+            <Route path="/classes/configure/:id" element={<ClassConfigure />} />
           </Route>
         </Route>
 
@@ -167,7 +170,8 @@ function App() {
           element={<ProtectedRoute allowedRoles={[Role.PLATFORM_OWNER, Role.COMPANY_ADMIN, Role.STAFF]} />}
         >
           <Route element={<Layout />}>
-            <Route path="/sessions/edit/:id" element={<SessionOverride />} />
+            <Route path="/sessions/edit/:id" element={<EditSession />} />
+            <Route path="/sessions/override/:id" element={<SessionOverride />} />
           </Route>
         </Route>
 

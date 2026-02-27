@@ -76,9 +76,12 @@ const EditSession: React.FC = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [sendNotification, setSendNotification] = useState(false);
+  const [selectedDates, setSelectedDates] = useState<Date[]>([]);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
 
   // Fetch session data on mount
   useEffect(() => {
@@ -97,10 +100,24 @@ const EditSession: React.FC = () => {
         const response = await api.get(url);
         const data: ISession = response.data.session || response.data;
 
+        // Fetch ClassBatch description if session has no description
+        let sessionDescription = data.description || '';
+        if (!sessionDescription && data.classBatchId) {
+          try {
+            const classBatchId = typeof data.classBatchId === 'object'
+              ? (data.classBatchId as any)._id || data.classBatchId
+              : data.classBatchId;
+            const classRes = await api.get(`/api/classes/${classBatchId}`);
+            sessionDescription = classRes.data?.description || '';
+          } catch {
+            // Silently ignore — description is optional
+          }
+        }
+
         // Populate form with existing data
         setFormData({
           name: data.name,
-          description: data.description || '',
+          description: sessionDescription,
           frequency: data.frequency,
           startDate: data.startDate.split('T')[0], // Extract date part from ISO string
           endDate: data.endDate ? data.endDate.split('T')[0] : '',
@@ -235,14 +252,7 @@ const EditSession: React.FC = () => {
     }
   };
 
-  const handleDayToggle = (day: string) => {
-    setFormData(prev => ({
-      ...prev,
-      weeklyDays: prev.weeklyDays.includes(day)
-        ? prev.weeklyDays.filter(d => d !== day)
-        : [...prev.weeklyDays, day],
-    }));
-  };
+
 
   const handleSaveUsers = (users: IUser[]) => {
     if (userModalContext === 'PHYSICAL') {
@@ -361,6 +371,7 @@ const EditSession: React.FC = () => {
         endDate: formData.endDate || undefined,
         startTime: formData.startTime,
         endTime: formData.endTime,
+        sendNotification,
         locationType: formData.locationType,
         sessionType: formData.sessionType,
         assignedUsers: combinedAssignedUsers,
@@ -430,7 +441,7 @@ const EditSession: React.FC = () => {
     }
   };
 
-  const dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
 
   return (
     <div className="relative flex min-h-screen w-full flex-col group/design-root overflow-x-hidden bg-background-light dark:bg-background-dark font-display text-[#181511] dark:text-gray-200">
@@ -489,95 +500,82 @@ const EditSession: React.FC = () => {
                       rows={3}
                     />
                   </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {/* Frequency Selector */}
+                  <label className="flex flex-col w-full mb-6">
+                    <p className="pb-2 text-sm font-medium leading-normal dark:text-gray-300">Frequency</p>
+                    <div className="relative">
+                      <select
+                        className="form-select flex w-full appearance-none min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary h-12 p-3 text-base font-normal leading-normal"
+                        name="frequency"
+                        value={formData.frequency}
+                        onChange={(e) => {
+                          handleChange(e);
+                          if (e.target.value !== 'Random') {
+                            setSelectedDates([]);
+                          }
+                        }}
+                        disabled // Disabled by default in EditSession as you're editing a single occurrence
+                        required
+                      >
+                        <option value="OneTime">One-Time</option>
+                        <option value="Daily">Daily</option>
+                        <option value="Weekly">Weekly</option>
+                        <option value="Monthly">Monthly</option>
+                        <option value="Random">Custom Dates</option>
+                      </select>
+                      <span className="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">unfold_more</span>
+                    </div>
+                  </label>
+
+                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
                     <label className="flex flex-col w-full">
-                      <p className="text-sm font-medium leading-normal pb-2 dark:text-gray-300">Start Date</p>
+                      <p className="pb-2 text-sm font-medium leading-normal dark:text-gray-300">Start Date</p>
                       <input
-                        className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary h-12 placeholder:text-gray-400 dark:placeholder:text-gray-500 p-3 text-base font-normal leading-normal"
-                        type="date"
+                        className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary h-12 p-3 text-base font-normal leading-normal"
                         name="startDate"
+                        type="date"
                         value={formData.startDate}
                         onChange={handleChange}
                         required
                       />
                     </label>
-                    {formData.frequency !== 'OneTime' && (
-                      <label className="flex flex-col w-full">
-                        <p className="text-sm font-medium leading-normal pb-2 dark:text-gray-300">End Date</p>
-                        <input
-                          className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary h-12 placeholder:text-gray-400 dark:placeholder:text-gray-500 p-3 text-base font-normal leading-normal"
-                          type="date"
-                          name="endDate"
-                          value={formData.endDate}
-                          onChange={handleChange}
-                          min={formData.startDate}
-                        />
-                      </label>
-                    )}
                     <label className="flex flex-col w-full">
-                      <p className="text-sm font-medium leading-normal pb-2 dark:text-gray-300">Start Time</p>
+                      <p className="pb-2 text-sm font-medium leading-normal dark:text-gray-300">
+                        End Date {formData.frequency === 'OneTime' && <span className="text-xs text-gray-400">(optional)</span>}
+                      </p>
                       <input
-                        className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary h-12 placeholder:text-gray-400 dark:placeholder:text-gray-500 p-3 text-base font-normal leading-normal"
-                        type="time"
+                        className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary h-12 p-3 text-base font-normal leading-normal"
+                        name="endDate"
+                        type="date"
+                        value={formData.endDate}
+                        onChange={handleChange}
+                        min={formData.startDate}
+                        required={formData.frequency !== 'OneTime'}
+                      />
+                    </label>
+                    <label className="flex flex-col w-full">
+                      <p className="pb-2 text-sm font-medium leading-normal dark:text-gray-300">Start Time</p>
+                      <input
+                        className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary h-12 p-3 text-base font-normal leading-normal"
                         name="startTime"
+                        type="time"
                         value={formData.startTime}
                         onChange={handleChange}
                         required
                       />
                     </label>
                     <label className="flex flex-col w-full">
-                      <p className="text-sm font-medium leading-normal pb-2 dark:text-gray-300">End Time</p>
+                      <p className="pb-2 text-sm font-medium leading-normal dark:text-gray-300">End Time</p>
                       <input
-                        className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary h-12 placeholder:text-gray-400 dark:placeholder:text-gray-500 p-3 text-base font-normal leading-normal"
-                        type="time"
+                        className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary h-12 p-3 text-base font-normal leading-normal"
                         name="endTime"
+                        type="time"
                         value={formData.endTime}
                         onChange={handleChange}
                         required
                       />
                     </label>
                   </div>
-                  <label className="flex flex-col w-full">
-                    <p className="text-sm font-medium leading-normal pb-2 dark:text-gray-300">Frequency</p>
-                    <select
-                      className="form-select flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary h-12 p-3 text-base font-normal leading-normal"
-                      name="frequency"
-                      value={formData.frequency}
-                      onChange={handleChange}
-                      required
-                    >
-                      <option value="OneTime">One-Time</option>
-                      <option value="Daily">Daily</option>
-                      <option value="Weekly">Weekly</option>
-                      <option value="Monthly">Monthly</option>
-                    </select>
-                  </label>
-                  {formData.frequency === 'Weekly' && (
-                    <div className="flex flex-col w-full">
-                      <p className="text-sm font-medium leading-normal pb-2 dark:text-gray-300">Repeat on</p>
-                      <div className="flex flex-wrap gap-2">
-                        {daysOfWeek.map((day, index) => {
-                          const isSelected = formData.weeklyDays.includes(day);
-                          return (
-                            <button
-                              key={day}
-                              type="button"
-                              onClick={() => handleDayToggle(day)}
-                              className={`flex items-center justify-center h-10 w-10 rounded-full border text-sm font-semibold transition-colors ${isSelected
-                                ? 'bg-primary text-white border-primary'
-                                : 'border-gray-300 dark:border-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                                }`}
-                            >
-                              {dayLabels[index]}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {formData.weeklyDays.length === 0 && (
-                        <p className="text-xs text-red-500 dark:text-red-400 mt-2">Please select at least one day for weekly classes/batches</p>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -854,7 +852,8 @@ const EditSession: React.FC = () => {
               {/* Footer Actions */}
               <div className="flex flex-col sm:flex-row-reverse items-center gap-4 pt-4 border-t border-gray-200 dark:border-gray-800">
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={() => setShowConfirmModal(true)}
                   disabled={isSubmitting}
                   className="flex w-full sm:w-auto min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-6 bg-primary text-white text-base font-bold leading-normal tracking-wide shadow-sm hover:bg-[#d63a25] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -905,6 +904,65 @@ const EditSession: React.FC = () => {
               initialRadius={formData.radius}
               apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}
             />
+
+            {/* Confirmation Modal */}
+            {showConfirmModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+                <div className="w-full max-w-md animate-in fade-in zoom-in duration-200 rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-800 border border-gray-200 dark:border-slate-700">
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">
+                    <span className="material-symbols-outlined text-2xl">warning</span>
+                  </div>
+                  <h3 className="mb-2 text-xl font-bold text-gray-900 dark:text-white">Confirm Session Update</h3>
+                  <p className="mb-6 text-gray-500 dark:text-slate-400">
+                    Are you sure you want to save changes to <span className="font-semibold text-gray-900 dark:text-white">"{formData.name}"</span>?
+                    If you have changed the schedule, updates will be propagated to all future scheduled instances.
+                  </p>
+
+                  <div className="mb-6 flex items-start gap-3 rounded-lg border border-gray-200 dark:border-slate-700 p-3">
+                    <div className="flex h-5 items-center">
+                      <input
+                        id="notify-users"
+                        type="checkbox"
+                        checked={sendNotification}
+                        onChange={(e) => setSendNotification(e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500 dark:border-slate-600 dark:bg-slate-700 dark:ring-offset-slate-800"
+                      />
+                    </div>
+                    <div className="flex flex-col">
+                      <label htmlFor="notify-users" className="text-sm font-medium text-gray-900 dark:text-white">
+                        Notify assigned users
+                      </label>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">
+                        Send a notification to all users about this session update.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmModal(false)}
+                      className="rounded-lg px-5 py-2.5 text-sm font-semibold text-gray-500 hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-700 transition-colors"
+                      disabled={isSubmitting}
+                    >
+                      No, cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setShowConfirmModal(false);
+                        const e = { preventDefault: () => { } } as React.FormEvent;
+                        await handleSubmit(e);
+                      }}
+                      disabled={isSubmitting}
+                      className="flex items-center justify-center rounded-lg bg-[#f04129] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#d63a25] transition-all disabled:opacity-50"
+                    >
+                      {isSubmitting ? 'Updating...' : 'Yes, save changes'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

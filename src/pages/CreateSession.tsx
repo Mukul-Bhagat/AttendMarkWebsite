@@ -447,6 +447,49 @@ const CreateSession: React.FC = () => {
                   placeholder="Enter a description for the session"
                 />
               </label>
+              {/* Frequency Selector */}
+              <label className="flex flex-col">
+                <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">
+                  Frequency
+                  {isAddingToExistingClass && (
+                    <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">(Locked to One-Time)</span>
+                  )}
+                </p>
+                <div className="relative">
+                  <select
+                    className={`form-select w-full appearance-none rounded-lg border border-[#e6e2db] bg-white p-3 text-[#181511] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 ${isAddingToExistingClass ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed opacity-75' : ''
+                      }`}
+                    name="frequency"
+                    value={isAddingToExistingClass ? 'OneTime' : formData.frequency}
+                    onChange={(e) => {
+                      if (isAddingToExistingClass) return;
+                      handleChange(e);
+                      if (e.target.value !== 'Random') {
+                        setSelectedDates([]);
+                      }
+                    }}
+                    required
+                    disabled={isAddingToExistingClass}
+                  >
+                    <option value="OneTime">One-Time</option>
+                    {!isAddingToExistingClass && (
+                      <>
+                        <option value="Daily">Daily</option>
+                        <option value="Weekly">Weekly</option>
+                        <option value="Monthly">Monthly</option>
+                        <option value="Random">Custom Dates (Select Manually)</option>
+                      </>
+                    )}
+                  </select>
+                  <span className="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">unfold_more</span>
+                </div>
+                {isAddingToExistingClass && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    When adding to an existing class, only single sessions can be added.
+                  </p>
+                )}
+              </label>
+
               {/* Date/Time inputs - different layout for Random frequency */}
               {formData.frequency !== 'Random' ? (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -606,48 +649,6 @@ const CreateSession: React.FC = () => {
                   </div>
                 </div>
               )}
-              <label className="flex flex-col">
-                <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">
-                  Frequency
-                  {isAddingToExistingClass && (
-                    <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">(Locked to One-Time)</span>
-                  )}
-                </p>
-                <div className="relative">
-                  <select
-                    className={`form-select w-full appearance-none rounded-lg border border-[#e6e2db] bg-white p-3 text-[#181511] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 ${isAddingToExistingClass ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed opacity-75' : ''
-                      }`}
-                    name="frequency"
-                    value={isAddingToExistingClass ? 'OneTime' : formData.frequency}
-                    onChange={(e) => {
-                      if (isAddingToExistingClass) return; // Prevent changes when adding to existing class
-                      handleChange(e);
-                      // Clear selected dates when switching away from Random
-                      if (e.target.value !== 'Random') {
-                        setSelectedDates([]);
-                      }
-                    }}
-                    required
-                    disabled={isAddingToExistingClass}
-                  >
-                    <option value="OneTime">One-Time</option>
-                    {!isAddingToExistingClass && (
-                      <>
-                        <option value="Daily">Daily</option>
-                        <option value="Weekly">Weekly</option>
-                        <option value="Monthly">Monthly</option>
-                        <option value="Random">Custom Dates (Select Manually)</option>
-                      </>
-                    )}
-                  </select>
-                  <span className="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">unfold_more</span>
-                </div>
-                {isAddingToExistingClass && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    When adding to an existing class, only single sessions can be added.
-                  </p>
-                )}
-              </label>
               {formData.frequency === 'Weekly' && (
                 <div>
                   <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Repeat On</p>
