@@ -45,6 +45,10 @@ const EditClass: React.FC = () => {
   // Custom dates for Random frequency
   const [selectedDates, setSelectedDates] = useState<Date[]>([]);
 
+  // Grace Period State
+  const [useOrgGracePeriod, setUseOrgGracePeriod] = useState(true);
+  const [customGracePeriod, setCustomGracePeriod] = useState(30);
+
   const [assignedUsers, setAssignedUsers] = useState<IUser[]>([]);
   const [physicalUsers, setPhysicalUsers] = useState<IUser[]>([]);
   const [remoteUsers, setRemoteUsers] = useState<IUser[]>([]);
@@ -79,6 +83,15 @@ const EditClass: React.FC = () => {
         // Fetch ClassBatch
         const classRes = await api.get(`/api/classes/${id}`);
         const classData = classRes.data;
+
+        const classUsesOrgGrace = classData.useOrganizationGracePeriod !== false;
+        setUseOrgGracePeriod(classUsesOrgGrace);
+        const classGrace = Number(classData.gracePeriod);
+        setCustomGracePeriod(
+          Number.isFinite(classGrace) && classGrace >= 0 && classGrace <= 180
+            ? classGrace
+            : 30
+        );
 
         // Fetch sessions for this class
         const sessionsRes = await api.get(`/api/classes/${id}/sessions`);
@@ -308,6 +321,8 @@ const EditClass: React.FC = () => {
         endTime: formData.endTime, // Pass endTime explicitly for session updates
         frequency: formData.frequency, // Required for extending sessions
         weeklyDays: formData.weeklyDays, // Required for extending sessions
+        useOrganizationGracePeriod: useOrgGracePeriod,
+        gracePeriod: !useOrgGracePeriod ? customGracePeriod : undefined,
 
         sessionAdmin: normalizedSessionAdmin,
 
@@ -664,6 +679,59 @@ const EditClass: React.FC = () => {
                       );
                     })}
                   </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Section 2: Attendance Grace Period */}
+          <div className="flex flex-col gap-6 rounded-xl border border-[#e6e2db] bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-2xl text-[#f04129]">alarm</span>
+              <h2 className="text-xl font-bold leading-tight tracking-[-0.015em] text-[#181511] dark:text-white">Attendance Grace Period</h2>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between rounded-lg border border-[#e6e2db] bg-[#faf9f7] p-4 dark:border-slate-700 dark:bg-slate-900">
+                <div>
+                  <p className="text-sm font-medium text-[#181511] dark:text-white">Use Organization Default</p>
+                  <p className="text-xs text-[#8a7b60] dark:text-slate-400">
+                    Use the global grace period from Organization Settings.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUseOrgGracePeriod(!useOrgGracePeriod)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${useOrgGracePeriod ? 'bg-[#f04129]' : 'bg-gray-300 dark:bg-gray-600'
+                    }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${useOrgGracePeriod ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                  />
+                </button>
+              </div>
+
+              {!useOrgGracePeriod && (
+                <div className="flex items-center gap-3">
+                  <label className="flex flex-col">
+                    <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">
+                      Custom Grace Period (Minutes)
+                    </p>
+                    <input
+                      type="number"
+                      min="0"
+                      max="180"
+                      value={customGracePeriod}
+                      onChange={(e) =>
+                        setCustomGracePeriod(
+                          Math.min(180, Math.max(0, parseInt(e.target.value, 10) || 0))
+                        )
+                      }
+                      className="form-input w-32 rounded-lg border border-[#e6e2db] bg-white p-3 text-[#181511] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                    />
+                  </label>
+                  <p className="text-sm text-[#8a7b60] dark:text-slate-400 mt-6">minutes after session start time</p>
                 </div>
               )}
             </div>

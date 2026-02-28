@@ -34,7 +34,7 @@ interface GracePeriodInfo {
     individualOverride?: number;
     classGracePeriod?: number;
     organizationGracePeriod: number;
-    source: 'USER' | 'CLASS' | 'ORGANIZATION';
+    source: 'USER_CLASS' | 'USER_GLOBAL' | 'CLASS' | 'ORGANIZATION';
 }
 
 const SetGracePeriodModal: React.FC<SetGracePeriodModalProps> = ({ isOpen, onClose, user }) => {
@@ -172,7 +172,8 @@ const SetGracePeriodModal: React.FC<SetGracePeriodModalProps> = ({ isOpen, onClo
         const info = gracePeriodInfo.find((gp) => gp.classId === classId);
         if (!info) return 'Unknown';
 
-        if (info.source === 'USER') return 'Individual Override';
+        if (info.source === 'USER_CLASS') return 'Individual Override';
+        if (info.source === 'USER_GLOBAL') return 'Global User Override';
         if (info.source === 'CLASS') return 'Class Default';
         return 'Organization Default';
     };

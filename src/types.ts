@@ -6,6 +6,8 @@ export interface IClassBatch {
   createdBy: string;
   defaultTime?: string; // HH:mm format
   defaultLocation?: string;
+  useOrganizationGracePeriod?: boolean;
+  gracePeriod?: number;
   organizationPrefix: string;
   createdAt: string;
   updatedAt: string;

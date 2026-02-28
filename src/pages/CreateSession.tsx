@@ -60,7 +60,7 @@ const CreateSession: React.FC = () => {
 
   // Grace Period State (New)
   const [useOrgGracePeriod, setUseOrgGracePeriod] = useState(true);
-  const [customGracePeriod, setCustomGracePeriod] = useState(15);
+  const [customGracePeriod, setCustomGracePeriod] = useState(30);
 
   const [assignedUsers, setAssignedUsers] = useState<IUser[]>([]); // Legacy: for Physical/Remote single mode
   const [physicalUsers, setPhysicalUsers] = useState<IUser[]>([]); // For Hybrid: Physical attendees
