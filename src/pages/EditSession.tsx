@@ -78,7 +78,6 @@ const EditSession: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [sendNotification, setSendNotification] = useState(false);
-  const [selectedDates, setSelectedDates] = useState<Date[]>([]);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
 
@@ -508,12 +507,7 @@ const EditSession: React.FC = () => {
                         className="form-select flex w-full appearance-none min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#181511] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary h-12 p-3 text-base font-normal leading-normal"
                         name="frequency"
                         value={formData.frequency}
-                        onChange={(e) => {
-                          handleChange(e);
-                          if (e.target.value !== 'Random') {
-                            setSelectedDates([]);
-                          }
-                        }}
+                        onChange={handleChange}
                         disabled // Disabled by default in EditSession as you're editing a single occurrence
                         required
                       >
