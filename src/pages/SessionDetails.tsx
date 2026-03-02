@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../api';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { ISession } from '../types';
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { formatIST } from '../utils/time';
@@ -25,6 +25,8 @@ const SessionDetails: React.FC = () => {
   const [qrExpiresAt, setQrExpiresAt] = useState<string | null>(null);
   const [qrTokenError, setQrTokenError] = useState('');
   const [isQrLoading, setIsQrLoading] = useState(false);
+  const [isSharingQr, setIsSharingQr] = useState(false);
+  const qrCanvasWrapperRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isSuperAdmin, isSessionAdmin, isEndUser } = useAuth();
@@ -163,6 +165,54 @@ const SessionDetails: React.FC = () => {
     fetchQrToken();
   }, [id, isEndUser, session, location.search]);
 
+  const handleShareQrImage = async () => {
+    if (!session || !qrToken || isQrLoading || isSharingQr) return;
+
+    const canvas = qrCanvasWrapperRef.current?.querySelector('canvas');
+    if (!canvas) {
+      setQrTokenError('QR is still rendering. Please try again.');
+      return;
+    }
+
+    setIsSharingQr(true);
+    try {
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob((value) => resolve(value), 'image/png');
+      });
+
+      if (!blob) {
+        throw new Error('QR image conversion failed');
+      }
+
+      const fileName = `attendmark-qr-${(session._id || 'session').slice(0, 8)}.png`;
+      const file = new File([blob], fileName, { type: 'image/png' });
+      const nav = navigator as Navigator & {
+        canShare?: (data?: ShareData) => boolean;
+      };
+
+      if (nav.share && nav.canShare?.({ files: [file] })) {
+        await nav.share({
+          files: [file],
+          title: 'AttendMark Session QR',
+        });
+      } else {
+        const imageUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = imageUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(imageUrl);
+      }
+    } catch (err) {
+      appLogger.error('Failed to share QR image:', err);
+      setQrTokenError('Unable to share QR image right now.');
+    } finally {
+      setIsSharingQr(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!id) return;
     setIsSubmitting(true);
@@ -270,14 +320,8 @@ const SessionDetails: React.FC = () => {
     );
   }
 
-  // The value of the QR code will be a deep link URL to the scan page
-  // This allows students to scan with their system camera or Google Lens
-  const allowLegacyQr = import.meta.env.VITE_ALLOW_LEGACY_QR === 'true';
-  const qrValue = qrToken
-    ? `${window.location.origin}/scan?token=${encodeURIComponent(qrToken)}`
-    : (allowLegacyQr && session._id)
-      ? `${window.location.origin}/scan?sessionId=${session._id}`
-      : '';
+  // Keep payload compact for faster QR render + scan.
+  const qrValue = qrToken ? qrToken : '';
   const hasQrValue = Boolean(qrValue);
 
   const formatDate = (dateString: string) => {
@@ -319,6 +363,16 @@ const SessionDetails: React.FC = () => {
       return timeString;
     }
   };
+
+  const query = new URLSearchParams(location.search);
+  const queryDate = query.get('date');
+  const qrDateSource = queryDate || session.occurrenceDate || session.startDate;
+  const qrDateLabel = qrDateSource ? formatDate(qrDateSource) : 'N/A';
+  const qrClassName =
+    session.classBatchId && typeof session.classBatchId === 'object'
+      ? (session.classBatchId.name || 'N/A')
+      : 'N/A';
+  const qrOrganizationName = user?.organizationName || user?.organization || 'N/A';
 
   return (
     <div className="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden bg-background-light dark:bg-background-dark font-display text-[#181511] dark:text-gray-200">
@@ -422,14 +476,11 @@ const SessionDetails: React.FC = () => {
                   </div>
                   <div className="shrink-0">
                     <p className="text-[#181511] dark:text-gray-200 text-base font-normal leading-normal">
-                      {(() => {
-                        const query = new URLSearchParams(location.search);
-                        const dateParam = query.get('date');
-                        if (dateParam) return formatDate(dateParam);
-                        return session.endDate
+                      {queryDate
+                        ? formatDate(queryDate)
+                        : session.endDate
                           ? `${formatDate(session.startDate)} - ${formatDate(session.endDate)}`
-                          : formatDate(session.startDate);
-                      })()}
+                          : formatDate(session.startDate)}
                     </p>
                   </div>
                 </div>
@@ -545,15 +596,26 @@ const SessionDetails: React.FC = () => {
                   </div>
                 )}
                 <div className="w-full">
-                  <h2 className="text-xl font-semibold text-[#181511] dark:text-white mb-6">Scan this code for attendance</h2>
+                  <div className="mb-6 flex items-center justify-between gap-3">
+                    <h2 className="text-xl font-semibold text-[#181511] dark:text-white">Scan this code for attendance</h2>
+                    {hasQrValue && (
+                      <button
+                        type="button"
+                        onClick={handleShareQrImage}
+                        disabled={isSharingQr}
+                        className="inline-flex items-center gap-2 rounded-lg border border-gray-300 dark:border-slate-600 px-3 py-2 text-sm font-medium text-[#181511] dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <span className="material-symbols-outlined text-base">share</span>
+                        {isSharingQr ? 'Sharing...' : 'Share QR'}
+                      </button>
+                    )}
+                  </div>
                   {hasQrValue ? (
-                    <div className="w-64 h-64 sm:w-80 sm:h-80 border border-gray-200 dark:border-gray-700 rounded-lg flex items-center justify-center p-4 mx-auto bg-gray-50 dark:bg-background-dark">
-                      <QRCodeSVG
-                        value={qrValue}
-                        size={256}
-                        level={'H'}
-                        includeMargin={true}
-                      />
+                    <div
+                      ref={qrCanvasWrapperRef}
+                      className="w-64 h-64 sm:w-80 sm:h-80 border border-gray-200 dark:border-gray-700 rounded-lg flex items-center justify-center p-4 mx-auto bg-gray-50 dark:bg-background-dark"
+                    >
+                      <QRCodeCanvas value={qrValue} size={256} level="L" includeMargin={true} />
                     </div>
                   ) : (
                     <div className="w-64 h-64 sm:w-80 sm:h-80 border border-red-200 dark:border-red-800 rounded-lg flex flex-col items-center justify-center p-4 mx-auto bg-red-50 dark:bg-red-900/20 text-center">
@@ -577,16 +639,22 @@ const SessionDetails: React.FC = () => {
                   {qrTokenError && (
                     <p className="mt-3 text-xs text-orange-600 dark:text-orange-400">{qrTokenError}</p>
                   )}
+                  <div className="mt-5 space-y-1 text-left text-xs font-light text-gray-500 dark:text-gray-400">
+                    <p>Class: {qrClassName}</p>
+                    <p>Session: {session.name}</p>
+                    <p>Date: {qrDateLabel}</p>
+                    <p>Organization: {qrOrganizationName}</p>
+                  </div>
                 </div>
                 <footer className="mt-6 w-full">
                   <span className="inline-block bg-gray-100 dark:bg-background-dark text-[#181511] dark:text-gray-300 px-3 py-1 rounded-md font-mono text-sm mb-3 break-all">
                     Session ID: {session._id}
                   </span>
                   <p className="text-sm text-gray-500 dark:text-gray-400 italic mb-2">
-                    Students can scan this with their system camera or Google Lens to mark attendance.
+                    Students can scan this with AttendMark scanner to mark attendance quickly.
                   </p>
                   <p className="text-xs text-gray-400 dark:text-gray-500 italic">
-                    The QR code contains a deep link that will automatically open the attendance page.
+                    Share sends only the QR image.
                   </p>
                 </footer>
               </div>
