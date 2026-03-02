@@ -243,6 +243,14 @@ const Sessions: React.FC = () => {
     // Secondary: Time
     return a.startTime.localeCompare(b.startTime);
   });
+  const MAX_VISIBLE_SESSIONS = 7;
+  const isDateFilterActive = Boolean(selectedDate);
+  const visibleSessions = isDateFilterActive
+    ? displayedSessions
+    : displayedSessions.slice(0, MAX_VISIBLE_SESSIONS);
+  const remainingSessionsCount = isDateFilterActive
+    ? 0
+    : Math.max(displayedSessions.length - MAX_VISIBLE_SESSIONS, 0);
 
   // 3. Past Count (For Badge) - Relevant to current view
   const relevantSessionsForCount = selectedDate
@@ -257,6 +265,9 @@ const Sessions: React.FC = () => {
 
   // Scroll to calendar function
   const scrollToCalendar = () => {
+    if (window.innerWidth < 768) {
+      setIsCalendarExpanded(true);
+    }
     if (calendarRef.current) {
       calendarRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -283,7 +294,7 @@ const Sessions: React.FC = () => {
                 <SkeletonCard variant="card" className="h-[430px]" />
               </div>
               <div className="w-full md:col-span-8 md:order-1">
-                <div className="grid grid-cols-1 gap-4 md:gap-6 w-full">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 w-full">
                   <SkeletonCard variant="card" className="h-48" count={6} />
                 </div>
               </div>
@@ -470,8 +481,8 @@ const Sessions: React.FC = () => {
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-1 gap-4 md:gap-6 w-full">
-                    {displayedSessions.slice(0, 7).map((session) => {
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 w-full">
+                    {visibleSessions.map((session) => {
                       // Get status using guarded function
                       const sessionStatus = getSessionStatusSafe(session);
                       const isPast = sessionStatus === 'past';
@@ -533,7 +544,7 @@ const Sessions: React.FC = () => {
                               <div className="bg-red-50 dark:bg-red-900/30 rounded-lg p-4 border-2 border-red-300 dark:border-red-700 max-w-sm">
                                 <span className="material-symbols-outlined text-5xl text-red-600 dark:text-red-400 mb-3">warning</span>
                                 <h3 className="text-xl font-bold text-red-700 dark:text-red-400 mb-2">
-                                  ⚠️ Session Cancelled
+                                  Session Cancelled
                                 </h3>
                                 {session.cancellationReason && (
                                   <p className="text-base font-semibold text-red-800 dark:text-red-300 mt-2 leading-relaxed">
@@ -552,26 +563,24 @@ const Sessions: React.FC = () => {
                             </div>
                           )}
 
-                          <div className="flex items-start justify-between mb-4 gap-2">
-                            <div className="flex-1">
-                              {/* Fix 2: Use Date as Title */}
-                              <h2 className="text-xl font-bold text-slate-900 dark:text-white break-words">Session – {dateTitle}</h2>
-                              {/* Class Description or Session Description (One Only) */}
-                              {(session.classBatchId && typeof session.classBatchId === 'object' && session.classBatchId.description) ? (
-                                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">
-                                  {session.classBatchId.description}
-                                </p>
-                              ) : session.description ? (
-                                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">
-                                  {session.description}
-                                </p>
-                              ) : null}
-                            </div>
-                            <div className="flex flex-col gap-2 items-end">
+                          <div className="mb-4">
+                            {/* Fix 2: Use Date as Title */}
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white break-words">Session - {dateTitle}</h2>
+                            {/* Class Description or Session Description (One Only) */}
+                            {(session.classBatchId && typeof session.classBatchId === 'object' && session.classBatchId.description) ? (
+                              <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">
+                                {session.classBatchId.description}
+                              </p>
+                            ) : session.description ? (
+                              <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">
+                                {session.description}
+                              </p>
+                            ) : null}
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
                               <ModeBadge mode={sessionMode} />
                               {session.isCancelled && (
                                 <span className="whitespace-nowrap rounded-full bg-orange-100 dark:bg-orange-900/30 px-3 py-1 text-xs font-medium text-orange-600 dark:text-orange-400 border border-orange-300 dark:border-orange-800">
-                                  ⚠️ Cancelled
+                                  Cancelled
                                 </span>
                               )}
                               {/* Status Badge - Using robust getSessionStatus() */}
@@ -622,10 +631,10 @@ const Sessions: React.FC = () => {
                             )}
                             {/* Fix 3: Duplicate Description Removed */}
                           </div>
-                          <div className="mt-auto flex flex-row items-center justify-between gap-3">
+                          <div className="mt-auto flex flex-col sm:flex-row items-stretch gap-3">
                             {showScanButton ? (
                               <button
-                                className="flex flex-1 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 bg-gradient-to-r from-orange-500 to-[#f04129] text-white text-sm font-bold hover:from-orange-600 hover:to-[#d63a25] transition-colors"
+                                className="flex w-full sm:flex-1 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 bg-gradient-to-r from-orange-500 to-[#f04129] text-white text-sm font-bold hover:from-orange-600 hover:to-[#d63a25] transition-colors"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   navigate(`/scan?sessionId=${session._id}`);
@@ -638,19 +647,19 @@ const Sessions: React.FC = () => {
                               <>
                                 {isEndUser ? (
                                   <button
-                                    className={`flex flex-1 items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 border text-sm font-medium cursor-not-allowed ${isLive
+                                    className={`flex w-full sm:flex-1 items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 border text-sm font-medium cursor-not-allowed ${isLive
                                       ? 'border-green-300 dark:border-green-700 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'
                                       : 'border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800'
                                       }`}
                                     disabled
                                   >
                                     <span className="truncate whitespace-normal">
-                                      {isLive ? '🟢 In Progress' : isPast ? 'Past Session' : 'Upcoming'}
+                                      {isLive ? 'In Progress' : isPast ? 'Past Session' : 'Upcoming'}
                                     </span>
                                   </button>
                                 ) : (
                                   <button
-                                    className="flex flex-1 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                                    className="flex w-full sm:flex-1 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                                     onClick={handleNavigate}
                                   >
                                     <Eye className="w-4 h-4 md:w-5 md:h-5 flex-shrink-0" />
@@ -661,7 +670,7 @@ const Sessions: React.FC = () => {
                             )}
                             {canEditSession(session) && (
                               <button
-                                className="flex flex-1 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 border border-[#f04129] text-[#f04129] text-sm font-bold hover:bg-red-50 dark:hover:bg-[#f04129]/10 transition-colors"
+                                className="flex w-full sm:flex-1 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 border border-[#f04129] text-[#f04129] text-sm font-bold hover:bg-red-50 dark:hover:bg-[#f04129]/10 transition-colors"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   // Add date query param for correct context when editing a specific occurrence
@@ -679,17 +688,17 @@ const Sessions: React.FC = () => {
                     })}
 
                     {/* Fix 4: More Sessions Card */}
-                    {displayedSessions.length > 7 && (
+                    {remainingSessionsCount > 0 && (
                       <div
-                        className="flex flex-col w-full rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-6 items-center justify-center text-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-h-[300px]"
+                        className="flex h-full flex-col w-full rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-6 items-center justify-center text-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-h-[220px]"
                         onClick={scrollToCalendar}
                       >
                         <span className="material-symbols-outlined text-4xl text-slate-400 mb-4">event_repeat</span>
                         <h3 className="text-xl font-bold text-slate-700 dark:text-slate-200">
-                          + {displayedSessions.length - 7} more {selectedDate ? 'on this date' : 'upcoming sessions'}
+                          + {remainingSessionsCount} sessions remaining
                         </h3>
                         <p className="text-slate-500 dark:text-slate-400 mt-2">
-                          Select a date in the calendar to view them.
+                          Use calendar to view sessions after these first 7 upcoming cards.
                         </p>
                       </div>
                     )}

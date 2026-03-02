@@ -88,6 +88,19 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
     return 'MIXED';
   };
 
+  const getCompactModeLabel = (mode: string | null): string | null => {
+    if (!mode) return null;
+
+    const compactLabels: Record<string, string> = {
+      PHYSICAL: 'PHY',
+      REMOTE: 'REM',
+      HYBRID: 'HYB',
+      MIXED: 'MIX',
+    };
+
+    return compactLabels[mode] || mode.slice(0, 3);
+  };
+
   // Navigate months
   const goToPreviousMonth = () => {
     onMonthChange(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
@@ -178,7 +191,7 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
       <div className="grid grid-cols-7 gap-1">
         {calendarDays.map((date, index) => {
           if (!date) {
-            return <div key={`empty-${index}`} className="aspect-square" />;
+            return <div key={`empty-${index}`} className="min-h-[58px] sm:min-h-[64px]" />;
           }
 
           const indicator = getDateIndicator(date);
@@ -191,14 +204,10 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
           const sortedSessions = [...dateSessions].sort((a, b) => a.startTime.localeCompare(b.startTime));
           const firstSessionTime = sortedSessions[0]?.startTime ? formatTime(sortedSessions[0].startTime) : null;
           const modeSummary = getModeSummary(dateSessions);
-          const modeStyles: Record<string, string> = {
-            PHYSICAL: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200',
-            REMOTE: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-200',
-            HYBRID: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-200',
-            MIXED: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
-          };
+          const compactModeLabel = getCompactModeLabel(modeSummary);
+          const sessionCountLabel = dateSessions.length === 1 ? '1 session' : `${dateSessions.length} sessions`;
           const tooltip = dateSessions.length
-            ? `${modeSummary || 'SESSION'} • ${firstSessionTime || ''}`.trim()
+            ? `${sessionCountLabel} - ${modeSummary || 'SESSION'}${firstSessionTime ? ` - ${firstSessionTime}` : ''}`
             : undefined;
 
           return (
@@ -206,34 +215,30 @@ const SessionCalendar: React.FC<SessionCalendarProps> = ({
               key={date.toISOString()}
               onClick={() => handleDateClick(date)}
               title={tooltip}
-              className={`aspect-square rounded-lg text-sm font-medium transition-colors relative ${isSelected
+              className={`min-h-[58px] sm:min-h-[64px] rounded-lg text-sm font-medium transition-colors ${isSelected
                   ? 'bg-blue-500 text-white hover:bg-blue-600'
                   : isToday
                     ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50'
                     : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }`}
             >
-              <div className="flex flex-col items-center justify-center leading-tight">
+              <div className="flex h-full flex-col items-center justify-between py-1.5 leading-tight">
                 <span className="text-sm font-semibold">{date.getDate()}</span>
-                {firstSessionTime && (
-                  <span className="text-[9px] text-slate-500 dark:text-slate-300">{firstSessionTime}</span>
-                )}
-                {modeSummary && (
-                  <span className={`mt-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${modeStyles[modeSummary]}`}>
-                    {modeSummary}
+                {dateSessions.length > 0 && (
+                  <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 ${isSelected ? 'bg-white/20' : 'bg-slate-100 dark:bg-slate-700/60'}`}>
+                    {indicator && (
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${indicator === 'red' ? 'bg-red-500' : 'bg-green-500'}`}
+                      />
+                    )}
+                    {compactModeLabel && (
+                      <span className={`text-[9px] font-semibold tracking-wide ${isSelected ? 'text-white' : 'text-slate-600 dark:text-slate-200'}`}>
+                        {compactModeLabel}
+                      </span>
+                    )}
                   </span>
                 )}
               </div>
-              {indicator && (
-                <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2">
-                  <div
-                    className={`w-1.5 h-1.5 rounded-full ${indicator === 'red'
-                        ? 'bg-red-500'
-                        : 'bg-green-500'
-                      }`}
-                  />
-                </div>
-              )}
             </button>
           );
         })}

@@ -22,7 +22,7 @@ const buildSession = (overrides: Partial<ISession> = {}): ISession => ({
 });
 
 describe('SessionCalendar', () => {
-  it('renders mode label based on sessions', () => {
+  it('renders compact mode label based on sessions', () => {
     const onDateSelect = () => { };
     const onMonthChange = () => { };
     const currentMonth = new Date('2026-02-01T00:00:00.000Z');
@@ -37,7 +37,7 @@ describe('SessionCalendar', () => {
       />
     );
 
-    expect(screen.getByText('PHYSICAL')).toBeTruthy();
+    expect(screen.getByText('PHY')).toBeTruthy();
 
     rerender(
       <SessionCalendar
@@ -49,6 +49,6 @@ describe('SessionCalendar', () => {
       />
     );
 
-    expect(screen.getByText('REMOTE')).toBeTruthy();
+    expect(screen.getByText('REM')).toBeTruthy();
   });
 });
