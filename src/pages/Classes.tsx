@@ -129,6 +129,17 @@ const Classes: React.FC = () => {
     return freqMap[frequency] || frequency;
   };
 
+  const formatDateLabel = (value?: string) => {
+    if (!value) return 'N/A';
+    const date = new Date(value);
+    if (isNaN(date.getTime())) return value;
+    return formatIST(date.getTime(), {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden bg-background-light dark:bg-background-dark">
@@ -259,7 +270,11 @@ const Classes: React.FC = () => {
                 })
                 .map((classBatch) => {
                   const firstSession = classBatch.firstSession;
+                  const nextSession = classBatch.nextSession || null;
+                  const displaySession = nextSession || firstSession;
                   const isPast = isClassPast(classBatch);
+                  const classStartDate = classBatch.startDate || firstSession?.startDate;
+                  const classEndDate = classBatch.endDate || classBatch.latestSessionDate || firstSession?.endDate;
 
                   return (
                     <div
@@ -317,11 +332,23 @@ const Classes: React.FC = () => {
                             {sessionCounts[classBatch._id] || 0} Session{sessionCounts[classBatch._id] !== 1 ? 's' : ''}
                           </span>
                         </div>
-                        {firstSession && (
+                        <div className="flex items-center text-sm">
+                          <Calendar className="w-4 h-4 mr-2 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+                          <span className="break-words whitespace-normal">
+                            Start: {formatDateLabel(classStartDate)}
+                          </span>
+                        </div>
+                        <div className="flex items-center text-sm">
+                          <Calendar className="w-4 h-4 mr-2 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+                          <span className="break-words whitespace-normal">
+                            End: {formatDateLabel(classEndDate)}
+                          </span>
+                        </div>
+                        {displaySession && (
                           <div className="flex items-center text-sm">
                             <Calendar className="w-4 h-4 mr-2 text-slate-500 dark:text-slate-400 flex-shrink-0" />
                             <span className="break-words whitespace-normal">
-                              {isPast ? 'Ended' : 'Next'}: {formatIST(sessionTimeToIST(firstSession.startDate, firstSession.startTime), { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
+                              {nextSession ? 'Next' : isPast ? 'Ended' : 'Upcoming'}: {formatIST(sessionTimeToIST(displaySession.startDate, displaySession.startTime), { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
                             </span>
                           </div>
                         )}

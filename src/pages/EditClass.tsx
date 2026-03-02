@@ -312,6 +312,7 @@ const EditClass: React.FC = () => {
         name: formData.name.trim(),
         description: formData.description.trim() || undefined,
         defaultTime: formData.startTime || undefined,
+        startTime: formData.startTime || undefined,
         startDate: formData.startDate || undefined,
         endDate: formData.endDate || undefined,
         sendNotification,

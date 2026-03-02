@@ -4,6 +4,8 @@ export interface IClassBatch {
   name: string;
   description?: string;
   createdBy: string;
+  startDate?: string;
+  endDate?: string;
   defaultTime?: string; // HH:mm format
   defaultLocation?: string;
   useOrganizationGracePeriod?: boolean;
@@ -31,6 +33,25 @@ export interface IClassBatch {
     };
     frequency: 'OneTime' | 'Daily' | 'Weekly' | 'Monthly' | 'Random';
   };
+  nextSession?: {
+    _id: string;
+    startDate: string;
+    endDate?: string;
+    startTime: string;
+    endTime: string;
+    locationType: string;
+    physicalLocation?: string;
+    virtualLocation?: string;
+    location?: {
+      type: 'LINK' | 'COORDS';
+      link?: string;
+      geolocation?: {
+        latitude: number;
+        longitude: number;
+      };
+    };
+    frequency: 'OneTime' | 'Daily' | 'Weekly' | 'Monthly' | 'Random';
+  } | null;
 }
 
 // Session interface matching the backend model
