@@ -1,6 +1,7 @@
 import api from '../api';
 
 export interface ShareReportOptions {
+    classId: string;
     recipientName: string;
     recipientEmail: string;
     recipientGender: string;
@@ -24,6 +25,7 @@ export interface ShareReportOptions {
 }
 
 export interface DownloadReportOptions {
+    classId: string;
     startDate: string;
     endDate: string;
     organizationName?: string;
@@ -48,11 +50,12 @@ export interface ReportShareRequest {
     startDate: string;
     endDate: string;
     organizationName: string;
+    classBatchId?: string;
     status: 'PENDING' | 'APPROVED' | 'REJECTED';
     automateWeekly: boolean;
     automateMonthly: boolean;
     createdAt: string;
-    targetUserId: {
+    targetUserId?: {
         _id: string;
         email: string;
         profile: {

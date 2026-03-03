@@ -6,12 +6,13 @@ import api from '../api';
 export const getMyAnalytics = async (params: {
     startDate: string;
     endDate: string;
-    sessionId?: string;
+    classId: string;
     userId?: string;
 }) => {
     const { userId, ...rest } = params;
-    const endpoint = userId ? `/api/attendance/user/${userId}/analytics` : '/api/attendance/my-analytics';
-    const response = await api.get(endpoint, { params: rest });
+    const response = await api.get('/api/attendance/my-analytics', {
+        params: userId ? { ...rest, userId } : rest,
+    });
     return response.data.data;
 };
 
@@ -19,7 +20,8 @@ export const getMyAnalytics = async (params: {
  * Get list of sessions/classes a user is enrolled in
  */
 export const getMySessions = async (userId?: string) => {
-    const endpoint = userId ? `/api/attendance/user/${userId}/sessions` : '/api/attendance/my-sessions';
-    const response = await api.get(endpoint);
+    const response = await api.get('/api/attendance/my-sessions', {
+        params: userId ? { userId } : undefined,
+    });
     return response.data.data;
 };

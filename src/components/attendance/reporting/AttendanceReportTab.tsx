@@ -2,27 +2,25 @@ import React, { useState, useEffect } from 'react';
 import api from '../../../api';
 import { IMyAttendanceRecord } from '../../../types';
 import { formatIST } from '../../../utils/time';
-import { Table, Search, Calendar, Filter, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Table, Search, Filter, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 import { appLogger } from '../../../shared/logger';
 interface AttendanceReportTabProps {
     userId?: string;
-    startDate?: string;
-    endDate?: string;
-    onDateChange?: (start: string, end: string) => void;
+    classId: string;
+    startDate: string;
+    endDate: string;
 }
 
 const AttendanceReportTab: React.FC<AttendanceReportTabProps> = ({
     userId,
-    startDate: initialStartDate = '',
-    endDate: initialEndDate = '',
-    onDateChange,
+    classId,
+    startDate,
+    endDate,
 }) => {
     const [records, setRecords] = useState<IMyAttendanceRecord[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [startDate, setStartDate] = useState(initialStartDate);
-    const [endDate, setEndDate] = useState(initialEndDate);
     const [searchQuery, setSearchQuery] = useState('');
     const [isFilterOpen, setIsFilterOpen] = useState(false);
 
@@ -34,8 +32,19 @@ const AttendanceReportTab: React.FC<AttendanceReportTabProps> = ({
         const fetchRecords = async () => {
             try {
                 setIsLoading(true);
+                if (!classId || !startDate || !endDate) {
+                    setRecords([]);
+                    setIsLoading(false);
+                    return;
+                }
                 const endpoint = userId ? `/api/attendance/user/${userId}` : '/api/attendance/me';
-                const { data } = await api.get(endpoint);
+                const { data } = await api.get(endpoint, {
+                    params: {
+                        classId,
+                        startDate,
+                        endDate,
+                    },
+                });
                 setRecords(data || []);
             } catch (err: any) {
                 setError('Failed to load attendance records');
@@ -45,16 +54,9 @@ const AttendanceReportTab: React.FC<AttendanceReportTabProps> = ({
             }
         };
         fetchRecords();
-    }, [userId]);
+    }, [userId, classId, startDate, endDate]);
 
     const filteredRecords = records.filter((record) => {
-        const recordDateStr = record.checkInTime ? new Date(record.checkInTime).toISOString().split('T')[0] : '';
-
-        // Date Filter
-        if (startDate && recordDateStr < startDate) return false;
-        if (endDate && recordDateStr > endDate) return false;
-
-        // Search Filter
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
             const sessionName = record.sessionId?.name?.toLowerCase() || '';
@@ -75,10 +77,7 @@ const AttendanceReportTab: React.FC<AttendanceReportTabProps> = ({
     };
 
     const handleClearFilter = () => {
-        setStartDate('');
-        setEndDate('');
         setSearchQuery('');
-        if (onDateChange) onDateChange('', '');
     };
 
     if (isLoading) {
@@ -130,11 +129,10 @@ const AttendanceReportTab: React.FC<AttendanceReportTabProps> = ({
 
                         <button
                             onClick={() => setIsFilterOpen(!isFilterOpen)}
-                            className={`flex items-center gap-2 px-5 py-3 rounded-2xl border transition-all font-bold ${isFilterOpen || startDate || endDate ? 'bg-primary border-primary text-white shadow-lg' : 'bg-surface-light dark:bg-surface-dark border-border-light dark:border-border-dark text-text-primary-light dark:text-text-primary-dark'}`}
+                            className={`flex items-center gap-2 px-5 py-3 rounded-2xl border transition-all font-bold ${isFilterOpen ? 'bg-primary border-primary text-white shadow-lg' : 'bg-surface-light dark:bg-surface-dark border-border-light dark:border-border-dark text-text-primary-light dark:text-text-primary-dark'}`}
                         >
                             <Filter size={18} />
                             <span>Filters</span>
-                            {(startDate || endDate) && <span className="w-2 h-2 rounded-full bg-white animate-pulse" />}
                         </button>
                     </div>
                 </div>
@@ -145,32 +143,14 @@ const AttendanceReportTab: React.FC<AttendanceReportTabProps> = ({
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="space-y-2">
                                 <label className="text-xs font-black text-text-secondary-light uppercase tracking-widest ml-1">From Date</label>
-                                <div className="relative">
-                                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary-light" size={16} />
-                                    <input
-                                        type="date"
-                                        value={startDate}
-                                        onChange={(e) => {
-                                            setStartDate(e.target.value);
-                                            if (onDateChange) onDateChange(e.target.value, endDate);
-                                        }}
-                                        className="w-full pl-11 pr-4 py-3 rounded-2xl bg-background-light dark:bg-background-dark border border-border-light dark:border-border-dark text-text-primary-light dark:text-text-primary-dark focus:ring-4 focus:ring-primary/10 outline-none transition-all"
-                                    />
+                                <div className="w-full px-4 py-3 rounded-2xl bg-background-light dark:bg-background-dark border border-border-light dark:border-border-dark text-text-primary-light dark:text-text-primary-dark">
+                                    {startDate || 'N/A'}
                                 </div>
                             </div>
                             <div className="space-y-2">
                                 <label className="text-xs font-black text-text-secondary-light uppercase tracking-widest ml-1">To Date</label>
-                                <div className="relative">
-                                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary-light" size={16} />
-                                    <input
-                                        type="date"
-                                        value={endDate}
-                                        onChange={(e) => {
-                                            setEndDate(e.target.value);
-                                            if (onDateChange) onDateChange(startDate, e.target.value);
-                                        }}
-                                        className="w-full pl-11 pr-4 py-3 rounded-2xl bg-background-light dark:bg-background-dark border border-border-light dark:border-border-dark text-text-primary-light dark:text-text-primary-dark focus:ring-4 focus:ring-primary/10 outline-none transition-all"
-                                    />
+                                <div className="w-full px-4 py-3 rounded-2xl bg-background-light dark:bg-background-dark border border-border-light dark:border-border-dark text-text-primary-light dark:text-text-primary-dark">
+                                    {endDate || 'N/A'}
                                 </div>
                             </div>
                             <div className="flex items-end">

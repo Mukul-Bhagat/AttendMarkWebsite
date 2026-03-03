@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import api from '../api';
 import { BarChart3, Table as TableIcon } from 'lucide-react';
 import { nowIST, toISTDateString } from '../utils/time';
 import { getMyAnalytics, getMySessions } from '../api/analyticsApi';
@@ -16,15 +15,25 @@ import { getEmailAutomationConfigs, toggleEmailAutomation, deleteEmailAutomation
 import toast from 'react-hot-toast';
 
 import { appLogger } from '../shared/logger';
+
+const getCurrentMonthRange = () => {
+  const todayKey = toISTDateString(nowIST());
+  const [year, month] = todayKey.split('-');
+  return {
+    start: `${year}-${month}-01`,
+    end: todayKey,
+  };
+};
+
 const MyAttendance: React.FC = () => {
   const { userId } = useParams<{ userId?: string }>();
-  const [userName, setUserName] = useState<string>('');
 
-  // Analytics filters state
-  const [sessions, setSessions] = useState<any[]>([]);
-  const [selectedSession, setSelectedSession] = useState('');
-  const [analyticsStartDate, setAnalyticsStartDate] = useState('');
-  const [analyticsEndDate, setAnalyticsEndDate] = useState('');
+  const [classes, setClasses] = useState<Array<{ _id: string; name: string }>>([]);
+  const [selectedClass, setSelectedClass] = useState('');
+
+  const initialRange = getCurrentMonthRange();
+  const [analyticsStartDate, setAnalyticsStartDate] = useState(initialRange.start);
+  const [analyticsEndDate, setAnalyticsEndDate] = useState(initialRange.end);
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
@@ -33,49 +42,61 @@ const MyAttendance: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'analytics' | 'report' | 'approval'>('analytics');
 
-  // Reporting Modals state
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
 
-  // Email Automation state
   const [automationConfigs, setAutomationConfigs] = useState<any[]>([]);
 
-  useEffect(() => {
-    const fetchBasicInfo = async () => {
-      try {
-        const endpoint = userId ? `/api/attendance/user/${userId}` : '/api/attendance/me';
-        const { data } = await api.get(endpoint);
-
-        if (userId && data.length > 0) {
-          const firstRecord = data[0];
-          if (firstRecord.userId?.profile) {
-            setUserName(`${firstRecord.userId.profile.firstName} ${firstRecord.userId.profile.lastName}`);
-          }
+  const fetchClasses = useCallback(async () => {
+    try {
+      const data = await getMySessions(userId);
+      const classList = Array.isArray(data) ? data : [];
+      setClasses(classList);
+      setSelectedClass((current) => {
+        if (current && classList.some((item: any) => item._id === current)) {
+          return current;
         }
-      } catch (err: any) {
-        appLogger.error('Error fetching attendance info:', err);
-      }
-    };
+        return classList[0]?._id || '';
+      });
+    } catch (err) {
+      appLogger.error('Error fetching classes:', err);
+      setClasses([]);
+      setSelectedClass('');
+    }
+  }, [userId]);
 
-    const fetchSessions = async () => {
-      try {
-        const data = await getMySessions(userId);
-        setSessions(data || []);
-      } catch (err) {
-        appLogger.error('Error fetching sessions:', err);
-      }
-    };
+  const handleFetchAnalytics = useCallback(async () => {
+    if (!analyticsStartDate || !analyticsEndDate || !selectedClass) return;
 
-    fetchBasicInfo();
-    fetchSessions();
+    setAnalyticsLoading(true);
+    try {
+      const data = await getMyAnalytics({
+        userId,
+        classId: selectedClass,
+        startDate: analyticsStartDate,
+        endDate: analyticsEndDate,
+      });
+      setAnalyticsData(data);
+    } catch (err) {
+      appLogger.error('Error fetching analytics:', err);
+      setAnalyticsData(null);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, [analyticsEndDate, analyticsStartDate, selectedClass, userId]);
 
-    // Set default date range (last 30 days)
-    const todayIST = nowIST();
-    const thirtyDaysAgoIST = todayIST - (30 * 24 * 60 * 60 * 1000);
-    setAnalyticsEndDate(toISTDateString(todayIST));
-    setAnalyticsStartDate(toISTDateString(thirtyDaysAgoIST));
+  const fetchAutomationConfigs = useCallback(async () => {
+    try {
+      const response = await getEmailAutomationConfigs();
+      setAutomationConfigs(response.data.data || []);
+    } catch (err: any) {
+      appLogger.error('Error fetching automation configs:', err);
+    }
+  }, []);
 
-    // Handle initial tab from URL
+  useEffect(() => {
+    fetchClasses();
+
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
     if (tabParam === 'approval' && isAdmin) {
@@ -83,45 +104,20 @@ const MyAttendance: React.FC = () => {
     } else if (tabParam === 'report') {
       setActiveTab('report');
     }
-  }, [userId, isAdmin]);
+  }, [fetchClasses, isAdmin]);
 
-  const handleFetchAnalytics = async () => {
-    if (!analyticsStartDate || !analyticsEndDate) return;
-
-    setAnalyticsLoading(true);
-    try {
-      const data = await getMyAnalytics({
-        userId,
-        sessionId: selectedSession,
-        startDate: analyticsStartDate,
-        endDate: analyticsEndDate,
-      });
-      setAnalyticsData(data);
-    } catch (err) {
-      appLogger.error('Error fetching analytics:', err);
-    } finally {
-      setAnalyticsLoading(false);
-    }
-  };
-
-  // Initial fetch when dates are set if they were pre-filled
   useEffect(() => {
-    if (analyticsStartDate && analyticsEndDate) {
+    if (selectedClass && analyticsStartDate && analyticsEndDate) {
       handleFetchAnalytics();
+    } else {
+      setAnalyticsData(null);
     }
-  }, [userId]);
+  }, [selectedClass, analyticsStartDate, analyticsEndDate, handleFetchAnalytics]);
 
-  // Fetch automation configs
-  const fetchAutomationConfigs = async () => {
-    try {
-      const response = await getEmailAutomationConfigs();
-      setAutomationConfigs(response.data.data || []);
-    } catch (err: any) {
-      appLogger.error('Error fetching automation configs:', err);
-    }
-  };
+  useEffect(() => {
+    fetchAutomationConfigs();
+  }, [fetchAutomationConfigs]);
 
-  // Toggle automation status
   const handleToggleAutomation = async (id: string) => {
     try {
       const toastId = toast.loading('Updating automation...');
@@ -133,7 +129,6 @@ const MyAttendance: React.FC = () => {
     }
   };
 
-  // Delete automation
   const handleDeleteAutomation = async (id: string) => {
     try {
       const toastId = toast.loading('Deleting automation...');
@@ -145,36 +140,32 @@ const MyAttendance: React.FC = () => {
     }
   };
 
-  // Load automation on mount
-  useEffect(() => {
-    fetchAutomationConfigs();
-  }, []);
-
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
           <div>
             <h1 className="text-3xl font-black text-text-primary-light dark:text-text-primary-dark mb-2">
-              {userId ? `${userName}'s Attendance` : 'My Attendance'}
+              {userId ? 'User Attendance' : 'My Attendance'}
             </h1>
             <p className="text-text-secondary-light dark:text-text-secondary-dark font-medium">
-              Track your presence, analytics and session history
+              Track attendance analytics and logs by class
             </p>
           </div>
 
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsShareModalOpen(true)}
-              className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark text-text-primary-light dark:text-text-primary-dark font-bold hover:bg-background-light dark:hover:bg-background-dark transition-all shadow-sm active:scale-95"
+              disabled={!selectedClass}
+              className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark text-text-primary-light dark:text-text-primary-dark font-bold hover:bg-background-light dark:hover:bg-background-dark transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span className="material-symbols-outlined text-xl">share</span>
               <span>Share</span>
             </button>
             <button
               onClick={() => setIsDownloadModalOpen(true)}
-              className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-[#181511] dark:bg-primary text-white font-bold hover:scale-105 transition-all shadow-lg active:scale-95"
+              disabled={!selectedClass}
+              className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-[#181511] dark:bg-primary text-white font-bold hover:scale-105 transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span className="material-symbols-outlined text-xl">download</span>
               <span>Download Report</span>
@@ -182,7 +173,6 @@ const MyAttendance: React.FC = () => {
           </div>
         </div>
 
-        {/* Tab Switcher */}
         <div className="flex flex-wrap items-center p-1.5 bg-border-light/50 dark:bg-border-dark/50 rounded-2xl w-fit mb-8 gap-1">
           <button
             onClick={() => setActiveTab('analytics')}
@@ -209,30 +199,39 @@ const MyAttendance: React.FC = () => {
           )}
         </div>
 
-        {/* Tab Content */}
         <div className="mt-8">
           {activeTab === 'analytics' && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <AnalyticsFilters
-                sessions={sessions}
-                selectedSession={selectedSession}
-                onSessionChange={setSelectedSession}
+                classes={classes}
+                selectedClass={selectedClass}
+                onClassChange={setSelectedClass}
                 startDate={analyticsStartDate}
                 onStartDateChange={setAnalyticsStartDate}
                 endDate={analyticsEndDate}
                 onEndDateChange={setAnalyticsEndDate}
                 onViewReport={handleFetchAnalytics}
                 loading={analyticsLoading}
+                hideClassFilter={classes.length <= 1}
               />
               <AnalyticsTab analyticsData={analyticsData} loading={analyticsLoading} />
             </div>
           )}
 
-          {activeTab === 'report' && (
+          {activeTab === 'report' && selectedClass && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <AttendanceReportTab
                 userId={userId}
+                classId={selectedClass}
+                startDate={analyticsStartDate}
+                endDate={analyticsEndDate}
               />
+            </div>
+          )}
+
+          {activeTab === 'report' && !selectedClass && (
+            <div className="bg-surface-light dark:bg-surface-dark rounded-xl shadow-sm border border-border-light dark:border-border-dark p-10 text-center text-text-secondary-light dark:text-text-secondary-dark">
+              No active classes available for attendance logs.
             </div>
           )}
 
@@ -243,7 +242,6 @@ const MyAttendance: React.FC = () => {
           )}
         </div>
 
-        {/* Automation Indicator - Bottom Section */}
         {!userId && automationConfigs.length > 0 && (
           <div className="mt-8">
             <AutomationIndicator
@@ -256,10 +254,10 @@ const MyAttendance: React.FC = () => {
         )}
       </div>
 
-      {/* Modals */}
       <ShareReportModal
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
+        classId={selectedClass}
         startDate={analyticsStartDate}
         endDate={analyticsEndDate}
         userId={userId}
@@ -270,6 +268,7 @@ const MyAttendance: React.FC = () => {
       <DownloadReportModal
         isOpen={isDownloadModalOpen}
         onClose={() => setIsDownloadModalOpen(false)}
+        classId={selectedClass}
         startDate={analyticsStartDate}
         endDate={analyticsEndDate}
         userId={userId}

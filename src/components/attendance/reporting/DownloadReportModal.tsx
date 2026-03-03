@@ -7,6 +7,7 @@ import { appLogger } from '../../../shared/logger';
 interface DownloadReportModalProps {
     isOpen: boolean;
     onClose: () => void;
+    classId: string;
     startDate: string;
     endDate: string;
     userId?: string;
@@ -17,6 +18,7 @@ interface DownloadReportModalProps {
 const DownloadReportModal: React.FC<DownloadReportModalProps> = ({
     isOpen,
     onClose,
+    classId,
     startDate: initialStartDate,
     endDate: initialEndDate,
     userId,
@@ -57,6 +59,10 @@ const DownloadReportModal: React.FC<DownloadReportModalProps> = ({
             toast.error('Please select both start and end dates');
             return;
         }
+        if (!classId) {
+            toast.error('Please select a class first');
+            return;
+        }
 
         setIsDownloading(true);
         const toastId = toast.loading(`Generating your ${format.toUpperCase()}...`);
@@ -67,6 +73,7 @@ const DownloadReportModal: React.FC<DownloadReportModalProps> = ({
             const endDateTime = `${downloadForm.endDate}T${downloadForm.endTime}:59`;
 
             const options: DownloadReportOptions = {
+                classId,
                 organizationName: downloadForm.organizationName,
                 organizationLogo: downloadForm.organizationLogo,
                 startDate: startDateTime,

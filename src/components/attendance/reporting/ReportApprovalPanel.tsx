@@ -110,11 +110,21 @@ const ReportApprovalPanel: React.FC = () => {
 
     const handlePreview = async (request: ReportShareRequest) => {
         try {
+            const targetUserId = request.targetUserId?._id || request.userId?._id;
+            if (!targetUserId) {
+                toast.error('Cannot determine target user for this request');
+                return;
+            }
+            if (!request.classBatchId) {
+                toast.error('This request has no class scope');
+                return;
+            }
             const toastId = toast.loading('Generating preview...');
             const response = await downloadAttendanceReport({
+                classId: request.classBatchId,
                 startDate: request.startDate,
                 endDate: request.endDate,
-                userId: request.targetUserId._id,
+                userId: targetUserId,
                 organizationName: request.organizationName,
                 organizationLogo: request.organizationLogo,
                 format: 'pdf',
@@ -185,7 +195,7 @@ const ReportApprovalPanel: React.FC = () => {
                                             </h4>
                                             <p className="text-[10px] font-bold text-primary uppercase tracking-widest">Requested Share for:</p>
                                             <p className="text-sm font-bold text-text-primary-light dark:text-text-primary-dark">
-                                                {request.targetUserId?.profile?.firstName} {request.targetUserId?.profile?.lastName}
+                                                {request.targetUserId?.profile?.firstName || request.userId?.profile?.firstName} {request.targetUserId?.profile?.lastName || request.userId?.profile?.lastName}
                                             </p>
                                             <p className="text-xs text-text-secondary-light font-bold flex items-center gap-1">
                                                 <Clock size={12} /> Requested {formatIST(new Date(request.createdAt).getTime(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -218,7 +228,7 @@ const ReportApprovalPanel: React.FC = () => {
                                             <label className="text-[10px] font-black text-text-secondary-light uppercase tracking-widest">Report Period</label>
                                             <div className="flex items-center gap-2 text-sm font-bold text-text-primary-light dark:text-text-primary-dark">
                                                 <Calendar size={14} className="text-primary" />
-                                                <span>{request.startDate} to {request.endDate}</span>
+                                            <span>{request.startDate} to {request.endDate}{request.classBatchId ? ` (Class: ${request.classBatchId})` : ''}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -303,7 +313,7 @@ const ReportApprovalPanel: React.FC = () => {
                                             </span>
                                         </div>
                                         <p className="text-text-secondary-light dark:text-text-secondary-dark truncate mt-0.5">
-                                            Shared report for <span className="text-primary">{request.targetUserId?.profile?.firstName}</span> with {request.recipientEmail}
+                                            Shared report for <span className="text-primary">{request.targetUserId?.profile?.firstName || request.userId?.profile?.firstName}</span> with {request.recipientEmail}
                                         </p>
                                     </div>
                                 </div>

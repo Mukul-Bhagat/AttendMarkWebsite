@@ -12,6 +12,11 @@ import SkeletonCard from '../components/SkeletonCard';
 import { appLogger } from '../shared/logger';
 
 interface AnalyticsData {
+  totalSessions: number;
+  overallPresent: number;
+  overallLate: number;
+  overallAbsent: number;
+  dailyBreakdown: Array<{ date: string; present: number; late: number; absent: number; totalStudents: number }>;
   timeline: Array<{ date: string; percentage: number; lateCount?: number }>;
   summary: { present: number; late: number; absent: number };
   topPerformers: Array<{ name: string; email: string; percentage: number; verified: number; assigned: number }>;
@@ -19,19 +24,33 @@ interface AnalyticsData {
 }
 
 interface SessionLog {
-  _id: string;
-  name: string;
+  _id?: string;
+  sessionId: string;
+  sessionName: string;
   date: string;
   dateStr?: string;
-  totalAssigned: number;
-  presentCount: number;
-  lateCount: number;
-  absentCount: number;
+  totalAssigned?: number;
+  totalStudents: number;
+  presentCount?: number;
+  present: number;
+  lateCount?: number;
+  late: number;
+  absentCount?: number;
+  absent: number;
   attendancePercentage: number;
   status: string;
   startTime?: string;
   endTime?: string;
 }
+
+const getCurrentMonthRange = () => {
+  const todayKey = toISTDateString(nowIST());
+  const [year, month] = todayKey.split('-');
+  return {
+    start: `${year}-${month}-01`,
+    end: todayKey,
+  };
+};
 
 const AttendanceReport: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -58,7 +77,18 @@ const AttendanceReport: React.FC = () => {
       setError('');
       try {
         const { data } = await api.get('/api/classes');
-        setClasses(data || []);
+        const classList = Array.isArray(data) ? data : [];
+        setClasses(classList);
+        const preferredClass = searchParams.get('classId') || searchParams.get('classBatchId');
+        setSelectedClass((current) => {
+          if (preferredClass && classList.some((item: any) => item._id === preferredClass)) {
+            return preferredClass;
+          }
+          if (current && classList.some((item: any) => item._id === current)) {
+            return current;
+          }
+          return classList[0]?._id || '';
+        });
       } catch (err: any) {
         if (err.response?.status === 401) {
           setError('You are not authorized. Please log in again.');
@@ -71,20 +101,21 @@ const AttendanceReport: React.FC = () => {
       }
     };
     fetchClasses();
-  }, []);
-
-  useEffect(() => {
-    const classBatchId = searchParams.get('classBatchId');
-    const tab = searchParams.get('tab');
-    if (classBatchId) setSelectedClass(classBatchId);
-    if (tab === 'logs' || tab === 'analytics' || tab === 'approval') setActiveTab(tab as any);
   }, [searchParams]);
 
   useEffect(() => {
-    const todayIST = nowIST();
-    const thirtyDaysAgoIST = todayIST - (30 * 24 * 60 * 60 * 1000);
-    setEndDate(toISTDateString(todayIST));
-    setStartDate(toISTDateString(thirtyDaysAgoIST));
+    const classBatchId = searchParams.get('classId') || searchParams.get('classBatchId');
+    const tab = searchParams.get('tab');
+    if (classBatchId && classes.some((item) => item._id === classBatchId)) {
+      setSelectedClass(classBatchId);
+    }
+    if (tab === 'logs' || tab === 'analytics' || tab === 'approval') setActiveTab(tab as any);
+  }, [searchParams, classes]);
+
+  useEffect(() => {
+    const range = getCurrentMonthRange();
+    setStartDate(range.start);
+    setEndDate(range.end);
   }, []);
 
   const handleViewReport = async () => {
@@ -100,11 +131,44 @@ const AttendanceReport: React.FC = () => {
 
     try {
       if (activeTab === 'analytics') {
-        const { data } = await api.get('/api/reports/analytics', { params: { classBatchId: selectedClass, startDate, endDate } });
-        setAnalyticsData(data);
+        const { data } = await api.get('/api/reports/analytics', { params: { classId: selectedClass, startDate, endDate } });
+        const normalizedDaily = Array.isArray(data?.dailyBreakdown) ? data.dailyBreakdown : [];
+        const normalized = {
+          ...data,
+          totalSessions: data?.totalSessions ?? 0,
+          overallPresent: data?.overallPresent ?? 0,
+          overallLate: data?.overallLate ?? 0,
+          overallAbsent: data?.overallAbsent ?? 0,
+          dailyBreakdown: normalizedDaily,
+          timeline: Array.isArray(data?.timeline)
+            ? data.timeline
+            : normalizedDaily.map((item: any) => ({
+              date: item.date,
+              percentage: item.totalStudents > 0
+                ? Math.round((((item.present + item.late) / item.totalStudents) * 100) * 100) / 100
+                : 0,
+              lateCount: item.late || 0,
+            })),
+          summary: data?.summary || {
+            present: data?.overallPresent ?? 0,
+            late: data?.overallLate ?? 0,
+            absent: data?.overallAbsent ?? 0,
+          },
+        };
+        setAnalyticsData(normalized);
       } else if (activeTab === 'logs') {
-        const { data } = await api.get('/api/reports/logs', { params: { classBatchId: selectedClass, startDate, endDate } });
-        setSessionLogs(data || []);
+        const { data } = await api.get('/api/reports/logs', { params: { classId: selectedClass, startDate, endDate } });
+        const logs = Array.isArray(data) ? data : [];
+        setSessionLogs(logs.map((log: any) => ({
+          ...log,
+          sessionId: log.sessionId || log._id,
+          sessionName: log.sessionName || log.name || 'Session',
+          totalStudents: log.totalStudents ?? log.totalAssigned ?? 0,
+          present: log.present ?? log.presentCount ?? 0,
+          late: log.late ?? log.lateCount ?? 0,
+          absent: log.absent ?? log.absentCount ?? 0,
+          attendancePercentage: log.attendancePercentage ?? 0,
+        })));
       }
     } catch (err: any) {
       if (err.response?.status === 403) setError('You are not authorized to view reports.');
@@ -117,15 +181,14 @@ const AttendanceReport: React.FC = () => {
   };
 
   useEffect(() => {
-    const classBatchId = searchParams.get('classBatchId');
-    if (classBatchId && selectedClass === classBatchId && startDate && endDate && classes.length > 0) {
-      const timer = setTimeout(() => {
-        if (!selectedClass || !startDate || !endDate) return;
-        handleViewReport();
-      }, 100);
-      return () => clearTimeout(timer);
+    if (!selectedClass || !startDate || !endDate || classes.length === 0) {
+      return;
     }
-  }, [selectedClass, startDate, endDate, classes.length, searchParams, activeTab]);
+    const timer = setTimeout(() => {
+      handleViewReport();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [selectedClass, startDate, endDate, classes.length, activeTab]);
 
   const downloadSessionCSV = async (sessionId: string, sessionName: string, date: string) => {
     try {
@@ -472,22 +535,22 @@ const AttendanceReport: React.FC = () => {
                 {sessionLogs.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {sessionLogs.map(log => (
-                      <div key={log._id} className="relative rounded-2xl bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark shadow-sm hover:shadow-md transition-shadow p-5 flex flex-col gap-4">
+                      <div key={log.sessionId} className="relative rounded-2xl bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark shadow-sm hover:shadow-md transition-shadow p-5 flex flex-col gap-4">
                         <div>
-                          <h4 className="text-lg font-bold text-text-primary-light dark:text-text-primary-dark truncate">{log.name}</h4>
+                          <h4 className="text-lg font-bold text-text-primary-light dark:text-text-primary-dark truncate">{log.sessionName}</h4>
                           <p className="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">{formatDate(log.dateStr || log.date)}</p>
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-sm">
                           <div className="bg-green-50 dark:bg-green-900/20 p-2 rounded-lg text-center">
-                            <div className="font-bold text-green-600 dark:text-green-400">{log.presentCount}</div>
+                            <div className="font-bold text-green-600 dark:text-green-400">{log.present}</div>
                             <div className="text-xs text-text-secondary-light dark:text-text-secondary-dark">Present</div>
                           </div>
                           <div className="bg-red-50 dark:bg-red-900/20 p-2 rounded-lg text-center">
-                            <div className="font-bold text-red-600 dark:text-red-400">{log.absentCount}</div>
+                            <div className="font-bold text-red-600 dark:text-red-400">{log.absent}</div>
                             <div className="text-xs text-text-secondary-light dark:text-text-secondary-dark">Absent</div>
                           </div>
                           <div className="bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded-lg text-center">
-                            <div className="font-bold text-yellow-600 dark:text-yellow-400">{log.lateCount}</div>
+                            <div className="font-bold text-yellow-600 dark:text-yellow-400">{log.late}</div>
                             <div className="text-xs text-text-secondary-light dark:text-text-secondary-dark">Late</div>
                           </div>
                           <div className="bg-blue-50 dark:bg-blue-900/20 p-2 rounded-lg text-center">
@@ -496,14 +559,14 @@ const AttendanceReport: React.FC = () => {
                           </div>
                         </div>
                         <div className="mt-auto grid grid-cols-1 gap-2">
-                          <button onClick={() => { setViewingSessionId(log._id); setViewingSessionDate(log.date || log.dateStr!); }} className="w-full py-2 bg-primary/10 text-primary font-bold rounded-lg hover:bg-primary/20 transition-colors">
+                          <button onClick={() => { setViewingSessionId(log.sessionId); setViewingSessionDate(log.date || log.dateStr!); }} className="w-full py-2 bg-primary/10 text-primary font-bold rounded-lg hover:bg-primary/20 transition-colors">
                             View Details
                           </button>
                           <div className="grid grid-cols-2 gap-2">
-                            <button onClick={() => downloadSessionCSV(log._id, log.name, log.date || log.dateStr!)} className="py-2 bg-gray-100 dark:bg-gray-800 text-text-primary-light dark:text-text-primary-dark text-xs font-bold rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                            <button onClick={() => downloadSessionCSV(log.sessionId, log.sessionName, log.date || log.dateStr!)} className="py-2 bg-gray-100 dark:bg-gray-800 text-text-primary-light dark:text-text-primary-dark text-xs font-bold rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
                               CSV
                             </button>
-                            <button onClick={() => downloadSessionPDF(log._id, log.name, log.date || log.dateStr!)} className="py-2 bg-gray-100 dark:bg-gray-800 text-text-primary-light dark:text-text-primary-dark text-xs font-bold rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                            <button onClick={() => downloadSessionPDF(log.sessionId, log.sessionName, log.date || log.dateStr!)} className="py-2 bg-gray-100 dark:bg-gray-800 text-text-primary-light dark:text-text-primary-dark text-xs font-bold rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
                               PDF
                             </button>
                           </div>

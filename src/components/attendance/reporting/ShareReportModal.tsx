@@ -7,6 +7,7 @@ import { appLogger } from '../../../shared/logger';
 interface ShareReportModalProps {
     isOpen: boolean;
     onClose: () => void;
+    classId: string;
     startDate: string;
     endDate: string;
     userId?: string;
@@ -17,6 +18,7 @@ interface ShareReportModalProps {
 const ShareReportModal: React.FC<ShareReportModalProps> = ({
     isOpen,
     onClose,
+    classId,
     startDate: initialStartDate,
     endDate: initialEndDate,
     userId,
@@ -95,6 +97,10 @@ const ShareReportModal: React.FC<ShareReportModalProps> = ({
             toast.error('Please fill in all required fields');
             return;
         }
+        if (!classId) {
+            toast.error('Please select a class first');
+            return;
+        }
 
         if (!emailRegex.test(shareForm.recipientEmail)) {
             toast.error('Please enter a valid email address');
@@ -119,6 +125,7 @@ const ShareReportModal: React.FC<ShareReportModalProps> = ({
         try {
             const options: ShareReportOptions = {
                 ...shareForm,
+                classId,
                 userId,
             };
 
