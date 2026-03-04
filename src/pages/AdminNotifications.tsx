@@ -17,11 +17,11 @@ interface SentNotification {
     _id: string;
     title: string;
     message: string;
-    targetType: 'ALL' | 'ORGANIZATION';
-    targetOrgIds: any[];
+    targetType: 'USER' | 'ORG' | 'PLATFORM';
+    organizationId?: string | null;
     createdAt: string;
-    deliveredCount: number;
-    failedCount: number;
+    deliveredCount?: number;
+    failedCount?: number;
 }
 
 const AdminNotifications: React.FC = () => {
@@ -31,7 +31,7 @@ const AdminNotifications: React.FC = () => {
     // Form state
     const [title, setTitle] = useState('');
     const [message, setMessage] = useState('');
-    const [targetType, setTargetType] = useState<'ALL' | 'ORGANIZATION'>('ALL');
+    const [targetType, setTargetType] = useState<'PLATFORM' | 'ORG'>('PLATFORM');
     const [selectedOrgs, setSelectedOrgs] = useState<string[]>([]);
 
     // Data
@@ -55,7 +55,7 @@ const AdminNotifications: React.FC = () => {
     useEffect(() => {
         const fetchOrganizations = async () => {
             try {
-                const response = await api.get('/platform/organizations');
+                const response = await api.get('/api/platform/organizations');
                 const data = response.data?.organizations || response.data;
                 // CRASH PREVENTION: Ensure we always have an array
                 if (Array.isArray(data)) {
@@ -77,7 +77,7 @@ const AdminNotifications: React.FC = () => {
     const fetchHistory = async () => {
         setLoadingHistory(true);
         try {
-            const response = await api.get('/admin/notifications?limit=10');
+            const response = await api.get('/api/admin/notifications?limit=10');
             const data = response.data;
             // CRASH PREVENTION: Ensure we always have an array
             if (Array.isArray(data)) {
@@ -101,7 +101,7 @@ const AdminNotifications: React.FC = () => {
     // Validation
     const isValid = () => {
         if (!title.trim() || !message.trim()) return false;
-        if (targetType === 'ORGANIZATION' && selectedOrgs.length === 0) return false;
+        if (targetType === 'ORG' && selectedOrgs.length === 0) return false;
         return true;
     };
 
@@ -117,19 +117,31 @@ const AdminNotifications: React.FC = () => {
         setSuccess('');
 
         try {
-            await api.post('/admin/notifications/send', {
-                title,
-                message,
-                targetType,
-                organizationIds: targetType === 'ORGANIZATION' ? selectedOrgs : undefined
-            });
+            if (targetType === 'ORG') {
+                await Promise.all(
+                    selectedOrgs.map((organizationId) =>
+                        api.post('/api/admin/notifications/send', {
+                            title,
+                            body: message,
+                            targetType: 'ORG',
+                            organizationId,
+                        }),
+                    ),
+                );
+            } else {
+                await api.post('/api/admin/notifications/send', {
+                    title,
+                    body: message,
+                    targetType: 'PLATFORM',
+                });
+            }
 
             setSuccess('✅ Notification sent successfully!');
 
             // Reset form
             setTitle('');
             setMessage('');
-            setTargetType('ALL');
+            setTargetType('PLATFORM');
             setSelectedOrgs([]);
 
             // Refresh history
@@ -252,17 +264,17 @@ const AdminNotifications: React.FC = () => {
                                     <input
                                         type="radio"
                                         name="targetType"
-                                        value="ALL"
-                                        checked={targetType === 'ALL'}
+                                        value="PLATFORM"
+                                        checked={targetType === 'PLATFORM'}
                                         onChange={() => {
-                                            setTargetType('ALL');
+                                            setTargetType('PLATFORM');
                                             setSelectedOrgs([]);
                                         }}
                                         className="w-4 h-4 text-orange-600 focus:ring-orange-500"
                                     />
                                     <div className="flex-1">
-                                        <div className="font-medium text-gray-900 dark:text-white">All Organizations</div>
-                                        <div className="text-sm text-gray-500 dark:text-gray-400">Send to everyone on the platform</div>
+                                        <div className="font-medium text-gray-900 dark:text-white">Platform Wide</div>
+                                        <div className="text-sm text-gray-500 dark:text-gray-400">Send to all users across organizations</div>
                                     </div>
                                 </label>
 
@@ -270,9 +282,9 @@ const AdminNotifications: React.FC = () => {
                                     <input
                                         type="radio"
                                         name="targetType"
-                                        value="ORGANIZATION"
-                                        checked={targetType === 'ORGANIZATION'}
-                                        onChange={() => setTargetType('ORGANIZATION')}
+                                        value="ORG"
+                                        checked={targetType === 'ORG'}
+                                        onChange={() => setTargetType('ORG')}
                                         className="w-4 h-4 text-orange-600 focus:ring-orange-500"
                                     />
                                     <div className="flex-1">
@@ -284,7 +296,7 @@ const AdminNotifications: React.FC = () => {
                         </div>
 
                         {/* Organization Selector */}
-                        {targetType === 'ORGANIZATION' && (
+                        {targetType === 'ORG' && (
                             <div className="animate-fadeIn">
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                                     Select Organizations *
@@ -354,7 +366,7 @@ const AdminNotifications: React.FC = () => {
                                 onClick={() => {
                                     setTitle('');
                                     setMessage('');
-                                    setTargetType('ALL');
+                                    setTargetType('PLATFORM');
                                     setSelectedOrgs([]);
                                 }}
                                 className="px-6 py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
@@ -426,12 +438,13 @@ const AdminNotifications: React.FC = () => {
                                                 </span>
                                                 <span className="flex items-center gap-1">
                                                     <span className="material-symbols-outlined text-sm">
-                                                        {notif.targetType === 'ALL' ? 'public' : 'groups'}
+                                                        {notif.targetType === 'PLATFORM' ? 'public' : 'groups'}
                                                     </span>
-                                                    {notif.targetType === 'ALL'
-                                                        ? 'All Organizations'
-                                                        : `${Array.isArray(notif.targetOrgIds) ? notif.targetOrgIds.length : 0} Organization${(Array.isArray(notif.targetOrgIds) && notif.targetOrgIds.length > 1) ? 's' : ''}`
-                                                    }
+                                                    {notif.targetType === 'PLATFORM'
+                                                        ? 'Platform'
+                                                        : notif.targetType === 'ORG'
+                                                            ? (notif.organizationId ? `Organization ${notif.organizationId}` : 'Organization')
+                                                            : 'User'}
                                                 </span>
                                                 {notif.deliveredCount !== undefined && (
                                                     <span className="flex items-center gap-1">

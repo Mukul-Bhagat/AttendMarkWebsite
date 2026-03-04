@@ -289,42 +289,63 @@ const ManageUsers: React.FC = () => {
       skipEmptyLines: true,
       complete: async (results) => {
         const data = results.data as any[];
-
-        // Validate headers
+        const normalizeHeader = (value: string) =>
+          value.toLowerCase().replace(/[\s_-]+/g, '');
         const headers = Object.keys(data[0] || {});
-        const hasFirstName = headers.some(h => h.toLowerCase() === 'firstname');
-        const hasLastName = headers.some(h => h.toLowerCase() === 'lastname');
-        const hasEmail = headers.some(h => h.toLowerCase() === 'email');
+        const findHeader = (aliases: string[]) =>
+          headers.find((h) => aliases.includes(normalizeHeader(h)));
 
-        if (!hasFirstName || !hasLastName || !hasEmail) {
-          setError('CSV must contain "FirstName", "LastName", and "Email" columns. Phone is optional.');
+        const nameKey = findHeader(['name', 'fullname']);
+        const firstNameKey = findHeader(['firstname', 'first']);
+        const lastNameKey = findHeader(['lastname', 'last']);
+        const emailKey = findHeader(['email']);
+        const roleKey = findHeader(['role']);
+        const phoneKey = findHeader(['phonenumber', 'phone', 'mobile']);
+        const addressKey = findHeader(['address']);
+        const genderKey = findHeader(['gender']);
+        const dobKey = findHeader(['dateofbirth', 'dob']);
+
+        if (!emailKey || (!nameKey && (!firstNameKey || !lastNameKey))) {
+          setError('CSV must contain Email and either Name or FirstName + LastName columns.');
           setIsBulkImporting(false);
           return;
         }
 
-        // Transform data to match backend format
-        // Note: Role column is optional - if missing, backend will default to 'EndUser'
-        const users = data.map((row: any) => {
-          const firstNameKey = headers.find(h => h.toLowerCase() === 'firstname') || 'FirstName';
-          const lastNameKey = headers.find(h => h.toLowerCase() === 'lastname') || 'LastName';
-          const emailKey = headers.find(h => h.toLowerCase() === 'email') || 'Email';
-          const roleKey = headers.find(h => h.toLowerCase() === 'role'); // Optional - may not exist
-          const phoneKey = headers.find(h => h.toLowerCase() === 'phone'); // Optional
+        const users = data
+          .map((row: any) => {
+            const emailValue = emailKey ? String(row[emailKey] || '').trim() : '';
+            const fullName = nameKey ? String(row[nameKey] || '').trim() : '';
+            const csvFirstName = firstNameKey ? String(row[firstNameKey] || '').trim() : '';
+            const csvLastName = lastNameKey ? String(row[lastNameKey] || '').trim() : '';
+            const resolvedName = fullName || [csvFirstName, csvLastName].filter(Boolean).join(' ').trim();
+            const role = roleKey ? String(row[roleKey] || '').trim() : '';
+            const phoneNumber = phoneKey ? String(row[phoneKey] || '').trim() : '';
+            const address = addressKey ? String(row[addressKey] || '').trim() : '';
+            const gender = genderKey ? String(row[genderKey] || '').trim() : '';
+            const dateOfBirth = dobKey ? String(row[dobKey] || '').trim() : '';
 
-          const userObj: any = {
-            firstName: row[firstNameKey]?.trim() || '',
-            lastName: row[lastNameKey]?.trim() || '',
-            email: row[emailKey]?.trim() || '',
-            phone: phoneKey ? (row[phoneKey]?.trim() || '') : '',
-          };
+            if (!resolvedName || !emailValue) {
+              return null;
+            }
 
-          // Only include role if the column exists
-          if (roleKey) {
-            userObj.role = row[roleKey]?.trim() || '';
-          }
+            const tokens = resolvedName.split(/\s+/).filter(Boolean);
+            const fallbackFirstName = tokens[0] || '';
+            const fallbackLastName = tokens.length > 1 ? tokens.slice(1).join(' ') : 'User';
 
-          return userObj;
-        }).filter(user => user.firstName && user.lastName && user.email); // Filter out empty rows
+            return {
+              name: resolvedName,
+              firstName: csvFirstName || fallbackFirstName,
+              lastName: csvLastName || fallbackLastName,
+              email: emailValue,
+              role,
+              phoneNumber: phoneNumber || undefined,
+              phone: phoneNumber || undefined,
+              address: address || undefined,
+              gender: gender || undefined,
+              dateOfBirth: dateOfBirth || undefined,
+            };
+          })
+          .filter(Boolean);
 
         if (users.length === 0) {
           setError('No valid users found in CSV file');
@@ -913,15 +934,17 @@ const ManageUsers: React.FC = () => {
                     <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                       <p className="text-xs font-medium text-blue-800 dark:text-blue-300 mb-2">CSV Format Requirements:</p>
                       <p className="text-xs text-blue-700 dark:text-blue-400 mb-2">
-                        <strong>Required Columns:</strong> FirstName, LastName, Email, Phone (optional).
+                        <strong>Required:</strong> Email and either Name or FirstName + LastName.
+                        <br />
+                        <strong>Optional:</strong> Role, PhoneNumber, Address, Gender, DateOfBirth (YYYY-MM-DD).
                       </p>
                       <button
                         type="button"
                         onClick={() => {
                           const sampleData = [
-                            ['FirstName', 'LastName', 'Email', 'Phone'],
-                            ['Rahul', 'Sharma', 'rahul.student@test.com', '9988776655'],
-                            ['Priya', 'Verma', 'priya.student@test.com', '8877665544'],
+                            ['name', 'email', 'role', 'phoneNumber', 'address', 'gender', 'dateOfBirth'],
+                            ['Rahul Sharma', 'rahul.student@test.com', 'Employee', '9988776655', 'Nashik', 'Male', '1998-04-12'],
+                            ['Priya Verma', 'priya.student@test.com', 'Manager', '', '', 'Female', ''],
                           ];
                           const csvContent = sampleData.map(row => row.join(',')).join('\n');
                           const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

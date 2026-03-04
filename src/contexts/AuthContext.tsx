@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import api from '../api';
 import { Role, RoleProfile, resolveRole } from '../shared/roles';
+import { deactivateWebPushDevice, registerWebPushDevice } from '../firebase/notificationPermission';
 
 import { appLogger } from '../shared/logger';
 // Define the shape of the user object and the auth context
@@ -138,6 +139,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     initAuth();
   }, []);
 
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    registerWebPushDevice().catch((error) => {
+      appLogger.warn('Failed to register web push device', error);
+    });
+  }, [user?.id, user?.organizationId]);
+
   // Login function - can accept formData (for old flow) or { user } (for new flow)
   const login = async (formDataOrAuth: any) => {
     setIsLoading(true);
@@ -163,6 +174,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Logout function
   const logout = () => {
+    deactivateWebPushDevice().catch((error) => {
+      appLogger.warn('Failed to deactivate web push device during logout', error);
+    });
     setToken(null);
     setUser(null);
     localStorage.removeItem('token');
@@ -187,6 +201,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Switch to a different organization
   const switchOrganization = async (organizationId: string) => {
     try {
+      await deactivateWebPushDevice().catch((error) => {
+        appLogger.warn('Failed to deactivate web push token on organization switch', error);
+      });
+
       const response = await api.post('/api/auth/switch-organization', {
         organizationId,
       });
@@ -209,6 +227,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setToken('cookie-auth');
       }
       setUser(normalizeAuthUser(user));
+
+      await registerWebPushDevice().catch((error) => {
+        appLogger.warn('Failed to register web push token on organization switch', error);
+      });
 
       // Reload the page to refresh the dashboard with new organization context
       window.location.href = '/dashboard';

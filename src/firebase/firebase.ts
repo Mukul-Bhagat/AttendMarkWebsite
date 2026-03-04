@@ -1,13 +1,70 @@
-import { initializeApp } from "firebase/app";
-import { getMessaging } from "firebase/messaging";
+import { FirebaseApp, getApp, getApps, initializeApp } from 'firebase/app';
+import { getMessaging, isSupported, Messaging } from 'firebase/messaging';
 
-const firebaseConfig = {
-    apiKey: "AIzaSyBoWv3-BdwtrO4ljkF2N03tUrm-V_vmf7A",
-    authDomain: "attend-mark.firebaseapp.com",
-    projectId: "attend-mark",
-    messagingSenderId: "408522161876",
-    appId: "1:408522161876:web:dcc248b159912e64280541",
+import { appLogger } from '../shared/logger';
+
+export const firebaseWebConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-export const firebaseApp = initializeApp(firebaseConfig);
-export const messaging = getMessaging(firebaseApp);
+export const hasFirebaseMessagingConfig = [
+  firebaseWebConfig.apiKey,
+  firebaseWebConfig.authDomain,
+  firebaseWebConfig.projectId,
+  firebaseWebConfig.messagingSenderId,
+  firebaseWebConfig.appId,
+].every((value) => typeof value === 'string' && value.trim().length > 0);
+
+let appInstance: FirebaseApp | null = null;
+let messagingPromise: Promise<Messaging | null> | null = null;
+
+export const getFirebaseApp = (): FirebaseApp | null => {
+  if (!hasFirebaseMessagingConfig) {
+    return null;
+  }
+
+  if (appInstance) {
+    return appInstance;
+  }
+
+  appInstance = getApps().length > 0 ? getApp() : initializeApp(firebaseWebConfig);
+  return appInstance;
+};
+
+export const getMessagingInstance = async (): Promise<Messaging | null> => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  if (!hasFirebaseMessagingConfig) {
+    appLogger.warn('Firebase messaging env config is incomplete. Push registration skipped.');
+    return null;
+  }
+
+  if (!messagingPromise) {
+    messagingPromise = isSupported()
+      .then((supported) => {
+        if (!supported) {
+          appLogger.warn('Firebase messaging is not supported in this browser.');
+          return null;
+        }
+
+        const app = getFirebaseApp();
+        if (!app) {
+          return null;
+        }
+
+        return getMessaging(app);
+      })
+      .catch((error) => {
+        appLogger.error('Failed to initialize firebase messaging', error);
+        return null;
+      });
+  }
+
+  return messagingPromise;
+};

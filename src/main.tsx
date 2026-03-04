@@ -9,6 +9,7 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import { AuthProvider } from './contexts/AuthContext' // Import the provider
 import { OrganizationProvider } from './contexts/OrganizationContext'
+import { bootstrapNotificationServiceWorker } from './firebase/notificationPermission'
 import './index.css'
 
 // Set default theme to light mode on initial load
@@ -18,6 +19,8 @@ if (!storedTheme || storedTheme === 'light') {
 } else if (storedTheme === 'dark') {
   document.documentElement.classList.add('dark');
 }
+
+void bootstrapNotificationServiceWorker();
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>

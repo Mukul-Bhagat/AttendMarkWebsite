@@ -51,7 +51,6 @@ const BulkImportStaff: React.FC<BulkImportStaffProps> = ({ isOpen, onClose, onSu
       return;
     }
 
-    // Password is now handled by the backend (default: "Staff@123")
     setIsBulkImporting(true);
     setError('');
     setMessage('');
@@ -61,29 +60,45 @@ const BulkImportStaff: React.FC<BulkImportStaffProps> = ({ isOpen, onClose, onSu
       skipEmptyLines: true,
       complete: async (results) => {
         const data = results.data as any[];
-
-        // Validate headers
+        const normalizeHeader = (value: string) =>
+          value.toLowerCase().replace(/[\s_-]+/g, '');
         const headers = Object.keys(data[0] || {});
-        const hasFirstName = headers.some(h => h.toLowerCase() === 'firstname');
-        const hasLastName = headers.some(h => h.toLowerCase() === 'lastname');
-        const hasEmail = headers.some(h => h.toLowerCase() === 'email');
-        const hasRole = headers.some(h => h.toLowerCase() === 'role');
+        const findHeader = (aliases: string[]) =>
+          headers.find((h) => aliases.includes(normalizeHeader(h)));
 
-        if (!hasFirstName || !hasLastName || !hasEmail || !hasRole) {
-          setError('CSV must contain "firstName", "lastName", "email", and "role" columns. Role must be "Manager" or "SessionAdmin" (case-insensitive).');
+        const nameKey = findHeader(['name', 'fullname']);
+        const firstNameKey = findHeader(['firstname', 'first']);
+        const lastNameKey = findHeader(['lastname', 'last']);
+        const emailKey = findHeader(['email']);
+        const roleKey = findHeader(['role']);
+        const phoneKey = findHeader(['phonenumber', 'phone', 'mobile']);
+        const addressKey = findHeader(['address']);
+        const genderKey = findHeader(['gender']);
+        const dobKey = findHeader(['dateofbirth', 'dob']);
+
+        if (!emailKey || !roleKey || (!nameKey && (!firstNameKey || !lastNameKey))) {
+          setError('CSV must contain Email, Role and either Name or FirstName + LastName.');
           setIsBulkImporting(false);
           return;
         }
 
-        // Transform data to match backend format
-        const users = data.map((row: any) => {
-          const firstNameKey = headers.find(h => h.toLowerCase() === 'firstname') || 'FirstName';
-          const lastNameKey = headers.find(h => h.toLowerCase() === 'lastname') || 'LastName';
-          const emailKey = headers.find(h => h.toLowerCase() === 'email') || 'Email';
-          const roleKey = headers.find(h => h.toLowerCase() === 'role') || 'Role';
-          const phoneKey = headers.find(h => h.toLowerCase() === 'phone') || 'Phone';
+        const users = data
+          .map((row: any) => {
+          const emailValue = emailKey ? String(row[emailKey] || '').trim() : '';
+          const fullName = nameKey ? String(row[nameKey] || '').trim() : '';
+          const csvFirstName = firstNameKey ? String(row[firstNameKey] || '').trim() : '';
+          const csvLastName = lastNameKey ? String(row[lastNameKey] || '').trim() : '';
+          const resolvedName = fullName || [csvFirstName, csvLastName].filter(Boolean).join(' ').trim();
+          const rawRole = roleKey ? String(row[roleKey] || '').trim() : '';
+          const phoneNumber = phoneKey ? String(row[phoneKey] || '').trim() : '';
+          const address = addressKey ? String(row[addressKey] || '').trim() : '';
+          const gender = genderKey ? String(row[genderKey] || '').trim() : '';
+          const dateOfBirth = dobKey ? String(row[dobKey] || '').trim() : '';
 
-          const rawRole = row[roleKey]?.trim() || '';
+          if (!resolvedName || !emailValue || !rawRole) {
+            return null;
+          }
+
           // Normalize role (case-insensitive): Manager, SessionAdmin, or Session Admin
           let normalizedRole = '';
           if (rawRole.toLowerCase() === 'manager') {
@@ -94,16 +109,26 @@ const BulkImportStaff: React.FC<BulkImportStaffProps> = ({ isOpen, onClose, onSu
             normalizedRole = rawRole; // Keep original if valid, will be validated later
           }
 
+          const tokens = resolvedName.split(/\s+/).filter(Boolean);
+          const fallbackFirstName = tokens[0] || '';
+          const fallbackLastName = tokens.length > 1 ? tokens.slice(1).join(' ') : 'User';
+
           return {
-            firstName: row[firstNameKey]?.trim() || '',
-            lastName: row[lastNameKey]?.trim() || '',
-            email: row[emailKey]?.trim() || '',
+            name: resolvedName,
+            firstName: csvFirstName || fallbackFirstName,
+            lastName: csvLastName || fallbackLastName,
+            email: emailValue,
             role: normalizedRole,
-            phone: row[phoneKey]?.trim() || '',
+            phone: phoneNumber || undefined,
+            phoneNumber: phoneNumber || undefined,
+            address: address || undefined,
+            gender: gender || undefined,
+            dateOfBirth: dateOfBirth || undefined,
           };
-        }).filter(user => {
+        }).filter((user: any) => {
+          if (!user) return false;
           // Filter out empty rows and validate role
-          if (!user.firstName || !user.lastName || !user.email || !user.role) {
+          if (!user.name || !user.email || !user.role) {
             return false;
           }
           // Validate role matches 'Manager' or 'SessionAdmin' (case-insensitive)
@@ -118,9 +143,9 @@ const BulkImportStaff: React.FC<BulkImportStaffProps> = ({ isOpen, onClose, onSu
         }
 
         try {
-          // Use the new staff-specific bulk import endpoint
-          const { data: response } = await api.post('/api/users/staff/bulk-import', {
-            staff: users, // Send as 'staff' array to match backend expectation
+          const { data: response } = await api.post('/api/users/staff/bulk', {
+            staff: users,
+            useRandomPassword: true,
           });
 
           setMessage(response.msg || `Successfully imported ${response.successCount} staff members`);
@@ -191,15 +216,16 @@ const BulkImportStaff: React.FC<BulkImportStaffProps> = ({ isOpen, onClose, onSu
         {/* CSV Format Instructions - Above Grid */}
         <div className="px-6 pt-4">
             <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 p-3 rounded-md text-sm">
-            <p><strong>Required Columns:</strong> firstName, lastName, email, role, phone (optional).</p>
+            <p><strong>Required Columns:</strong> Email, Role, and either Name or FirstName + LastName.</p>
+            <p className="mt-1"><strong>Optional Columns:</strong> PhoneNumber, Address, Gender, DateOfBirth (YYYY-MM-DD).</p>
             <p className="mt-1">Note: <strong>Role</strong> must be 'Manager' or 'SessionAdmin' (case-insensitive).</p>
             <button
               type="button"
               onClick={() => {
                 const sampleData = [
-                  ['firstName', 'lastName', 'email', 'phone', 'role'],
-                  ['John', 'Doe', 'john.doe@example.com', '9876543210', 'Manager'],
-                  ['Jane', 'Smith', 'jane.smith@example.com', '9123456789', 'SessionAdmin'],
+                  ['name', 'email', 'role', 'phoneNumber', 'address', 'gender', 'dateOfBirth'],
+                  ['John Doe', 'john.doe@example.com', 'Manager', '9876543210', 'Nashik', 'Male', '1998-04-12'],
+                  ['Jane Smith', 'jane.smith@example.com', 'SessionAdmin', '', '', 'Female', ''],
                 ];
                 const csvContent = sampleData.map(row => row.join(',')).join('\n');
                 const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -338,7 +364,7 @@ const BulkImportStaff: React.FC<BulkImportStaffProps> = ({ isOpen, onClose, onSu
             
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-2">
               <p className="text-sm text-blue-800 dark:text-blue-300">
-                <strong>Password Generation:</strong> Each staff member will receive a default password (<code className="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">Staff@123</code>) via email.
+                <strong>Password Generation:</strong> Each staff member will receive an auto-generated temporary password via email.
               </p>
               <p className="text-sm text-blue-800 dark:text-blue-300">
                 <strong>Note:</strong> Staff members will be required to change their password on first login.
