@@ -275,6 +275,18 @@ const Classes: React.FC = () => {
                   const isPast = isClassPast(classBatch);
                   const classStartDate = classBatch.startDate || firstSession?.startDate;
                   const classEndDate = classBatch.endDate || classBatch.latestSessionDate || firstSession?.endDate;
+                  const cardStatusLabel = nextSession ? 'Next' : isPast ? 'Ended' : 'Upcoming';
+                  const endedAtSource = classBatch.latestSessionDate || classEndDate || displaySession?.endDate || displaySession?.startDate;
+                  const endedAtDate = endedAtSource ? new Date(endedAtSource) : null;
+                  const endedAtTimestamp =
+                    endedAtDate && !Number.isNaN(endedAtDate.getTime())
+                      ? endedAtDate.getTime()
+                      : null;
+                  const cardStatusTimestamp = displaySession
+                    ? (isPast && !nextSession && endedAtTimestamp !== null
+                      ? endedAtTimestamp
+                      : sessionTimeToIST(displaySession.startDate, displaySession.startTime))
+                    : null;
 
                   return (
                     <div
@@ -344,11 +356,11 @@ const Classes: React.FC = () => {
                             End: {formatDateLabel(classEndDate)}
                           </span>
                         </div>
-                        {displaySession && (
+                        {displaySession && cardStatusTimestamp !== null && (
                           <div className="flex items-center text-sm">
                             <Calendar className="w-4 h-4 mr-2 text-slate-500 dark:text-slate-400 flex-shrink-0" />
                             <span className="break-words whitespace-normal">
-                              {nextSession ? 'Next' : isPast ? 'Ended' : 'Upcoming'}: {formatIST(sessionTimeToIST(displaySession.startDate, displaySession.startTime), { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
+                              {cardStatusLabel}: {formatIST(cardStatusTimestamp, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
                             </span>
                           </div>
                         )}

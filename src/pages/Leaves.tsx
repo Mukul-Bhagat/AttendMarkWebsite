@@ -376,6 +376,15 @@ const Leaves: React.FC = () => {
   const pendingLeaveRequests = pendingRequests;
   const orgHistoryUpcoming = useMemo(() => orgHistory.filter((leave) => !isLeavePast(leave)), [orgHistory, todayStr]);
   const orgHistoryPast = useMemo(() => orgHistory.filter((leave) => isLeavePast(leave)), [orgHistory, todayStr]);
+  const approvedByMe = useMemo(() => {
+    if (!isAdminOrStaff || !user?.id) return [] as ILeaveRequest[];
+    return orgHistory.filter((leave) => {
+      if (leave.status !== 'Approved') return false;
+      if (!leave.approvedBy) return false;
+      if (typeof leave.approvedBy === 'string') return leave.approvedBy === user.id;
+      return leave.approvedBy._id === user.id;
+    });
+  }, [isAdminOrStaff, orgHistory, user?.id]);
   const myPastLeaves = useMemo(() => leaveRequests.filter((leave) => isLeavePast(leave)), [leaveRequests, todayStr]);
   const combinedPastLeaves = useMemo(() => {
     if (!isAdminOrStaff) return myPastLeaves;
@@ -1232,13 +1241,24 @@ const Leaves: React.FC = () => {
             Manage your leave requests and track your leave balance.
           </p>
         </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="px-6 py-3 bg-[#f04129] hover:bg-[#d63a25] text-white font-bold rounded-lg transition-colors flex items-center gap-2"
-        >
-          <span className="material-symbols-outlined">add</span>
-          Apply Leave
-        </button>
+        <div className="flex items-center gap-2 ml-auto">
+          {isAdminOrStaff && (
+            <button
+              onClick={() => document.getElementById('leave-approval-queue')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              className="px-4 py-3 bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark text-text-primary-light dark:text-text-primary-dark font-bold rounded-lg transition-colors flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined">fact_check</span>
+              Approval Queue
+            </button>
+          )}
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="px-6 py-3 bg-[#f04129] hover:bg-[#d63a25] text-white font-bold rounded-lg transition-colors flex items-center gap-2"
+          >
+            <span className="material-symbols-outlined">add</span>
+            Apply Leave
+          </button>
+        </div>
       </div>
 
       {/* Quota Summary Cards */}
@@ -1354,7 +1374,7 @@ const Leaves: React.FC = () => {
 
       {/* Organization History Section - Only for Admins/Staff */}
       {isAdminOrStaff && (
-        <div className="w-full rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm mb-6">
+        <div id="leave-approval-queue" className="w-full rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm mb-6">
           <h2 className="text-xl font-bold mb-4 text-text-primary-light dark:text-text-primary-dark">
             Organization History
           </h2>
@@ -1393,6 +1413,26 @@ const Leaves: React.FC = () => {
           ) : (
             <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm py-4">
               No organization history found.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Approved by Me Section - Only for Admins/Staff */}
+      {isAdminOrStaff && (
+        <div className="w-full rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm mb-6">
+          <h2 className="text-xl font-bold mb-4 text-text-primary-light dark:text-text-primary-dark">
+            Approved by Me
+          </h2>
+          {approvedByMe.length > 0 ? (
+            <div className="scroll-wrapper">
+              <div className="card-track">
+                {approvedByMe.map((leave) => renderLeaveCard(leave, { showUser: true, showApprover: true }))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm py-4">
+              No leave approvals done by you yet.
             </p>
           )}
         </div>

@@ -16,6 +16,21 @@ export const getMyAnalytics = async (params: {
     return response.data.data;
 };
 
+export interface AttendanceDashboardParams {
+    startDate?: string;
+    endDate?: string;
+    classId: string;
+    userId?: string;
+}
+
+export const getMyDashboard = async (params: AttendanceDashboardParams) => {
+    const { userId, ...rest } = params;
+    const response = await api.get('/api/attendance/my-dashboard', {
+        params: userId ? { ...rest, userId } : rest,
+    });
+    return response.data.data;
+};
+
 /**
  * Get list of sessions/classes a user is enrolled in
  */

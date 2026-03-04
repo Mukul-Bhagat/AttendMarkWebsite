@@ -534,7 +534,7 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                                                             setIsAdjustModalOpen(true);
                                                         }}
                                                         className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded text-sm font-medium transition-colors">
-                                                        Adjust
+                                                        Manual Attendance
                                                     </button>
                                                 </td>
                                             )}
@@ -607,7 +607,7 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                                                 className="w-full h-11 bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
                                             >
                                                 <span className="material-symbols-outlined text-lg">edit</span>
-                                                Adjust Attendance
+                                                Manual Attendance
                                             </button>
                                         )}
                                     </div>

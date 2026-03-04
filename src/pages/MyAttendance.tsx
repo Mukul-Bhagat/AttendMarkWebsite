@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { BarChart3, Table as TableIcon } from 'lucide-react';
+import { BarChart3, CircleAlert, Table as TableIcon } from 'lucide-react';
 import { nowIST, toISTDateString } from '../utils/time';
-import { getMyAnalytics, getMySessions } from '../api/analyticsApi';
+import { getMyDashboard, getMySessions } from '../api/analyticsApi';
 import AnalyticsFilters from '../components/attendance/AnalyticsFilters';
 import AnalyticsTab from '../components/attendance/AnalyticsTab';
 import AttendanceReportTab from '../components/attendance/reporting/AttendanceReportTab';
@@ -13,6 +13,7 @@ import ReportApprovalPanel from '../components/attendance/reporting/ReportApprov
 import { AutomationIndicator } from '../components/attendance/reporting/AutomationIndicator';
 import { getEmailAutomationConfigs, toggleEmailAutomation, deleteEmailAutomation } from '../api/reportingApi';
 import toast from 'react-hot-toast';
+import AttendanceIssuePanel from '../components/attendance/AttendanceIssuePanel';
 
 import { appLogger } from '../shared/logger';
 
@@ -36,6 +37,7 @@ const MyAttendance: React.FC = () => {
   const [analyticsEndDate, setAnalyticsEndDate] = useState(initialRange.end);
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [isIssuePanelOpen, setIsIssuePanelOpen] = useState(false);
 
   const { user, isSuperAdmin, isCompanyAdmin, isManager, isPlatformOwner, isSessionAdmin } = useAuth();
   const isAdmin = isSuperAdmin || isCompanyAdmin || isManager || isPlatformOwner || isSessionAdmin;
@@ -65,12 +67,12 @@ const MyAttendance: React.FC = () => {
     }
   }, [userId]);
 
-  const handleFetchAnalytics = useCallback(async () => {
+  const handleRefreshDashboard = useCallback(async () => {
     if (!analyticsStartDate || !analyticsEndDate || !selectedClass) return;
 
     setAnalyticsLoading(true);
     try {
-      const data = await getMyAnalytics({
+      const data = await getMyDashboard({
         userId,
         classId: selectedClass,
         startDate: analyticsStartDate,
@@ -108,11 +110,11 @@ const MyAttendance: React.FC = () => {
 
   useEffect(() => {
     if (selectedClass && analyticsStartDate && analyticsEndDate) {
-      handleFetchAnalytics();
+      handleRefreshDashboard();
     } else {
       setAnalyticsData(null);
     }
-  }, [selectedClass, analyticsStartDate, analyticsEndDate, handleFetchAnalytics]);
+  }, [selectedClass, analyticsStartDate, analyticsEndDate, handleRefreshDashboard]);
 
   useEffect(() => {
     fetchAutomationConfigs();
@@ -210,7 +212,7 @@ const MyAttendance: React.FC = () => {
                 onStartDateChange={setAnalyticsStartDate}
                 endDate={analyticsEndDate}
                 onEndDateChange={setAnalyticsEndDate}
-                onViewReport={handleFetchAnalytics}
+                onViewReport={handleRefreshDashboard}
                 loading={analyticsLoading}
                 hideClassFilter={classes.length <= 1}
               />
@@ -274,6 +276,23 @@ const MyAttendance: React.FC = () => {
         userId={userId}
         initialOrgName={user?.organizationName}
         initialOrgLogo={user?.organizationLogo}
+      />
+
+      <button
+        onClick={() => setIsIssuePanelOpen(true)}
+        className="fixed bottom-6 right-6 z-40 h-14 px-5 rounded-2xl shadow-xl bg-primary hover:bg-primary-hover text-white font-black flex items-center gap-2 transition-all hover:scale-[1.02]"
+      >
+        <CircleAlert size={18} />
+        Attendance Issues
+      </button>
+
+      <AttendanceIssuePanel
+        isOpen={isIssuePanelOpen}
+        onClose={() => setIsIssuePanelOpen(false)}
+        classId={selectedClass}
+        defaultSessionDate={analyticsEndDate}
+        canReview={isAdmin}
+        onIssueUpdated={handleRefreshDashboard}
       />
     </div>
   );
