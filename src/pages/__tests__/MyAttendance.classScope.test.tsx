@@ -69,15 +69,15 @@ vi.mock('../../components/attendance/reporting/AutomationIndicator', () => ({
 
 describe('MyAttendance class-scoped behavior', () => {
   const STORAGE_KEY = 'my-attendance:selected-class:org-1:viewer-1:self';
+  const REAL_DATE_NOW = Date.now;
 
   beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-03-05T12:00:00.000Z'));
+    Date.now = vi.fn(() => new Date('2026-03-05T12:00:00.000Z').getTime()) as any;
     localStorage.clear();
   });
 
   afterEach(() => {
-    vi.useRealTimers();
+    Date.now = REAL_DATE_NOW;
     vi.clearAllMocks();
   });
 
