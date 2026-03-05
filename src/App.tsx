@@ -84,6 +84,14 @@ function App() {
           }
         />
         <Route
+          path="/reset-password"
+          element={
+            <PublicRoute>
+              <ResetPassword />
+            </PublicRoute>
+          }
+        />
+        <Route
           path="/reset-password/:collectionPrefix/:token"
           element={
             <PublicRoute>

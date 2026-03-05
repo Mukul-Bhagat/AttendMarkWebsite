@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import api from '../api';
-import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { useNavigate, Link, useParams, useSearchParams } from 'react-router-dom';
 
 const ResetPassword: React.FC = () => {
   const [newPassword, setNewPassword] = useState('');
@@ -13,7 +13,9 @@ const ResetPassword: React.FC = () => {
 
   // Get token from URL query params (e.g. ?token=abc)
   const [searchParams] = useSearchParams();
-  const token = searchParams.get('token');
+  const { token: tokenFromPath } = useParams<{ collectionPrefix?: string; token?: string }>();
+  const tokenFromQuery = searchParams.get('token');
+  const token = (tokenFromQuery?.trim() || tokenFromPath?.trim() || null);
   const navigate = useNavigate();
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {

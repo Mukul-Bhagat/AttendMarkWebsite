@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { BarChart3, CircleAlert, Table as TableIcon } from 'lucide-react';
 import { nowIST, toISTDateString } from '../utils/time';
@@ -22,11 +22,35 @@ interface EnrolledClassOption {
   name: string;
 }
 
-const getCurrentMonthRange = () => {
+const getDaysInMonth = (year: number, monthOneBased: number): number => {
+  return new Date(year, monthOneBased, 0).getDate();
+};
+
+const subtractOneMonthWithDayClamp = (dateKey: string): string => {
+  const [yearPart, monthPart, dayPart] = dateKey.split('-');
+  const year = Number(yearPart);
+  const month = Number(monthPart);
+  const day = Number(dayPart);
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return dateKey;
+  }
+
+  let targetYear = year;
+  let targetMonth = month - 1;
+  if (targetMonth < 1) {
+    targetMonth = 12;
+    targetYear -= 1;
+  }
+
+  const clampedDay = Math.min(day, getDaysInMonth(targetYear, targetMonth));
+  return `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(clampedDay).padStart(2, '0')}`;
+};
+
+const getPreviousMonthSameDayRange = () => {
   const todayKey = toISTDateString(nowIST());
-  const [year, month] = todayKey.split('-');
   return {
-    start: `${year}-${month}-01`,
+    start: subtractOneMonthWithDayClamp(todayKey),
     end: todayKey,
   };
 };
@@ -55,15 +79,34 @@ const getPreferredClassFromUrl = (): string => {
   return params.get('classId') || params.get('classBatchId') || '';
 };
 
+const getStoredClass = (storageKey: string): string => {
+  try {
+    return localStorage.getItem(storageKey) || '';
+  } catch {
+    return '';
+  }
+};
+
+const persistClassSelection = (storageKey: string, classId: string) => {
+  try {
+    if (classId) {
+      localStorage.setItem(storageKey, classId);
+    } else {
+      localStorage.removeItem(storageKey);
+    }
+  } catch {
+    // Ignore storage failures (private mode, blocked storage).
+  }
+};
+
 const MyAttendance: React.FC = () => {
   const { userId } = useParams<{ userId?: string }>();
 
   const [classes, setClasses] = useState<EnrolledClassOption[]>([]);
   const [selectedClass, setSelectedClass] = useState('');
-
-  const initialRange = getCurrentMonthRange();
-  const [analyticsStartDate, setAnalyticsStartDate] = useState(initialRange.start);
-  const [analyticsEndDate, setAnalyticsEndDate] = useState(initialRange.end);
+  const defaultRange = useMemo(() => getPreviousMonthSameDayRange(), []);
+  const [analyticsStartDate, setAnalyticsStartDate] = useState(defaultRange.start);
+  const [analyticsEndDate, setAnalyticsEndDate] = useState(defaultRange.end);
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [isIssuePanelOpen, setIsIssuePanelOpen] = useState(false);
@@ -78,15 +121,26 @@ const MyAttendance: React.FC = () => {
 
   const [automationConfigs, setAutomationConfigs] = useState<any[]>([]);
 
+  const classSelectionStorageKey = useMemo(() => {
+    const orgScope = (user?.organizationId || 'unknown-org').trim();
+    const viewerScope = (user?.id || 'unknown-user').trim();
+    const targetScope = (userId || 'self').trim();
+    return `my-attendance:selected-class:${orgScope}:${viewerScope}:${targetScope}`;
+  }, [user?.organizationId, user?.id, userId]);
+
   const fetchClasses = useCallback(async () => {
     try {
       const data = await getMySessions(userId);
       const classList = normalizeClassOptions(data);
       const preferredClassId = getPreferredClassFromUrl();
+      const storedClassId = getStoredClass(classSelectionStorageKey);
       setClasses(classList);
       setSelectedClass((current) => {
         if (preferredClassId && classList.some((item: EnrolledClassOption) => item._id === preferredClassId)) {
           return preferredClassId;
+        }
+        if (storedClassId && classList.some((item: EnrolledClassOption) => item._id === storedClassId)) {
+          return storedClassId;
         }
         if (current && classList.some((item: EnrolledClassOption) => item._id === current)) {
           return current;
@@ -98,7 +152,7 @@ const MyAttendance: React.FC = () => {
       setClasses([]);
       setSelectedClass('');
     }
-  }, [userId]);
+  }, [userId, classSelectionStorageKey]);
 
   const handleRefreshDashboard = useCallback(async () => {
     if (!analyticsStartDate || !analyticsEndDate || !selectedClass) return;
@@ -152,6 +206,20 @@ const MyAttendance: React.FC = () => {
   useEffect(() => {
     fetchAutomationConfigs();
   }, [fetchAutomationConfigs]);
+
+  useEffect(() => {
+    if (classes.length === 0) {
+      return;
+    }
+    const isValidSelection = classes.some((item) => item._id === selectedClass);
+    if (isValidSelection) {
+      persistClassSelection(classSelectionStorageKey, selectedClass);
+      return;
+    }
+    if (!selectedClass) {
+      persistClassSelection(classSelectionStorageKey, '');
+    }
+  }, [classes, selectedClass, classSelectionStorageKey]);
 
   const handleToggleAutomation = async (id: string) => {
     try {

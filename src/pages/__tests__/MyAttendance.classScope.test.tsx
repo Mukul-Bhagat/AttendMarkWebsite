@@ -19,7 +19,12 @@ vi.mock('../../api/reportingApi', () => ({
 
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({
-    user: { organizationName: 'Org', organizationLogo: '' },
+    user: {
+      id: 'viewer-1',
+      organizationId: 'org-1',
+      organizationName: 'Org',
+      organizationLogo: '',
+    },
     isSuperAdmin: false,
     isCompanyAdmin: false,
     isManager: false,
@@ -63,11 +68,20 @@ vi.mock('../../components/attendance/reporting/AutomationIndicator', () => ({
 }));
 
 describe('MyAttendance class-scoped behavior', () => {
+  const STORAGE_KEY = 'my-attendance:selected-class:org-1:viewer-1:self';
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-05T12:00:00.000Z'));
+    localStorage.clear();
+  });
+
   afterEach(() => {
+    vi.useRealTimers();
     vi.clearAllMocks();
   });
 
-  it('defaults to first class and fetches analytics with classId', async () => {
+  it('defaults to first class, uses previous-month range, and fetches analytics with classId', async () => {
     (getMySessions as any).mockResolvedValue([
       { _id: 'class-1', name: 'Class One' },
     ]);
@@ -92,6 +106,8 @@ describe('MyAttendance class-scoped behavior', () => {
       expect(getMyDashboard).toHaveBeenCalledWith(
         expect.objectContaining({
           classId: 'class-1',
+          startDate: '2026-02-05',
+          endDate: '2026-03-05',
         }),
       );
     });
@@ -99,6 +115,68 @@ describe('MyAttendance class-scoped behavior', () => {
     const filterNode = screen.getByTestId('analytics-filters');
     expect(filterNode.getAttribute('data-selected')).toBe('class-1');
     expect(filterNode.getAttribute('data-hide')).toBe('true');
+  });
+
+  it('restores persisted class when still enrolled', async () => {
+    localStorage.setItem(STORAGE_KEY, 'class-2');
+    (getMySessions as any).mockResolvedValue([
+      { _id: 'class-1', name: 'Class One' },
+      { _id: 'class-2', name: 'Class Two' },
+    ]);
+    (getMyDashboard as any).mockResolvedValue({
+      trend: [],
+      summary: {},
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/my-attendance']}>
+        <Routes>
+          <Route path="/my-attendance" element={<MyAttendance />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(getMyDashboard).toHaveBeenCalledWith(
+        expect.objectContaining({
+          classId: 'class-2',
+        }),
+      );
+    });
+
+    const filterNode = screen.getByTestId('analytics-filters');
+    expect(filterNode.getAttribute('data-selected')).toBe('class-2');
+  });
+
+  it('falls back to first class when persisted class is no longer valid', async () => {
+    localStorage.setItem(STORAGE_KEY, 'class-missing');
+    (getMySessions as any).mockResolvedValue([
+      { _id: 'class-1', name: 'Class One' },
+      { _id: 'class-2', name: 'Class Two' },
+    ]);
+    (getMyDashboard as any).mockResolvedValue({
+      trend: [],
+      summary: {},
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/my-attendance']}>
+        <Routes>
+          <Route path="/my-attendance" element={<MyAttendance />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(getMyDashboard).toHaveBeenCalledWith(
+        expect.objectContaining({
+          classId: 'class-1',
+        }),
+      );
+    });
+
+    const filterNode = screen.getByTestId('analytics-filters');
+    expect(filterNode.getAttribute('data-selected')).toBe('class-1');
   });
 
   it('shows class filter when user has multiple classes', async () => {

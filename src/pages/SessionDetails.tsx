@@ -11,6 +11,11 @@ import { normalizeSessionMode } from '../utils/sessionMode';
 import SkeletonCard from '../components/SkeletonCard';
 
 import { appLogger } from '../shared/logger';
+
+const QR_TOKEN_MAX_ATTEMPTS = 3;
+const QR_TOKEN_RETRY_DELAY_MS = 400;
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const SessionDetails: React.FC = () => {
   const [session, setSession] = useState<ISession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -136,34 +141,75 @@ const SessionDetails: React.FC = () => {
       return;
     }
 
+    let isStale = false;
+
     const fetchQrToken = async () => {
-      try {
-        setIsQrLoading(true);
-        setQrTokenError('');
+      setIsQrLoading(true);
+      setQrToken('');
+      setQrExpiresAt(null);
+      setQrTokenError('');
 
-        const query = new URLSearchParams(location.search);
-        const dateParam = query.get('date');
-        const resolvedDate = session?.occurrenceDate || dateParam || undefined;
-        const qrSessionId = session?._id || id;
-        const requestUrl = resolvedDate
-          ? `/api/sessions/${qrSessionId}/qr-token?date=${encodeURIComponent(resolvedDate)}`
-          : `/api/sessions/${qrSessionId}/qr-token`;
+      const query = new URLSearchParams(location.search);
+      const dateParam = query.get('date');
+      const resolvedDate = session?.occurrenceDate || dateParam || undefined;
+      const qrSessionId = session?._id || id;
+      const requestUrl = resolvedDate
+        ? `/api/sessions/${qrSessionId}/qr-token?date=${encodeURIComponent(resolvedDate)}`
+        : `/api/sessions/${qrSessionId}/qr-token`;
 
-        const { data } = await api.get(requestUrl);
-        setQrToken(data?.token || '');
-        setQrExpiresAt(data?.expiresAt || null);
-      } catch (err: any) {
-        setQrToken('');
-        setQrExpiresAt(null);
-        setQrTokenError('Unable to generate secure QR token.');
-        appLogger.error('Failed to fetch QR token:', err);
-      } finally {
-        setIsQrLoading(false);
+      let lastError: any = null;
+
+      for (let attempt = 1; attempt <= QR_TOKEN_MAX_ATTEMPTS; attempt += 1) {
+        try {
+          const { data } = await api.get(requestUrl);
+          if (isStale) return;
+
+          const token = typeof data?.token === 'string' ? data.token : '';
+          if (!token) {
+            throw new Error('QR token missing in response');
+          }
+
+          setQrToken(token);
+          setQrExpiresAt(data?.expiresAt || null);
+          setQrTokenError('');
+          return;
+        } catch (err: any) {
+          lastError = err;
+          const status = err?.response?.status;
+          const shouldRetry = (!status || status >= 500) && attempt < QR_TOKEN_MAX_ATTEMPTS;
+          appLogger.error('Failed to fetch QR token:', {
+            attempt,
+            status,
+            message: err?.message,
+          });
+
+          if (!shouldRetry) {
+            break;
+          }
+
+          await wait(QR_TOKEN_RETRY_DELAY_MS * attempt);
+        }
       }
+
+      if (isStale) return;
+      const backendMessage = typeof lastError?.response?.data?.msg === 'string'
+        ? lastError.response.data.msg
+        : '';
+      setQrTokenError(backendMessage || 'Unable to generate secure QR token. Please refresh and try again.');
+      setQrToken('');
+      setQrExpiresAt(null);
     };
 
-    fetchQrToken();
-  }, [id, isEndUser, session, location.search]);
+    fetchQrToken().finally(() => {
+      if (!isStale) {
+        setIsQrLoading(false);
+      }
+    });
+
+    return () => {
+      isStale = true;
+    };
+  }, [id, isEndUser, session?._id, session?.occurrenceDate, session?.isCancelled, location.search]);
 
   const handleShareQrImage = async () => {
     if (!session || !qrToken || isQrLoading || isSharingQr) return;
@@ -327,6 +373,7 @@ const SessionDetails: React.FC = () => {
     ? `${universalScanBaseUrl}?token=${encodeURIComponent(qrToken)}`
     : '';
   const hasQrValue = Boolean(qrValue);
+  const showQrLoadingState = isQrLoading || (!hasQrValue && !qrTokenError);
 
   const formatDate = (dateString: string) => {
     try {
@@ -620,6 +667,16 @@ const SessionDetails: React.FC = () => {
                       className="w-64 h-64 sm:w-80 sm:h-80 border border-gray-200 dark:border-gray-700 rounded-lg flex items-center justify-center p-4 mx-auto bg-gray-50 dark:bg-background-dark"
                     >
                       <QRCodeCanvas value={qrValue} size={256} level="L" includeMargin={true} />
+                    </div>
+                  ) : showQrLoadingState ? (
+                    <div className="w-64 h-64 sm:w-80 sm:h-80 border border-gray-200 dark:border-gray-700 rounded-lg flex flex-col items-center justify-center p-4 mx-auto bg-gray-50 dark:bg-background-dark text-center">
+                      <span className="material-symbols-outlined text-4xl text-gray-500 dark:text-gray-400 mb-2 animate-spin">progress_activity</span>
+                      <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        Generating secure QR...
+                      </p>
+                      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                        Please wait a moment.
+                      </p>
                     </div>
                   ) : (
                     <div className="w-64 h-64 sm:w-80 sm:h-80 border border-red-200 dark:border-red-800 rounded-lg flex flex-col items-center justify-center p-4 mx-auto bg-red-50 dark:bg-red-900/20 text-center">
