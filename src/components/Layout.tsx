@@ -32,7 +32,7 @@ const Layout: React.FC = () => {
     if (path === '/dashboard') return 'Dashboard';
     if (path.startsWith('/classes')) return 'Classes/Batches';
     if (path.startsWith('/sessions')) return 'Sessions';
-    if (path === '/scan') return 'Scan QR Code';
+    if (path === '/scan' || path === '/scan-web') return 'Scan QR Code';
     if (path === '/my-attendance') return 'My Attendance';
     if (path === '/leaves') return 'Leave Management';
     if (path === '/reports') return 'Attendance Report';
@@ -171,7 +171,7 @@ const Layout: React.FC = () => {
                     {/* Scan QR - visible to all authenticated users (except Platform Owner) */}
                     {!isPlatformOwner && (
                       <li>
-                        <NavLinkItem to="/scan" icon="qr_code_scanner">Scan QR</NavLinkItem>
+                        <NavLinkItem to="/scan-web" icon="qr_code_scanner">Scan QR</NavLinkItem>
                       </li>
                     )}
 
@@ -385,7 +385,7 @@ const Layout: React.FC = () => {
 
                     {!isPlatformOwner && (
                       <li>
-                        <NavLinkItem to="/scan" icon="qr_code_scanner">Scan QR</NavLinkItem>
+                        <NavLinkItem to="/scan-web" icon="qr_code_scanner">Scan QR</NavLinkItem>
                       </li>
                     )}
 

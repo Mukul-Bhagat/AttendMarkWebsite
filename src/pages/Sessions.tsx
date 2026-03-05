@@ -637,7 +637,7 @@ const Sessions: React.FC = () => {
                                 className="flex w-full sm:flex-1 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 bg-gradient-to-r from-orange-500 to-[#f04129] text-white text-sm font-bold hover:from-orange-600 hover:to-[#d63a25] transition-colors"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigate(`/scan?sessionId=${session._id}`);
+                                  navigate(`/scan-web?sessionId=${session._id}`);
                                 }}
                               >
                                 <span className="material-symbols-outlined text-lg">qr_code_scanner</span>

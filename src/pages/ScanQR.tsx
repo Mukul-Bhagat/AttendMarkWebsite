@@ -27,6 +27,7 @@ const ScanQR: React.FC = () => {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
     qrTokenFromUrl ? null : (sessionIdFromUrl || null)
   );
+  const [showSessionPicker, setShowSessionPicker] = useState(false);
   const [directQrToken, setDirectQrToken] = useState<string | null>(qrTokenFromUrl || null);
   const [sessions, setSessions] = useState<ISession[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
@@ -63,6 +64,7 @@ const ScanQR: React.FC = () => {
     if (qrTokenFromUrl) {
       setDirectQrToken(qrTokenFromUrl);
       setSelectedSessionId(null);
+      setShowSessionPicker(false);
       hasAutoSubmittedRef.current = false;
       return;
     }
@@ -70,6 +72,7 @@ const ScanQR: React.FC = () => {
     setDirectQrToken(null);
     if (sessionIdFromUrl) {
       setSelectedSessionId(sessionIdFromUrl);
+      setShowSessionPicker(false);
     }
   }, [qrTokenFromUrl, sessionIdFromUrl]);
   const isLocationError = (reason?: string) => {
@@ -125,24 +128,25 @@ const ScanQR: React.FC = () => {
     fetchSessionInfo();
   }, [selectedSessionId, directQrToken]);
 
-  // Start scanning when selectedSessionId is set
+  // Start scanning in camera-first mode (unless direct token auto-submit or session picker is open)
   useEffect(() => {
     if (directQrToken) {
       stopScanning();
       return;
     }
 
-    if (selectedSessionId) {
-      startScanning();
-    } else {
+    if (showSessionPicker) {
       stopScanning();
+      return;
     }
+
+    startScanning();
 
     // Cleanup: stop scanning when component unmounts or session changes
     return () => {
       stopScanning();
     };
-  }, [selectedSessionId, directQrToken]);
+  }, [selectedSessionId, directQrToken, showSessionPicker]);
 
   // State for current time - used to trigger re-renders and calculations
   const [currentTime, setCurrentTime] = useState(nowIST());
@@ -212,7 +216,7 @@ const ScanQR: React.FC = () => {
 
   const startScanning = async () => {
     // Prevent starting if already scanning or if scanner is paused
-    if (directQrToken || isScanning || scannerRef.current || isScannerPaused || !selectedSessionId) {
+    if (directQrToken || isScanning || scannerRef.current || isScannerPaused) {
       return;
     }
 
@@ -489,12 +493,18 @@ const ScanQR: React.FC = () => {
 
   const handleAttendanceResponse = (data: any) => {
     if (data.status === 'MARKED' || data.status === 'ALREADY_MARKED') {
+      const sessionLabel = data?.name || data?.sessionName || 'Session';
+      const orgLabel = data?.organizationName || 'Organization';
+      const confirmationMessage = data.status === 'ALREADY_MARKED'
+        ? `Attendance already recorded for ${orgLabel} - ${sessionLabel}`
+        : `Attendance marked for ${orgLabel} - ${sessionLabel}`;
+
       setMessageType('success');
-      setMessage(data.msg);
+      setMessage(confirmationMessage);
       setIsSuccess(true);
       setIsProcessing(false);
 
-      setSessionInfo((prev: any) => ({ ...prev, ...data }));
+      setSessionInfo((prev: any) => ({ ...prev, ...data, confirmationMessage }));
 
       setTimeout(() => {
         navigate('/dashboard');
@@ -523,6 +533,10 @@ const ScanQR: React.FC = () => {
       setMessage('You do not have access to the organization that issued this QR code.');
     } else if (data.reason === 'SECURE_QR_REQUIRED') {
       setMessage('Secure QR required. Please scan the latest QR displayed by the instructor.');
+    } else if (data.reason === 'INVALID_QR_CLASS') {
+      setMessage('This QR code does not match the session class. Please scan the latest valid QR.');
+    } else if (data.reason === 'QR_VERSION_EXPIRED') {
+      setMessage('This QR code version has expired. Please scan the latest QR displayed by the instructor.');
     } else if (data.reason === 'USER_NOT_ASSIGNED') {
       setMessage('Access Denied: You are not assigned to this session.');
     } else if (data.type === 'TOO_EARLY' || data.reason === 'ATTENDANCE_WINDOW_CLOSED') {
@@ -558,23 +572,27 @@ const ScanQR: React.FC = () => {
   };
 
   const handleBackToList = () => {
-    setSelectedSessionId(null);
     setIsSuccess(false);
     setMessage('');
     setMessageType('');
     setIsProcessing(false);
     setCameraError(false);
     setIsScannerPaused(false);
-    setDirectQrToken(null);
+    setSessionInfo(null);
     hasAutoSubmittedRef.current = false;
     stopScanning();
     if (qrTokenFromUrl) {
-      navigate('/scan', { replace: true });
+      navigate('/scan-web', { replace: true });
+      return;
     }
+
+    setDirectQrToken(null);
+    setSelectedSessionId(null);
+    setShowSessionPicker(true);
   };
 
-  // If selectedSessionId or direct token is set, show the Scanner View
-  if (selectedSessionId || directQrToken) {
+  // Camera-first scanner view (default). Session picker is optional fallback.
+  if (directQrToken || !showSessionPicker) {
     // Success State
     if (isSuccess) {
       const isAlreadyMarked = sessionInfo?.status === 'ALREADY_MARKED';
@@ -583,12 +601,13 @@ const ScanQR: React.FC = () => {
       const orgLine = sessionInfo?.organizationName ? `\nOrganization: ${sessionInfo.organizationName}` : '';
       const statusLine = sessionInfo?.attendanceStatus ? `\nStatus: ${sessionInfo.attendanceStatus}${sessionInfo.attendanceStatus === 'Late' && sessionInfo.lateByMinutes ? ` (${sessionInfo.lateByMinutes}m late)` : ''}` : '';
       const checkInLine = sessionInfo?.checkInTime ? `\nTime: ${new Date(sessionInfo.checkInTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` : '';
+      const confirmationLine = sessionInfo?.confirmationMessage || '';
 
       return (
         <FullScreenAnimation
           src="/animations/success.lottie"
           title={isAlreadyMarked ? 'Attendance Already Marked' : 'Attendance Marked Successfully'}
-          description={`Class: ${sessionInfo?.className || 'Class'}\nSession: ${sessionInfo?.name || sessionInfo?.sessionName || 'Session'}\nDate: ${sessionDate}${orgLine}${statusLine}${checkInLine}${subText}`}
+          description={`${confirmationLine}\nClass: ${sessionInfo?.className || 'Class'}\nSession: ${sessionInfo?.name || sessionInfo?.sessionName || 'Session'}\nDate: ${sessionDate}${orgLine}${statusLine}${checkInLine}${subText}`}
           loop={false}
         />
       );
@@ -666,7 +685,16 @@ const ScanQR: React.FC = () => {
                 <span className="font-medium">Back</span>
               </button>
               <h1 className="text-2xl font-bold text-white">Scan Session QR</h1>
-              <div className="w-24"></div> {/* Spacer for centering */}
+              <button
+                onClick={() => {
+                  setShowSessionPicker(true);
+                  setSelectedSessionId(null);
+                }}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors text-sm"
+              >
+                <span className="material-symbols-outlined text-base">view_list</span>
+                <span>Sessions</span>
+              </button>
             </header>
 
             {/* Session Info Banner (if available) */}
@@ -781,8 +809,18 @@ const ScanQR: React.FC = () => {
               </h1>
             </div>
             <p className="text-sm md:text-base text-slate-500 dark:text-slate-400">
-              Select a session to scan QR code and mark your attendance
+              Optional fallback: select a session, or go back to camera-first scanning.
             </p>
+            <button
+              onClick={() => {
+                setShowSessionPicker(false);
+                setSelectedSessionId(null);
+              }}
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white hover:bg-[#d63a25] transition-colors"
+            >
+              <span className="material-symbols-outlined text-base">photo_camera</span>
+              <span>Use Camera-First Scan</span>
+            </button>
           </header>
 
           {myScanSessions.length === 0 ? (
@@ -814,7 +852,10 @@ const ScanQR: React.FC = () => {
                 return (
                   <div
                     key={session._id}
-                    onClick={() => setSelectedSessionId(session._id)}
+                    onClick={() => {
+                      setSelectedSessionId(session._id);
+                      setShowSessionPicker(false);
+                    }}
                     className={`relative flex flex-col rounded-xl border-2 p-4 md:p-6 shadow-sm hover:shadow-md transition-all cursor-pointer ${isLive
                       ? 'border-green-500 bg-green-50 dark:bg-green-900/20 dark:border-green-600'
                       : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50'
@@ -873,6 +914,7 @@ const ScanQR: React.FC = () => {
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedSessionId(session._id);
+                          setShowSessionPicker(false);
                         }}
                         className="mt-6 w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-gradient-to-r from-orange-500 to-[#f04129] text-white text-sm font-bold hover:from-orange-600 hover:to-[#d63a25] transition-all"
                       >

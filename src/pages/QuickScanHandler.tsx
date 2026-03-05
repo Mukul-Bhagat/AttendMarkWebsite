@@ -18,7 +18,7 @@ const QuickScanHandler: React.FC = () => {
       params.set('token', token);
     }
 
-    const target = params.toString() ? `/scan?${params.toString()}` : '/scan';
+    const target = params.toString() ? `/scan-web?${params.toString()}` : '/scan-web';
     navigate(target, { replace: true });
   }, [navigate, searchParams, sessionId]);
 

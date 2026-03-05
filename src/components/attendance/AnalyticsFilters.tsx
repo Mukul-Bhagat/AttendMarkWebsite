@@ -45,7 +45,7 @@ const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
                                 onChange={(e) => onClassChange(e.target.value)}
                                 className="w-full px-4 py-2.5 pr-10 border border-border-light dark:border-border-dark rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary appearance-none bg-background-light dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark"
                             >
-                                <option value="">Select Class</option>
+                                {classes.length === 0 && <option value="">No enrolled classes</option>}
                                 {Array.isArray(classes) && classes.map((classBatch) => (
                                     <option key={classBatch._id} value={classBatch._id}>
                                         {classBatch.name}

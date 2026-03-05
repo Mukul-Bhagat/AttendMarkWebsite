@@ -16,6 +16,8 @@ interface AttendanceIssuePanelProps {
     isOpen: boolean;
     onClose: () => void;
     classId: string;
+    classes: Array<{ _id: string; name: string }>;
+    onClassChange: (classId: string) => void;
     defaultSessionDate: string;
     canReview: boolean;
     onIssueUpdated?: () => void;
@@ -31,6 +33,8 @@ const AttendanceIssuePanel: React.FC<AttendanceIssuePanelProps> = ({
     isOpen,
     onClose,
     classId,
+    classes,
+    onClassChange,
     defaultSessionDate,
     canReview,
     onIssueUpdated,
@@ -52,6 +56,12 @@ const AttendanceIssuePanel: React.FC<AttendanceIssuePanelProps> = ({
     useEffect(() => {
         setSessionDate(defaultSessionDate);
     }, [defaultSessionDate]);
+
+    useEffect(() => {
+        if (!classId && classes.length > 0) {
+            onClassChange(classes[0]._id);
+        }
+    }, [classId, classes, onClassChange]);
 
     const fetchMyIssues = useCallback(async () => {
         setLoadingMy(true);
@@ -211,6 +221,22 @@ const AttendanceIssuePanel: React.FC<AttendanceIssuePanelProps> = ({
                     <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
                         {tab === 'raise' && (
                             <div className="space-y-4 animate-in slide-in-from-right-3 duration-300">
+                                <label className="block">
+                                    <span className="text-xs font-black uppercase tracking-wider text-text-secondary-light">Class / Batch</span>
+                                    <select
+                                        value={classId}
+                                        onChange={(e) => onClassChange(e.target.value)}
+                                        disabled={classes.length === 0}
+                                        className="mt-2 w-full px-3 py-2 rounded-xl border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark disabled:opacity-60 disabled:cursor-not-allowed"
+                                    >
+                                        {classes.length === 0 && <option value="">No enrolled classes</option>}
+                                        {classes.map((classBatch) => (
+                                            <option key={classBatch._id} value={classBatch._id}>
+                                                {classBatch.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <label className="block">
                                         <span className="text-xs font-black uppercase tracking-wider text-text-secondary-light">Session Date</span>

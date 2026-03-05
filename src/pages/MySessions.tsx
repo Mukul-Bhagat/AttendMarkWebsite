@@ -74,7 +74,7 @@ const MySessions: React.FC = () => {
 
   const handleSessionClick = (sessionId: string) => {
     // Navigate to Scan QR page with session ID
-    navigate(`/scan?sessionId=${sessionId}`);
+    navigate(`/scan-web?sessionId=${sessionId}`);
   };
 
   if (isLoading) {

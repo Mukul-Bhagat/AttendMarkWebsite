@@ -13,6 +13,7 @@ import EditClass from './pages/EditClass';
 import EditSession from './pages/EditSession';
 import SessionDetails from './pages/SessionDetails';
 import ScanQR from './pages/ScanQR';
+import ScanDeepLinkBridge from './pages/ScanDeepLinkBridge';
 import MyAttendance from './pages/MyAttendance';
 import MySessions from './pages/MySessions';
 import AttendanceReport from './pages/AttendanceReport';
@@ -29,12 +30,14 @@ import AdminNotifications from './pages/AdminNotifications';
 import DataBackup from './pages/DataBackup';
 import EmailAutomationSettings from './pages/EmailAutomationSettings';
 import OrganizationSettings from './pages/OrganizationSettings';
+import AppDownload from './pages/AppDownload';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
 import Layout from './components/Layout';
 import ForceResetPassword from './components/ForceResetPassword';
 import { useAuth } from './contexts/AuthContext';
 import { Role, RoleProfile } from './shared/roles';
+import { Toaster } from 'react-hot-toast';
 
 function App() {
   const { user, isLoading } = useAuth();
@@ -42,6 +45,7 @@ function App() {
 
   return (
     <div>
+      <Toaster position="top-right" />
       {/* Force Password Reset Modal - Blocks entire app if mustResetPassword is true */}
       {showForceReset && <ForceResetPassword />}
 
@@ -87,6 +91,8 @@ function App() {
             </PublicRoute>
           }
         />
+        <Route path="/scan" element={<ScanDeepLinkBridge />} />
+        <Route path="/app-download" element={<AppDownload />} />
         <Route
           path="/"
           element={
@@ -127,7 +133,7 @@ function App() {
             {/* Routes accessible to all authenticated users */}
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/profile" element={<Profile />} />
-            <Route path="/scan" element={<ScanQR />} />
+            <Route path="/scan-web" element={<ScanQR />} />
             <Route path="/my-attendance" element={<MyAttendance />} />
             <Route path="/my-sessions" element={<MySessions />} />
             <Route path="/leaves" element={<Leaves />} />

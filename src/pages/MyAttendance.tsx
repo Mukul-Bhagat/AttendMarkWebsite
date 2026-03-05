@@ -17,6 +17,11 @@ import AttendanceIssuePanel from '../components/attendance/AttendanceIssuePanel'
 
 import { appLogger } from '../shared/logger';
 
+interface EnrolledClassOption {
+  _id: string;
+  name: string;
+}
+
 const getCurrentMonthRange = () => {
   const todayKey = toISTDateString(nowIST());
   const [year, month] = todayKey.split('-');
@@ -26,10 +31,34 @@ const getCurrentMonthRange = () => {
   };
 };
 
+const normalizeClassOptions = (input: unknown): EnrolledClassOption[] => {
+  if (!Array.isArray(input)) return [];
+
+  const seen = new Set<string>();
+  const normalized: EnrolledClassOption[] = [];
+
+  for (const item of input) {
+    const rawId = (item as any)?._id || (item as any)?.id || (item as any)?.classId || (item as any)?.classBatchId;
+    const classId = typeof rawId === 'string' ? rawId : rawId?.toString?.();
+    const className = (item as any)?.name || (item as any)?.className || (item as any)?.title || 'Unnamed Class';
+
+    if (!classId || seen.has(classId)) continue;
+    seen.add(classId);
+    normalized.push({ _id: classId, name: className });
+  }
+
+  return normalized;
+};
+
+const getPreferredClassFromUrl = (): string => {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('classId') || params.get('classBatchId') || '';
+};
+
 const MyAttendance: React.FC = () => {
   const { userId } = useParams<{ userId?: string }>();
 
-  const [classes, setClasses] = useState<Array<{ _id: string; name: string }>>([]);
+  const [classes, setClasses] = useState<EnrolledClassOption[]>([]);
   const [selectedClass, setSelectedClass] = useState('');
 
   const initialRange = getCurrentMonthRange();
@@ -52,10 +81,14 @@ const MyAttendance: React.FC = () => {
   const fetchClasses = useCallback(async () => {
     try {
       const data = await getMySessions(userId);
-      const classList = Array.isArray(data) ? data : [];
+      const classList = normalizeClassOptions(data);
+      const preferredClassId = getPreferredClassFromUrl();
       setClasses(classList);
       setSelectedClass((current) => {
-        if (current && classList.some((item: any) => item._id === current)) {
+        if (preferredClassId && classList.some((item: EnrolledClassOption) => item._id === preferredClassId)) {
+          return preferredClassId;
+        }
+        if (current && classList.some((item: EnrolledClassOption) => item._id === current)) {
           return current;
         }
         return classList[0]?._id || '';
@@ -280,7 +313,8 @@ const MyAttendance: React.FC = () => {
 
       <button
         onClick={() => setIsIssuePanelOpen(true)}
-        className="fixed bottom-6 right-6 z-40 h-14 px-5 rounded-2xl shadow-xl bg-primary hover:bg-primary-hover text-white font-black flex items-center gap-2 transition-all hover:scale-[1.02]"
+        disabled={classes.length === 0}
+        className="fixed bottom-6 right-6 z-40 h-14 px-5 rounded-2xl shadow-xl bg-primary hover:bg-primary-hover disabled:bg-border-light dark:disabled:bg-border-dark disabled:text-text-secondary-light dark:disabled:text-text-secondary-dark disabled:cursor-not-allowed text-white font-black flex items-center gap-2 transition-all hover:scale-[1.02]"
       >
         <CircleAlert size={18} />
         Attendance Issues
@@ -290,6 +324,8 @@ const MyAttendance: React.FC = () => {
         isOpen={isIssuePanelOpen}
         onClose={() => setIsIssuePanelOpen(false)}
         classId={selectedClass}
+        classes={classes}
+        onClassChange={setSelectedClass}
         defaultSessionDate={analyticsEndDate}
         canReview={isAdmin}
         onIssueUpdated={handleRefreshDashboard}

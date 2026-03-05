@@ -4,10 +4,10 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { vi } from 'vitest';
 
 import MyAttendance from '../MyAttendance';
-import { getMyAnalytics, getMySessions } from '../../api/analyticsApi';
+import { getMyDashboard, getMySessions } from '../../api/analyticsApi';
 
 vi.mock('../../api/analyticsApi', () => ({
-  getMyAnalytics: vi.fn(),
+  getMyDashboard: vi.fn(),
   getMySessions: vi.fn(),
 }));
 
@@ -71,7 +71,7 @@ describe('MyAttendance class-scoped behavior', () => {
     (getMySessions as any).mockResolvedValue([
       { _id: 'class-1', name: 'Class One' },
     ]);
-    (getMyAnalytics as any).mockResolvedValue({
+    (getMyDashboard as any).mockResolvedValue({
       trend: [],
       summary: {},
     });
@@ -89,7 +89,7 @@ describe('MyAttendance class-scoped behavior', () => {
     });
 
     await waitFor(() => {
-      expect(getMyAnalytics).toHaveBeenCalledWith(
+      expect(getMyDashboard).toHaveBeenCalledWith(
         expect.objectContaining({
           classId: 'class-1',
         }),
@@ -106,7 +106,7 @@ describe('MyAttendance class-scoped behavior', () => {
       { _id: 'class-1', name: 'Class One' },
       { _id: 'class-2', name: 'Class Two' },
     ]);
-    (getMyAnalytics as any).mockResolvedValue({
+    (getMyDashboard as any).mockResolvedValue({
       trend: [],
       summary: {},
     });
@@ -125,4 +125,3 @@ describe('MyAttendance class-scoped behavior', () => {
     });
   });
 });
-

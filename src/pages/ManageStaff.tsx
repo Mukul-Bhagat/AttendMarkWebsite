@@ -1,14 +1,22 @@
-import React, { useState, useEffect, useRef } from 'react';
+
+import React, { useEffect, useMemo, useState } from 'react';
 import api from '../api';
 import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 import BulkImportStaff from '../components/BulkImportStaff';
 import EditUserModal from '../components/EditUserModal';
+import SetGracePeriodModal from '../components/SetGracePeriodModal';
 import ActionHeader from '../components/entity/ActionHeader';
-import EntityTable from '../components/entity/EntityTable';
+import BulkSelectableTable from '../components/entity/BulkSelectableTable';
+import BulkActionToolbar from '../components/entity/BulkActionToolbar';
+import RowActionMenu, { RowActionMenuItem } from '../components/entity/RowActionMenu';
 import EntityFormModal from '../components/common/EntityFormModal';
+import ConfirmationModal from '../components/common/ConfirmationModal';
 import { getOptimizedImageUrl } from '../utils/cloudinary';
-
+import { useBulkSelection } from '../hooks/useBulkSelection';
+import { staffService } from '../services/staffService';
 import { appLogger } from '../shared/logger';
+
 type StaffUser = {
   _id?: string;
   id?: string;
@@ -29,68 +37,112 @@ type StaffUser = {
   } | null;
 };
 
+const OBJECT_ID_REGEX = /^[a-fA-F0-9]{24}$/;
+
+const roleFilterToQuery = (roleFilter: string): string | undefined => {
+  if (roleFilter === 'Session Admin') return 'SessionAdmin';
+  if (roleFilter === 'Manager') return 'Manager';
+  if (roleFilter === 'Company Admin') return 'SuperAdmin';
+  return undefined;
+};
+
+const roleLabel = (role: StaffUser['role']): string => {
+  if (role === 'SessionAdmin') return 'Session Admin';
+  if (role === 'SuperAdmin' || role === 'CompanyAdmin') return 'Company Admin';
+  return role;
+};
+
+const roleBadgeClass = (role: StaffUser['role']): string => {
+  if (role === 'SessionAdmin') {
+    return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/50 dark:text-red-300 dark:border-red-800';
+  }
+  if (role === 'SuperAdmin' || role === 'CompanyAdmin') {
+    return 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-900/50 dark:text-indigo-300 dark:border-indigo-800';
+  }
+  return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/50 dark:text-blue-300 dark:border-blue-800';
+};
+
 const ManageStaff: React.FC = () => {
   const { user, isSuperAdmin, isCompanyAdmin, isPlatformOwner } = useAuth();
-  const canManageQuota = isSuperAdmin || isCompanyAdmin || isPlatformOwner;
 
-  // Form state
+  const canManageQuota = isSuperAdmin || isCompanyAdmin || isPlatformOwner;
+  const canAdjustGrace = isSuperAdmin || isCompanyAdmin || isPlatformOwner;
+  const canDeleteStaff = isSuperAdmin;
+
+  const [staffList, setStaffList] = useState<StaffUser[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('All Roles');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [totalStaff, setTotalStaff] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<'SessionAdmin' | 'Manager'>('SessionAdmin');
-
   const [showPassword, setShowPassword] = useState(false);
-
-  // Page state
-  const [staffList, setStaffList] = useState<StaffUser[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
   const [resettingDevice, setResettingDevice] = useState<string | null>(null);
   const [deletingStaff, setDeletingStaff] = useState<string | null>(null);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState('All Roles');
 
-  // Quota management state
+  const [selectedUserForEdit, setSelectedUserForEdit] = useState<StaffUser | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  const [isGracePeriodModalOpen, setIsGracePeriodModalOpen] = useState(false);
+  const [selectedStaffForGracePeriod, setSelectedStaffForGracePeriod] = useState<StaffUser | null>(null);
+
   const [quotaModalOpen, setQuotaModalOpen] = useState(false);
   const [selectedStaffForQuota, setSelectedStaffForQuota] = useState<StaffUser | null>(null);
   const [quotaForm, setQuotaForm] = useState({ pl: 12, cl: 12, sl: 10 });
-  const [isSavingQuota, setIsSavingQuota] = useState(false);
   const [orgDefaults, setOrgDefaults] = useState({ pl: 12, cl: 12, sl: 10 });
+  const [isSavingQuota, setIsSavingQuota] = useState(false);
 
-  // Dropdown menu state
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const menuRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
+  const [bulkQuotaModalOpen, setBulkQuotaModalOpen] = useState(false);
+  const [bulkGraceModalOpen, setBulkGraceModalOpen] = useState(false);
+  const [bulkQuotaForm, setBulkQuotaForm] = useState({ pl: 12, cl: 12, sl: 10 });
+  const [bulkQuotaResetToDefault, setBulkQuotaResetToDefault] = useState(false);
+  const [bulkGraceMinutes, setBulkGraceMinutes] = useState(30);
+  const [bulkGraceResetToDefault, setBulkGraceResetToDefault] = useState(false);
+  const [isBulkActionRunning, setIsBulkActionRunning] = useState(false);
 
-  // Bulk import state
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const getStaffId = (staff: StaffUser): string => staff._id || staff.id || '';
+  const selection = useBulkSelection(staffList, getStaffId);
 
-  // Edit user modal state
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [selectedUserForEdit, setSelectedUserForEdit] = useState<StaffUser | null>(null);
+  const actionableSelectedIds = useMemo(
+    () => selection.selectedIdsArray.filter((id) => OBJECT_ID_REGEX.test(id)),
+    [selection.selectedIdsArray],
+  );
 
-  // Fetch existing staff
-  const fetchStaff = async () => {
+  const fetchStaff = async (targetPage?: number) => {
     try {
       setIsLoading(true);
       setError('');
-      const { data } = await api.get('/api/users/my-organization');
+      const response = await staffService.fetchList<StaffUser>({
+        page: targetPage ?? page,
+        limit: pageSize,
+        search: debouncedSearchTerm || undefined,
+        role: roleFilterToQuery(roleFilter),
+        sortBy: 'createdAt',
+        sortOrder: 'desc',
+      });
 
-      // Define allowed roles for staff list
-      const allowedRoles = ['SessionAdmin', 'Manager'];
-      // SuperAdmin and CompanyAdmin can see Company Admins (stored as 'SuperAdmin' in backend)
-      if (isPlatformOwner || isSuperAdmin || isCompanyAdmin) {
-        allowedRoles.push('SuperAdmin'); // Backend role for Company Admin
-        allowedRoles.push('CompanyAdmin'); // Legacy support
-      }
-
-      // Filter for staff roles
-      const staff = data.filter((user: StaffUser) => allowedRoles.includes(user.role));
-      setStaffList(staff);
+      setStaffList(response.items || []);
+      setTotalStaff(response.total || 0);
+      setTotalPages(response.totalPages || 0);
     } catch (err: any) {
       if (err.response?.status === 401) {
         setError('You are not authorized. Please log in again.');
@@ -103,56 +155,42 @@ const ManageStaff: React.FC = () => {
     }
   };
 
-  // Fetch on component mount
+  const fetchOrgDefaults = async () => {
+    if (!canManageQuota) return;
+    try {
+      const { data } = await api.get('/api/organization/settings');
+      setOrgDefaults({
+        pl: data.yearlyQuotaPL || 12,
+        cl: data.yearlyQuotaCL || 12,
+        sl: data.yearlyQuotaSL || 10,
+      });
+    } catch (err) {
+      appLogger.error('Failed to fetch organization defaults:', err);
+    }
+  };
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedSearchTerm(searchTerm.trim()), 250);
+    return () => window.clearTimeout(timeout);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearchTerm, roleFilter, pageSize]);
+
   useEffect(() => {
     fetchStaff();
-    // Fetch organization defaults for quota
-    if (canManageQuota) {
-      const fetchOrgDefaults = async () => {
-        try {
-          const { data } = await api.get('/api/organization/settings');
-          setOrgDefaults({
-            pl: data.yearlyQuotaPL || 12,
-            cl: data.yearlyQuotaCL || 12,
-            sl: data.yearlyQuotaSL || 10,
-          });
-        } catch (err) {
-          appLogger.error('Failed to fetch organization defaults:', err);
-        }
-      };
-      fetchOrgDefaults();
-    }
+  }, [page, pageSize, debouncedSearchTerm, roleFilter]);
+
+  useEffect(() => {
+    fetchOrgDefaults();
   }, [canManageQuota]);
 
-  // Auto-dismiss success message
   useEffect(() => {
-    if (message) {
-      const timer = setTimeout(() => {
-        setMessage('');
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
+    if (!message) return;
+    const timer = setTimeout(() => setMessage(''), 5000);
+    return () => clearTimeout(timer);
   }, [message]);
-
-  // Click outside handler for dropdown menu
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (openMenuId) {
-        const menuElement = menuRefs.current[openMenuId];
-        if (menuElement && !menuElement.contains(event.target as Node)) {
-          setOpenMenuId(null);
-        }
-      }
-    };
-
-    if (openMenuId) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [openMenuId]);
 
   const clearForm = () => {
     setFirstName('');
@@ -161,29 +199,25 @@ const ManageStaff: React.FC = () => {
     setPassword('');
     setPhone('');
     setRole('SessionAdmin');
-    setMessage('');
     setError('');
+    setMessage('');
   };
 
-  // Form submission
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreateStaff = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setIsSubmitting(true);
     setError('');
     setMessage('');
-    setIsSubmitting(true);
-
-    const staffData = {
-      firstName,
-      lastName,
-      email,
-      password,
-      phone: phone || undefined,
-      role,
-    };
 
     try {
-      const { data } = await api.post('/api/users/staff', staffData);
-
+      const { data } = await api.post('/api/users/staff', {
+        firstName,
+        lastName,
+        email,
+        password,
+        phone: phone || undefined,
+        role,
+      });
       setMessage(data.msg || `${role} created successfully`);
       clearForm();
       setIsCreateModalOpen(false);
@@ -202,42 +236,30 @@ const ManageStaff: React.FC = () => {
     }
   };
 
-  // Handle quota management
-  const handleOpenQuotaModal = async (staff: StaffUser) => {
+  const openSingleQuotaModal = (staff: StaffUser) => {
     setSelectedStaffForQuota(staff);
     if (staff.customLeaveQuota) {
-      setQuotaForm({
-        pl: staff.customLeaveQuota.pl,
-        cl: staff.customLeaveQuota.cl,
-        sl: staff.customLeaveQuota.sl,
-      });
+      setQuotaForm(staff.customLeaveQuota);
     } else {
-      setQuotaForm({
-        pl: orgDefaults.pl,
-        cl: orgDefaults.cl,
-        sl: orgDefaults.sl,
-      });
+      setQuotaForm(orgDefaults);
     }
     setQuotaModalOpen(true);
   };
 
-  const handleCloseQuotaModal = () => {
-    setQuotaModalOpen(false);
-    setSelectedStaffForQuota(null);
-    setQuotaForm({ pl: 12, cl: 12, sl: 10 });
-  };
-
-  const handleSaveQuota = async () => {
+  const saveSingleQuota = async (resetToDefault = false) => {
     if (!selectedStaffForQuota) return;
+    const staffId = getStaffId(selectedStaffForQuota);
+    if (!staffId) return;
 
     try {
       setIsSavingQuota(true);
-      const staffId = selectedStaffForQuota._id || selectedStaffForQuota.id;
-      await api.put(`/api/users/${staffId}/quota`, quotaForm);
-
-      setMessage(`Leave quota updated for ${selectedStaffForQuota.profile.firstName} ${selectedStaffForQuota.profile.lastName}`);
-      handleCloseQuotaModal();
-      fetchStaff();
+      await api.put(`/api/users/${staffId}/quota`, resetToDefault ? { resetToDefault: true } : quotaForm);
+      setMessage(
+        `${resetToDefault ? 'Leave quota reset to default' : 'Leave quota updated'} for ${selectedStaffForQuota.profile.firstName} ${selectedStaffForQuota.profile.lastName}`,
+      );
+      setQuotaModalOpen(false);
+      setSelectedStaffForQuota(null);
+      await fetchStaff();
     } catch (err: any) {
       setError(err.response?.data?.msg || 'Failed to update quota');
     } finally {
@@ -245,131 +267,195 @@ const ManageStaff: React.FC = () => {
     }
   };
 
-  const handleResetToDefault = async () => {
-    if (!selectedStaffForQuota) return;
+  const resetDevice = async (staffId: string, deviceOnly: boolean) => {
+    const confirmation = deviceOnly
+      ? 'Reset this staff device ID only? Password will not change.'
+      : 'Reset device ID and send a new password to this staff member?';
 
-    try {
-      setIsSavingQuota(true);
-      const staffId = selectedStaffForQuota._id || selectedStaffForQuota.id;
-      await api.put(`/api/users/${staffId}/quota`, { resetToDefault: true });
-
-      setMessage(`Leave quota reset to default for ${selectedStaffForQuota.profile.firstName} ${selectedStaffForQuota.profile.lastName}`);
-      handleCloseQuotaModal();
-      fetchStaff();
-    } catch (err: any) {
-      setError(err.response?.data?.msg || 'Failed to reset quota');
-    } finally {
-      setIsSavingQuota(false);
-    }
-  };
-
-  // Handle device reset
-  const handleResetDevice = async (staffId: string) => {
-    if (!window.confirm('This will reset the device ID and send a new 6-digit password to the user\'s email. Continue?')) {
-      return;
-    }
+    if (!window.confirm(confirmation)) return;
 
     setResettingDevice(staffId);
     setError('');
-    setMessage('');
-
     try {
-      await api.put(`/api/users/${staffId}/reset-device`);
-
-      setMessage('Staff device reset successfully. New credentials have been emailed.');
+      await api.put(`/api/users/${staffId}/${deviceOnly ? 'reset-device-only' : 'reset-device'}`);
+      setMessage(deviceOnly ? 'Device ID reset successfully.' : 'Staff device reset successfully.');
       await fetchStaff();
     } catch (err: any) {
-      if (err.response?.status === 403) {
-        setError('You do not have permission to reset devices.');
-      } else {
-        setError(err.response?.data?.msg || 'Failed to reset device. Please try again.');
-      }
+      setError(err.response?.data?.msg || 'Failed to reset device.');
     } finally {
       setResettingDevice(null);
     }
   };
 
-  // Handle device reset (Platform Owner only)
-  const handleResetDeviceOnly = async (staffId: string) => {
-    if (!window.confirm('Are you sure you want to reset this staff member\'s device ID? This will allow them to register a new device without changing their password.')) {
-      return;
-    }
-
-    setResettingDevice(staffId);
-    setError('');
-    setMessage('');
-
-    try {
-      await api.put(`/api/users/${staffId}/reset-device-only`);
-
-      setMessage('Device ID reset successfully! Staff member can now register a new device.');
-      await fetchStaff();
-    } catch (err: any) {
-      if (err.response?.status === 403) {
-        setError('You do not have permission to reset devices.');
-      } else {
-        setError(err.response?.data?.msg || 'Failed to reset device. Please try again.');
-      }
-    } finally {
-      setResettingDevice(null);
-    }
-  };
-
-  // Handle staff deletion
-  const handleDeleteStaff = async (staffId: string, staffName: string) => {
-    if (!window.confirm(`Are you sure you want to delete ${staffName}? This action cannot be undone.`)) {
-      return;
-    }
+  const deleteSingleStaff = async (staffId: string, staffName: string) => {
+    if (!window.confirm(`Delete ${staffName}? This action cannot be undone.`)) return;
 
     setDeletingStaff(staffId);
     setError('');
-    setMessage('');
-
     try {
       const { data } = await api.delete(`/api/users/${staffId}`);
-
       setMessage(data.msg || 'Staff member deleted successfully');
       await fetchStaff();
     } catch (err: any) {
-      if (err.response?.status === 403) {
-        setError('You do not have permission to delete staff members.');
-      } else {
-        setError(err.response?.data?.msg || 'Failed to delete staff member. Please try again.');
-      }
+      setError(err.response?.data?.msg || 'Failed to delete staff member.');
     } finally {
       setDeletingStaff(null);
     }
   };
 
-  // Filter staff based on search term and role
-  const filteredStaff = staffList.filter((staff) => {
-    const staffName = `${staff.profile.firstName} ${staff.profile.lastName}`.toLowerCase();
-    const staffEmail = staff.email.toLowerCase();
-    const searchLower = searchTerm.toLowerCase();
+  const showBulkResultToast = (result: { updatedCount: number; failedCount: number }, noun: string) => {
+    const text = `${result.updatedCount} ${noun}${result.updatedCount === 1 ? '' : 's'} updated`;
+    if (result.failedCount > 0) toast.error(`${text}, ${result.failedCount} failed`);
+    else toast.success(text);
+  };
 
-    // Search filter
-    const matchesSearch = !searchTerm ||
-      staffName.includes(searchLower) ||
-      staffEmail.includes(searchLower);
+  const ensureBulkSelection = (): string[] | null => {
+    if (selection.selectedCount === 0) return null;
+    if (actionableSelectedIds.length === 0) {
+      toast.error('No valid staff records selected for this action.');
+      return null;
+    }
+    return actionableSelectedIds;
+  };
 
-    // Role filter
-    const roleMap: { [key: string]: string } = {
-      'All Roles': 'All',
-      'Session Admin': 'SessionAdmin',
-      'Manager': 'Manager',
-      ...(isPlatformOwner || isSuperAdmin || isCompanyAdmin ? { 'Company Admin': 'SuperAdmin' } : {})
-    };
-    const mappedRole = roleMap[roleFilter] || roleFilter;
-    const matchesRole = mappedRole === 'All' || staff.role === mappedRole || (mappedRole === 'SuperAdmin' && staff.role === 'CompanyAdmin');
+  const runBulkResetDevice = async () => {
+    const ids = ensureBulkSelection();
+    if (!ids) return;
 
-    return matchesSearch && matchesRole;
-  });
+    try {
+      setIsBulkActionRunning(true);
+      const result = await staffService.bulkResetDevice(ids);
+      showBulkResultToast(result, 'staff');
+      selection.clearSelection();
+      await fetchStaff();
+    } catch (err: any) {
+      toast.error(err.response?.data?.msg || 'Failed to reset devices');
+    } finally {
+      setIsBulkActionRunning(false);
+    }
+  };
+
+  const runBulkDelete = async () => {
+    const ids = ensureBulkSelection();
+    if (!ids) return;
+
+    try {
+      setIsBulkActionRunning(true);
+      const result = await staffService.bulkDelete(ids);
+      showBulkResultToast(result, 'staff');
+      setBulkDeleteModalOpen(false);
+      selection.clearSelection();
+      await fetchStaff();
+    } catch (err: any) {
+      toast.error(err.response?.data?.msg || 'Failed to delete staff members');
+    } finally {
+      setIsBulkActionRunning(false);
+    }
+  };
+
+  const runBulkQuota = async () => {
+    const ids = ensureBulkSelection();
+    if (!ids) return;
+
+    try {
+      setIsBulkActionRunning(true);
+      const result = await staffService.bulkQuota({
+        userIds: ids,
+        resetToDefault: bulkQuotaResetToDefault,
+        ...(bulkQuotaResetToDefault ? {} : bulkQuotaForm),
+      });
+      showBulkResultToast(result, 'staff');
+      setBulkQuotaModalOpen(false);
+      setBulkQuotaResetToDefault(false);
+      selection.clearSelection();
+      await fetchStaff();
+    } catch (err: any) {
+      toast.error(err.response?.data?.msg || 'Failed to update leave quota');
+    } finally {
+      setIsBulkActionRunning(false);
+    }
+  };
+
+  const runBulkGrace = async () => {
+    const ids = ensureBulkSelection();
+    if (!ids) return;
+
+    try {
+      setIsBulkActionRunning(true);
+      const result = await staffService.bulkGrace({
+        userIds: ids,
+        resetToDefault: bulkGraceResetToDefault,
+        ...(bulkGraceResetToDefault ? {} : { gracePeriodMinutes: bulkGraceMinutes }),
+      });
+      showBulkResultToast(result, 'staff');
+      setBulkGraceModalOpen(false);
+      setBulkGraceResetToDefault(false);
+      selection.clearSelection();
+      await fetchStaff();
+    } catch (err: any) {
+      toast.error(err.response?.data?.msg || 'Failed to update grace period');
+    } finally {
+      setIsBulkActionRunning(false);
+    }
+  };
+
+  const selectedSingleStaff =
+    selection.selectedCount === 1
+      ? staffList.find((item) => getStaffId(item) === selection.selectedIdsArray[0]) || null
+      : null;
+
+  const bulkToolbarActions = [
+    {
+      id: 'edit',
+      label: 'Edit',
+      icon: 'edit',
+      hidden: !(isSuperAdmin || isCompanyAdmin || isPlatformOwner),
+      disabled: selection.selectedCount !== 1,
+      title: selection.selectedCount === 1 ? '' : 'Select exactly one staff member to edit',
+      onClick: () => {
+        if (!selectedSingleStaff) return;
+        setSelectedUserForEdit(selectedSingleStaff);
+        setIsEditModalOpen(true);
+      },
+    },
+    {
+      id: 'reset-device',
+      label: 'Reset Device',
+      icon: 'restart_alt',
+      disabled: isBulkActionRunning,
+      onClick: runBulkResetDevice,
+    },
+    {
+      id: 'manage-quota',
+      label: 'Manage Leave Quota',
+      icon: 'bar_chart',
+      hidden: !canManageQuota,
+      disabled: isBulkActionRunning,
+      onClick: () => setBulkQuotaModalOpen(true),
+    },
+    {
+      id: 'adjust-grace',
+      label: 'Adjust Grace',
+      icon: 'hourglass_empty',
+      hidden: !canAdjustGrace,
+      disabled: isBulkActionRunning,
+      onClick: () => setBulkGraceModalOpen(true),
+    },
+    {
+      id: 'delete',
+      label: 'Delete Staff',
+      icon: 'delete',
+      hidden: !canDeleteStaff,
+      danger: true,
+      disabled: isBulkActionRunning,
+      onClick: () => setBulkDeleteModalOpen(true),
+    },
+  ];
 
   return (
     <div className="relative flex h-auto min-h-screen w-full flex-col group/design-root">
       <div className="layout-container flex h-full grow flex-col">
         <div className="px-4 sm:px-6 lg:px-8 py-8 w-full max-w-7xl mx-auto">
-
           <ActionHeader
             title="Manage Staff"
             subtitle="Create, view, and manage staff accounts and roles."
@@ -378,452 +464,338 @@ const ManageStaff: React.FC = () => {
             onCreateClick={() => setIsCreateModalOpen(true)}
           />
 
-          {/* Messages */}
-          {message && (
-            <div className="mb-6 bg-green-500/10 text-green-700 dark:text-green-300 border border-green-500/20 p-4 rounded-xl flex items-center shadow-sm">
-              <span className="material-symbols-outlined mr-2">check_circle</span>
-              {message}
-            </div>
-          )}
+          {message && <div className="mb-4 rounded-lg border border-green-300 bg-green-50 px-4 py-3 text-green-800">{message}</div>}
+          {error && <div className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-red-800">{error}</div>}
 
-          {error && (
-            <div className="mb-6 bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/20 p-4 rounded-xl flex items-center shadow-sm">
-              <span className="material-symbols-outlined mr-2">error</span>
-              {error}
-            </div>
-          )}
-
-          {/* Search and Filter Row */}
-          <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
-            <div className="relative w-full sm:w-96">
-              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                <svg className="h-5 w-5 text-gray-400" fill="none" height="24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <line x1="21" x2="16.65" y1="21" y2="16.65"></line>
-                </svg>
-              </div>
+          <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-800">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <input
-                className="block w-full rounded-lg border-0 py-2.5 pl-10 pr-3 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:placeholder-gray-400"
+                className="w-full sm:w-96 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:bg-gray-700 dark:border-gray-600"
                 placeholder="Search by name or email..."
-                type="search"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(event) => setSearchTerm(event.target.value)}
               />
-            </div>
 
-            <div className="flex items-center gap-4 w-full sm:w-auto">
-              <div className="relative w-full sm:w-48">
+              <div className="flex items-center gap-3">
                 <select
-                  className="block w-full rounded-lg border-0 py-2.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 appearance-none"
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:bg-gray-700 dark:border-gray-600"
                   value={roleFilter}
-                  onChange={(e) => setRoleFilter(e.target.value)}
+                  onChange={(event) => setRoleFilter(event.target.value)}
                 >
                   <option value="All Roles">All Roles</option>
                   <option value="Session Admin">Session Admin</option>
                   <option value="Manager">Manager</option>
                   {(isPlatformOwner || isSuperAdmin || isCompanyAdmin) && <option value="Company Admin">Company Admin</option>}
                 </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                    <path clipRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" fillRule="evenodd"></path>
-                  </svg>
-                </div>
-              </div>
-              <div className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap hidden sm:block">
-                Total: <span className="font-semibold text-gray-900 dark:text-white">{filteredStaff.length}</span>
+                <span className="text-sm text-gray-600 dark:text-gray-300">Total: {totalStaff}</span>
               </div>
             </div>
           </div>
 
-          <EntityTable
-            data={filteredStaff}
-            columns={[
-              'Name',
-              'Email',
-              'Role',
-              'Phone',
-              ...((isSuperAdmin || canManageQuota) ? ['Actions'] : [])
-            ]}
+          {selection.selectedCount > 0 && (
+            <BulkActionToolbar
+              selectedCount={selection.selectedCount}
+              entityLabel="Staff"
+              actions={bulkToolbarActions}
+              onClear={selection.clearSelection}
+            />
+          )}
+          <BulkSelectableTable
+            rows={staffList}
+            columns={['Name', 'Email', 'Role', 'Phone', 'Actions']}
+            rowKey={getStaffId}
+            selectedIds={selection.selectedIds}
+            allSelected={selection.allSelected}
+            someSelected={selection.someSelected}
+            onToggleAll={selection.selectAll}
+            onToggleRow={(id, index, shiftKey) => selection.toggleSelect(id, { index, shiftKey })}
             isLoading={isLoading}
-            emptyMessage="No staff members found."
+            emptyMessage="No staff members found matching your criteria."
             renderRow={(staff) => {
-              const staffId = staff._id || staff.id || '';
-              const roleDisplay = staff.role === 'SessionAdmin'
-                ? 'Session Admin'
-                : staff.role === 'SuperAdmin' || staff.role === 'CompanyAdmin'
-                  ? 'Company Admin'
-                  : staff.role;
-              const isDeviceLocked = !!staff.registeredDeviceId;
-              const isResetting = resettingDevice === staffId;
-              const isDeleting = deletingStaff === staffId;
+              const staffId = getStaffId(staff);
               const staffName = `${staff.profile.firstName} ${staff.profile.lastName}`;
-
-              const currentUserId = user?.id;
-              const isCurrentUser = staffId === currentUserId;
+              const isCurrentUser = staffId === (user?.id || '');
               const isSubordinate = ['Manager', 'SessionAdmin'].includes(staff.role);
-              const canResetDevice = isPlatformOwner || isSuperAdmin || (isCompanyAdmin && (isCurrentUser || isSubordinate));
-              const canDeleteStaff = isSuperAdmin && !isCurrentUser;
+              const canResetDevice =
+                isPlatformOwner || isSuperAdmin || (isCompanyAdmin && (isCurrentUser || isSubordinate));
+              const showResetAction =
+                (isSuperAdmin && !!staff.registeredDeviceId) ||
+                (isPlatformOwner && canResetDevice) ||
+                (isCompanyAdmin && canResetDevice);
+
+              const actionItems: RowActionMenuItem[] = [
+                {
+                  id: 'edit',
+                  label: 'Edit Profile',
+                  icon: 'edit',
+                  hidden: !(isSuperAdmin || isCompanyAdmin || isPlatformOwner),
+                  onClick: () => {
+                    setSelectedUserForEdit(staff);
+                    setIsEditModalOpen(true);
+                  },
+                },
+                {
+                  id: 'quota',
+                  label: 'Manage Leave Quota',
+                  icon: 'bar_chart',
+                  hidden: !canManageQuota,
+                  onClick: () => openSingleQuotaModal(staff),
+                },
+                {
+                  id: 'grace',
+                  label: 'Adjust Grace Period',
+                  icon: 'hourglass_empty',
+                  hidden: !canAdjustGrace,
+                  onClick: () => {
+                    setSelectedStaffForGracePeriod(staff);
+                    setIsGracePeriodModalOpen(true);
+                  },
+                },
+                {
+                  id: 'reset',
+                  label: 'Reset Device ID',
+                  icon: 'restart_alt',
+                  hidden: !showResetAction,
+                  disabled: resettingDevice === staffId,
+                  onClick: () => resetDevice(staffId, isPlatformOwner),
+                },
+                {
+                  id: 'delete',
+                  label: 'Delete Staff',
+                  icon: 'delete',
+                  danger: true,
+                  hidden: !canDeleteStaff || isCurrentUser,
+                  disabled: deletingStaff === staffId,
+                  onClick: () => deleteSingleStaff(staffId, staffName),
+                },
+              ];
 
               return (
                 <>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
                     <div className="flex items-center gap-3">
                       {staff.profileImageUrl || staff.profilePicture ? (
                         <img
                           src={getOptimizedImageUrl(staff.profileImageUrl || staff.profilePicture, 80, 80, 'fill')}
                           alt={staffName}
-                          className="h-8 w-8 rounded-full object-cover bg-gray-100 dark:bg-gray-800"
+                          className="h-8 w-8 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="h-8 w-8 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-400 font-bold text-xs shrink-0">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-600">
                           {staff.profile.firstName?.[0]}{staff.profile.lastName?.[0]}
                         </div>
                       )}
-                      <div>
-                        <div className="font-medium text-gray-900 dark:text-white">{staffName}</div>
-                        {isDeviceLocked && (
-                          <span className="flex items-center gap-1 text-xs text-red-500">
-                            <span className="material-symbols-outlined text-[14px]">lock</span>
-                          </span>
-                        )}
+                      <div className="flex flex-col">
+                        <span>{staffName}</span>
+                        {staff.registeredDeviceId && <span className="text-xs text-red-500">Device Bound</span>}
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {staff.email}
+                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{staff.email}</td>
+                  <td className="px-6 py-4 text-sm">
+                    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${roleBadgeClass(staff.role)}`}>
+                      {roleLabel(staff.role)}
+                    </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    {staff.role === 'SessionAdmin' ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs leading-5 font-semibold rounded-full border bg-red-100 text-red-800 border-red-200 dark:bg-red-900/50 dark:text-red-300 dark:border-red-800">
-                        <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>shield_person</span>
-                        {roleDisplay}
-                      </span>
-                    ) : (staff.role === 'SuperAdmin' || staff.role === 'CompanyAdmin') ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs leading-5 font-semibold rounded-full border bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/50 dark:text-purple-300 dark:border-purple-800">
-                        <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>admin_panel_settings</span>
-                        {roleDisplay}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs leading-5 font-semibold rounded-full border bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/50 dark:text-blue-300 dark:border-blue-800">
-                        <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>supervisor_account</span>
-                        {roleDisplay}
-                      </span>
-                    )}
+                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{staff.profile.phone || 'N/A'}</td>
+                  <td className="px-6 py-4 text-right text-sm font-medium">
+                    <RowActionMenu
+                      menuId={staffId}
+                      openMenuId={openMenuId}
+                      setOpenMenuId={setOpenMenuId}
+                      items={actionItems}
+                    />
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {staff.profile.phone || 'N/A'}
-                  </td>
-                  {(isSuperAdmin || canManageQuota) && (
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
-                      <div className="relative inline-block text-left" ref={(el) => { menuRefs.current[staffId] = el; }}>
-                        <button
-                          onClick={() => setOpenMenuId(openMenuId === staffId ? null : staffId)}
-                          className="text-gray-400 hover:text-gray-500 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                        >
-                          <span className="material-symbols-outlined text-xl">more_vert</span>
-                        </button>
-
-                        {openMenuId === staffId && (
-                          <div className="absolute right-0 mt-2 w-56 origin-top-right divide-y divide-gray-100 dark:divide-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
-                            <div className="py-1">
-                              {(isSuperAdmin || isCompanyAdmin) && (
-                                <button
-                                  onClick={() => {
-                                    setOpenMenuId(null);
-                                    setSelectedUserForEdit(staff);
-                                    setIsEditModalOpen(true);
-                                  }}
-                                  className="group flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                  <span className="material-symbols-outlined text-lg mr-3 text-gray-400 group-hover:text-gray-500">edit</span>
-                                  Edit Profile
-                                </button>
-                              )}
-
-                              {canManageQuota && (
-                                <button
-                                  onClick={() => {
-                                    setOpenMenuId(null);
-                                    handleOpenQuotaModal(staff);
-                                  }}
-                                  className="group flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                  <span className="material-symbols-outlined text-lg mr-3 text-gray-400 group-hover:text-gray-500">bar_chart</span>
-                                  Manage Leave Quota
-                                </button>
-                              )}
-
-                              {((isSuperAdmin && isDeviceLocked) || (isPlatformOwner && canResetDevice) || (isCompanyAdmin && canResetDevice)) && (
-                                <button
-                                  onClick={() => {
-                                    setOpenMenuId(null);
-                                    if (isPlatformOwner) {
-                                      handleResetDeviceOnly(staffId);
-                                    } else {
-                                      handleResetDevice(staffId);
-                                    }
-                                  }}
-                                  disabled={isResetting}
-                                  className="group flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                  {isResetting ? (
-                                    <span className="animate-spin h-4 w-4 mr-3 border-2 border-gray-400 border-t-transparent rounded-full"></span>
-                                  ) : (
-                                    <span className="material-symbols-outlined text-lg mr-3 text-amber-500">restart_alt</span>
-                                  )}
-                                  Reset Device ID
-                                </button>
-                              )}
-                            </div>
-
-                            {canDeleteStaff && (
-                              <div className="py-1">
-                                <button
-                                  onClick={() => {
-                                    setOpenMenuId(null);
-                                    handleDeleteStaff(staffId, staffName);
-                                  }}
-                                  disabled={isDeleting || ((staff.role === 'SuperAdmin' || staff.role === 'CompanyAdmin') && isCurrentUser)}
-                                  className="group flex w-full items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10"
-                                  title={((staff.role === 'SuperAdmin' || staff.role === 'CompanyAdmin') && isCurrentUser) ? 'You cannot delete yourself' : ''}
-                                >
-                                  {isDeleting ? (
-                                    <span className="animate-spin h-4 w-4 mr-3 border-2 border-red-500 border-t-transparent rounded-full"></span>
-                                  ) : (
-                                    <span className="material-symbols-outlined text-lg mr-3">delete</span>
-                                  )}
-                                  Delete Staff
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                  )}
                 </>
               );
             }}
           />
 
-          {/* Create Staff Modal */}
-          <EntityFormModal
-            isOpen={isCreateModalOpen}
-            onClose={() => setIsCreateModalOpen(false)}
-            title="Create New Staff Member"
-          >
-            <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">First Name</label>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Page {totalPages === 0 ? 0 : page} of {totalPages}
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600 dark:text-gray-400">Rows</label>
+              <select
+                value={pageSize}
+                onChange={(event) => setPageSize(Number(event.target.value))}
+                className="rounded-lg border border-gray-300 px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-600"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <button
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                disabled={page <= 1 || isLoading}
+                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm disabled:opacity-50"
+              >
+                Prev
+              </button>
+              <button
+                onClick={() => setPage((prev) => (totalPages > 0 ? Math.min(totalPages, prev + 1) : prev))}
+                disabled={page >= totalPages || isLoading || totalPages === 0}
+                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+
+          <ConfirmationModal
+            isOpen={bulkDeleteModalOpen}
+            title={`Delete ${selection.selectedCount} Staff${selection.selectedCount === 1 ? '' : ' Members'}?`}
+            description={`You are about to delete ${selection.selectedCount} staff account${selection.selectedCount === 1 ? '' : 's'}. This action cannot be undone.`}
+            confirmLabel="Delete"
+            danger
+            isConfirming={isBulkActionRunning}
+            onCancel={() => setBulkDeleteModalOpen(false)}
+            onConfirm={runBulkDelete}
+          />
+
+          {bulkQuotaModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl dark:bg-slate-800">
+                <h2 className="mb-3 text-lg font-bold text-gray-900 dark:text-white">Bulk Manage Leave Quota</h2>
+                <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">Apply quota update to {selection.selectedCount} selected staff members.</p>
+
+                <label className="mb-4 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                   <input
-                    className="block w-full rounded-lg border-0 py-2.5 px-4 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 dark:bg-gray-800 dark:text-white dark:ring-gray-700"
-                    placeholder="e.g. Suresh"
-                    type="text"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    required
-                    disabled={isSubmitting}
+                    type="checkbox"
+                    checked={bulkQuotaResetToDefault}
+                    onChange={(event) => setBulkQuotaResetToDefault(event.target.checked)}
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Last Name</label>
-                  <input
-                    className="block w-full rounded-lg border-0 py-2.5 px-4 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 dark:bg-gray-800 dark:text-white dark:ring-gray-700"
-                    placeholder="e.g. Patil"
-                    type="text"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    required
-                    disabled={isSubmitting}
-                  />
-                </div>
-              </div>
+                  Reset selected staff to organization default quota
+                </label>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email Address</label>
-                <input
-                  className="block w-full rounded-lg border-0 py-2.5 px-4 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 dark:bg-gray-800 dark:text-white dark:ring-gray-700"
-                  placeholder="e.g. suresh.patil@example.com"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={isSubmitting}
-                />
-              </div>
+                {!bulkQuotaResetToDefault && (
+                  <div className="mb-4 grid grid-cols-3 gap-2">
+                    <input className="rounded border p-2" type="number" min="0" value={bulkQuotaForm.pl} onChange={(event) => setBulkQuotaForm({ ...bulkQuotaForm, pl: parseInt(event.target.value, 10) || 0 })} />
+                    <input className="rounded border p-2" type="number" min="0" value={bulkQuotaForm.cl} onChange={(event) => setBulkQuotaForm({ ...bulkQuotaForm, cl: parseInt(event.target.value, 10) || 0 })} />
+                    <input className="rounded border p-2" type="number" min="0" value={bulkQuotaForm.sl} onChange={(event) => setBulkQuotaForm({ ...bulkQuotaForm, sl: parseInt(event.target.value, 10) || 0 })} />
+                  </div>
+                )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role</label>
-                <select
-                  className="block w-full rounded-lg border-0 py-2.5 px-4 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 dark:bg-gray-800 dark:text-white dark:ring-gray-700"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value as 'SessionAdmin' | 'Manager')}
-                  required
-                  disabled={isSubmitting}
-                >
-                  <option value="SessionAdmin">Session Admin</option>
-                  <option value="Manager">Manager</option>
-                </select>
-                <p className="mt-1 text-xs text-gray-500">Can manage assigned classes/batches.</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone Number (Optional)</label>
-                <input
-                  className="block w-full rounded-lg border-0 py-2.5 px-4 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 dark:bg-gray-800 dark:text-white dark:ring-gray-700"
-                  placeholder="e.g. +91 98765 12345"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
-                <div className="relative">
-                  <input
-                    className="block w-full rounded-lg border-0 py-2.5 pl-4 pr-10 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 dark:bg-gray-800 dark:text-white dark:ring-gray-700"
-                    placeholder="Leave empty to auto-generate"
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    minLength={6}
-                    disabled={isSubmitting}
-                    autoComplete="new-password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-red-500"
-                  >
-                    <span className="material-symbols-outlined text-lg">
-                      {showPassword ? 'visibility_off' : 'visibility'}
-                    </span>
+                <div className="flex gap-3">
+                  <button className="flex-1 rounded border px-4 py-2" onClick={() => setBulkQuotaModalOpen(false)}>Cancel</button>
+                  <button className="flex-1 rounded bg-[#f04129] px-4 py-2 text-white disabled:opacity-50" disabled={isBulkActionRunning} onClick={runBulkQuota}>
+                    {isBulkActionRunning ? 'Applying...' : 'Apply'}
                   </button>
                 </div>
               </div>
+            </div>
+          )}
 
-              <div className="pt-4 flex gap-3">
-                <button
-                  type="button"
-                  onClick={clearForm}
-                  className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800 transition-colors"
+          {bulkGraceModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl dark:bg-slate-800">
+                <h2 className="mb-3 text-lg font-bold text-gray-900 dark:text-white">Bulk Adjust Grace Period</h2>
+                <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">Apply grace update to {selection.selectedCount} selected staff members.</p>
+
+                <label className="mb-4 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={bulkGraceResetToDefault}
+                    onChange={(event) => setBulkGraceResetToDefault(event.target.checked)}
+                  />
+                  Clear global grace override for selected staff
+                </label>
+
+                {!bulkGraceResetToDefault && (
+                  <input
+                    className="mb-4 w-full rounded border p-2"
+                    type="number"
+                    min="0"
+                    max="180"
+                    value={bulkGraceMinutes}
+                    onChange={(event) => setBulkGraceMinutes(Math.min(180, Math.max(0, parseInt(event.target.value, 10) || 0)))}
+                  />
+                )}
+
+                <div className="flex gap-3">
+                  <button className="flex-1 rounded border px-4 py-2" onClick={() => setBulkGraceModalOpen(false)}>Cancel</button>
+                  <button className="flex-1 rounded bg-[#f04129] px-4 py-2 text-white disabled:opacity-50" disabled={isBulkActionRunning} onClick={runBulkGrace}>
+                    {isBulkActionRunning ? 'Applying...' : 'Apply'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          <EntityFormModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title="Create New Staff Member">
+            <form onSubmit={handleCreateStaff} className="space-y-4" autoComplete="off">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <input className="rounded-lg border px-4 py-2.5" placeholder="First Name" value={firstName} onChange={(event) => setFirstName(event.target.value)} required disabled={isSubmitting} />
+                <input className="rounded-lg border px-4 py-2.5" placeholder="Last Name" value={lastName} onChange={(event) => setLastName(event.target.value)} required disabled={isSubmitting} />
+              </div>
+
+              <input className="w-full rounded-lg border px-4 py-2.5" placeholder="Email Address" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={isSubmitting} />
+
+              <select className="w-full rounded-lg border px-4 py-2.5" value={role} onChange={(event) => setRole(event.target.value as 'SessionAdmin' | 'Manager')} disabled={isSubmitting}>
+                <option value="SessionAdmin">Session Admin</option>
+                <option value="Manager">Manager</option>
+              </select>
+
+              <input className="w-full rounded-lg border px-4 py-2.5" placeholder="Phone (Optional)" value={phone} onChange={(event) => setPhone(event.target.value)} disabled={isSubmitting} />
+
+              <div className="relative">
+                <input
+                  className="w-full rounded-lg border py-2.5 pl-4 pr-10"
+                  placeholder="Password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  minLength={6}
                   disabled={isSubmitting}
-                >
-                  Clear
+                />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 px-3 text-sm">
+                  {showPassword ? 'Hide' : 'Show'}
                 </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-r from-orange-500 to-[#f04129] text-white font-medium hover:from-orange-600 hover:to-[#d63a25] shadow-md hover:shadow-lg transition-all disabled:opacity-70 disabled:cursor-not-allowed"
-                >
+              </div>
+
+              <div className="flex gap-3">
+                <button type="button" onClick={clearForm} className="flex-1 rounded-lg border px-4 py-2.5" disabled={isSubmitting}>Clear</button>
+                <button type="submit" className="flex-1 rounded-lg bg-[#f04129] px-4 py-2.5 text-white disabled:opacity-60" disabled={isSubmitting}>
                   {isSubmitting ? 'Creating...' : 'Create Staff Member'}
                 </button>
               </div>
             </form>
           </EntityFormModal>
 
-          {/* Quota Management Modal */}
           {quotaModalOpen && selectedStaffForQuota && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full max-w-[95vw] mx-4">
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold text-[#181511] dark:text-white">
-                      Manage Leave Quota
-                    </h2>
-                    <button
-                      onClick={handleCloseQuotaModal}
-                      className="text-[#8a7b60] dark:text-gray-400 hover:text-[#181511] dark:hover:text-white"
-                    >
-                      <span className="material-symbols-outlined">close</span>
-                    </button>
-                  </div>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl dark:bg-slate-800">
+                <h2 className="mb-3 text-lg font-bold text-gray-900 dark:text-white">Manage Leave Quota</h2>
+                <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">{selectedStaffForQuota.profile.firstName} {selectedStaffForQuota.profile.lastName}</p>
 
-                  <p className="text-sm text-[#8a7b60] dark:text-gray-400 mb-4">
-                    Setting custom leave quotas for <strong>{selectedStaffForQuota.profile.firstName} {selectedStaffForQuota.profile.lastName}</strong>
-                  </p>
+                <div className="mb-4 grid grid-cols-3 gap-2">
+                  <input className="rounded border p-2" type="number" min="0" value={quotaForm.pl} onChange={(event) => setQuotaForm({ ...quotaForm, pl: parseInt(event.target.value, 10) || 0 })} />
+                  <input className="rounded border p-2" type="number" min="0" value={quotaForm.cl} onChange={(event) => setQuotaForm({ ...quotaForm, cl: parseInt(event.target.value, 10) || 0 })} />
+                  <input className="rounded border p-2" type="number" min="0" value={quotaForm.sl} onChange={(event) => setQuotaForm({ ...quotaForm, sl: parseInt(event.target.value, 10) || 0 })} />
+                </div>
 
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-[#181511] dark:text-white mb-2">
-                        Personal Leave (PL)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={quotaForm.pl}
-                        onChange={(e) => setQuotaForm({ ...quotaForm, pl: parseInt(e.target.value) || 0 })}
-                        className="w-full px-4 py-2 rounded-lg border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 text-[#181511] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f04129]"
-                      />
-                    </div>
+                <div className="mb-4 text-xs text-gray-500">Org default: PL {orgDefaults.pl}, CL {orgDefaults.cl}, SL {orgDefaults.sl}</div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-[#181511] dark:text-white mb-2">
-                        Casual Leave (CL)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={quotaForm.cl}
-                        onChange={(e) => setQuotaForm({ ...quotaForm, cl: parseInt(e.target.value) || 0 })}
-                        className="w-full px-4 py-2 rounded-lg border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 text-[#181511] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f04129]"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-[#181511] dark:text-white mb-2">
-                        Sick Leave (SL)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={quotaForm.sl}
-                        onChange={(e) => setQuotaForm({ ...quotaForm, sl: parseInt(e.target.value) || 0 })}
-                        className="w-full px-4 py-2 rounded-lg border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 text-[#181511] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f04129]"
-                      />
-                    </div>
-
-                    {selectedStaffForQuota.customLeaveQuota && (
-                      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                        <p className="text-xs text-blue-800 dark:text-blue-300">
-                          This staff member currently has custom quotas. Organization default: PL: {orgDefaults.pl}, CL: {orgDefaults.cl}, SL: {orgDefaults.sl}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex gap-3 mt-6">
-                    <button
-                      onClick={handleResetToDefault}
-                      disabled={isSavingQuota}
-                      className="flex-1 px-4 py-2 rounded-lg border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 text-[#181511] dark:text-white hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
-                    >
-                      Reset to Default
-                    </button>
-                    <button
-                      onClick={handleSaveQuota}
-                      disabled={isSavingQuota}
-                      className="flex-1 px-4 py-2 rounded-lg bg-[#f04129] hover:bg-[#d63a25] text-white transition-colors disabled:opacity-50"
-                    >
-                      {isSavingQuota ? 'Saving...' : 'Save Quota'}
-                    </button>
-                  </div>
+                <div className="flex gap-3">
+                  <button className="flex-1 rounded border px-4 py-2" disabled={isSavingQuota} onClick={() => saveSingleQuota(true)}>Reset to Default</button>
+                  <button className="flex-1 rounded bg-[#f04129] px-4 py-2 text-white disabled:opacity-50" disabled={isSavingQuota} onClick={() => saveSingleQuota(false)}>
+                    {isSavingQuota ? 'Saving...' : 'Save'}
+                  </button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Bulk Import Staff Modal */}
           <BulkImportStaff
             isOpen={isImportModalOpen}
             onClose={() => setIsImportModalOpen(false)}
-            onSuccess={fetchStaff}
+            onSuccess={async () => {
+              setPage(1);
+              await fetchStaff(1);
+            }}
           />
 
-          {/* Edit User Modal */}
           {selectedUserForEdit && (
             <EditUserModal
               user={selectedUserForEdit}
@@ -840,6 +812,14 @@ const ManageStaff: React.FC = () => {
             />
           )}
 
+          <SetGracePeriodModal
+            isOpen={isGracePeriodModalOpen}
+            onClose={() => {
+              setIsGracePeriodModalOpen(false);
+              setSelectedStaffForGracePeriod(null);
+            }}
+            user={selectedStaffForGracePeriod}
+          />
         </div>
       </div>
     </div>

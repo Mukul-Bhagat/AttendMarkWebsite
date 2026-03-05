@@ -59,7 +59,7 @@ const SessionDetails: React.FC = () => {
   // Redirect End Users to scanner instead of showing details page
   useEffect(() => {
     if (isEndUser && id) {
-      navigate(`/scan?sessionId=${id}`, { replace: true });
+      navigate(`/scan-web?sessionId=${id}`, { replace: true });
     }
   }, [isEndUser, id, navigate]);
 
@@ -320,8 +320,12 @@ const SessionDetails: React.FC = () => {
     );
   }
 
-  // Keep payload compact for faster QR render + scan.
-  const qrValue = qrToken ? qrToken : '';
+  const universalScanBaseUrl =
+    (import.meta.env.VITE_UNIVERSAL_SCAN_BASE_URL as string | undefined)?.trim() ||
+    'https://attendmark.com/scan';
+  const qrValue = qrToken
+    ? `${universalScanBaseUrl}?token=${encodeURIComponent(qrToken)}`
+    : '';
   const hasQrValue = Boolean(qrValue);
 
   const formatDate = (dateString: string) => {

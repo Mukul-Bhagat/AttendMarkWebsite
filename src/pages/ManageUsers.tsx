@@ -2,12 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import api from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import Papa from 'papaparse';
+import toast from 'react-hot-toast';
 import EditUserModal from '../components/EditUserModal';
 import SetGracePeriodModal from '../components/SetGracePeriodModal';
 import ActionHeader from '../components/entity/ActionHeader';
-import EntityTable from '../components/entity/EntityTable';
+import BulkSelectableTable from '../components/entity/BulkSelectableTable';
+import BulkActionToolbar from '../components/entity/BulkActionToolbar';
+import RowActionMenu, { RowActionMenuItem } from '../components/entity/RowActionMenu';
 import EntityFormModal from '../components/common/EntityFormModal';
+import ConfirmationModal from '../components/common/ConfirmationModal';
 import { getOptimizedImageUrl } from '../utils/cloudinary';
+import { useBulkSelection } from '../hooks/useBulkSelection';
+import { userService } from '../services/userService';
 
 import { appLogger } from '../shared/logger';
 type EndUser = {
@@ -54,6 +60,11 @@ const ManageUsers: React.FC = () => {
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Status');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
   // Quota management state
   const [quotaModalOpen, setQuotaModalOpen] = useState(false);
@@ -77,21 +88,38 @@ const ManageUsers: React.FC = () => {
 
   // Dropdown menu state
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const menuRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   // Edit user modal state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<EndUser | null>(null);
 
+  // Bulk action state
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
+  const [bulkQuotaModalOpen, setBulkQuotaModalOpen] = useState(false);
+  const [bulkGraceModalOpen, setBulkGraceModalOpen] = useState(false);
+  const [bulkQuotaForm, setBulkQuotaForm] = useState({ pl: 12, cl: 12, sl: 10 });
+  const [bulkQuotaResetToDefault, setBulkQuotaResetToDefault] = useState(false);
+  const [bulkGraceMinutes, setBulkGraceMinutes] = useState(30);
+  const [bulkGraceResetToDefault, setBulkGraceResetToDefault] = useState(false);
+  const [isBulkActionRunning, setIsBulkActionRunning] = useState(false);
+
   // Fetch existing EndUsers
-  const fetchUsers = async () => {
+  const fetchUsers = async (targetPage?: number) => {
     try {
       setIsLoading(true);
       setError('');
-      const { data } = await api.get('/api/users/my-organization');
-      // Filter for EndUser role only
-      const endUsers = data.filter((user: EndUser) => user.role === 'EndUser');
-      setUsersList(endUsers);
+      const response = await userService.fetchList<EndUser>({
+        page: targetPage ?? page,
+        limit: pageSize,
+        search: debouncedSearchTerm || undefined,
+        status: statusFilter as 'Locked' | 'Unlocked' | 'All Status',
+        sortBy: 'createdAt',
+        sortOrder: 'desc',
+      });
+
+      setUsersList(response.items || []);
+      setTotalUsers(response.total || 0);
+      setTotalPages(response.totalPages || 0);
     } catch (err: any) {
       if (err.response?.status === 401) {
         setError('You are not authorized. Please log in again.');
@@ -104,10 +132,22 @@ const ManageUsers: React.FC = () => {
     }
   };
 
-  // Fetch on component mount
+  const selection = useBulkSelection(usersList, (user) => user._id || user.id || '');
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm.trim());
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearchTerm, statusFilter, pageSize]);
+
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [page, pageSize, debouncedSearchTerm, statusFilter]);
 
   // Auto-dismiss success message after 5 seconds
   useEffect(() => {
@@ -118,26 +158,6 @@ const ManageUsers: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [message]);
-
-  // Click outside handler for dropdown menu
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (openMenuId) {
-        const menuElement = menuRefs.current[openMenuId];
-        if (menuElement && !menuElement.contains(event.target as Node)) {
-          setOpenMenuId(null);
-        }
-      }
-    };
-
-    if (openMenuId) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [openMenuId]);
 
   const clearForm = () => {
     setFirstName('');
@@ -473,25 +493,166 @@ const ManageUsers: React.FC = () => {
     }
   };
 
-  // Filter users based on search term and status
-  const filteredUsers = usersList.filter((user) => {
-    const userName = `${user.profile.firstName} ${user.profile.lastName}`.toLowerCase();
-    const userEmail = user.email.toLowerCase();
-    const searchLower = searchTerm.toLowerCase();
+  const selectedSingleUser =
+    selection.selectedCount === 1
+      ? usersList.find((item) => (item._id || item.id) === selection.selectedIdsArray[0]) || null
+      : null;
 
-    // Search filter: check if name or email includes search term
-    const matchesSearch = !searchTerm ||
-      userName.includes(searchLower) ||
-      userEmail.includes(searchLower);
+  const showBulkResultToast = (result: { updatedCount: number; failedCount: number }, noun: string) => {
+    const updatedLabel = `${result.updatedCount} ${noun}${result.updatedCount === 1 ? '' : 's'} updated`;
+    if (result.failedCount > 0) {
+      toast.error(`${updatedLabel}, ${result.failedCount} failed`);
+    } else {
+      toast.success(updatedLabel);
+    }
+  };
 
-    // Status filter: check if device is locked/unlocked
-    const isDeviceLocked = !!user.registeredDeviceId;
-    const matchesStatus = statusFilter === 'All Status' ||
-      (statusFilter === 'Locked' && isDeviceLocked) ||
-      (statusFilter === 'Unlocked' && !isDeviceLocked);
+  const runBulkResetDevice = async () => {
+    if (selection.selectedCount === 0) {
+      return;
+    }
 
-    return matchesSearch && matchesStatus;
-  });
+    try {
+      setIsBulkActionRunning(true);
+      const result = await userService.bulkResetDevice(selection.selectedIdsArray);
+      showBulkResultToast(result, 'user');
+      selection.clearSelection();
+      await fetchUsers();
+    } catch (err: any) {
+      toast.error(err.response?.data?.msg || 'Failed to reset devices');
+    } finally {
+      setIsBulkActionRunning(false);
+    }
+  };
+
+  const runBulkDelete = async () => {
+    if (selection.selectedCount === 0) {
+      return;
+    }
+
+    try {
+      setIsBulkActionRunning(true);
+      const result = await userService.bulkDelete(selection.selectedIdsArray);
+      showBulkResultToast(result, 'user');
+      setBulkDeleteModalOpen(false);
+      selection.clearSelection();
+      await fetchUsers();
+    } catch (err: any) {
+      toast.error(err.response?.data?.msg || 'Failed to delete users');
+    } finally {
+      setIsBulkActionRunning(false);
+    }
+  };
+
+  const runBulkQuota = async () => {
+    if (selection.selectedCount === 0) {
+      return;
+    }
+
+    try {
+      setIsBulkActionRunning(true);
+      const result = await userService.bulkQuota({
+        userIds: selection.selectedIdsArray,
+        resetToDefault: bulkQuotaResetToDefault,
+        ...(bulkQuotaResetToDefault ? {} : bulkQuotaForm),
+      });
+      showBulkResultToast(result, 'user');
+      setBulkQuotaModalOpen(false);
+      setBulkQuotaResetToDefault(false);
+      selection.clearSelection();
+      await fetchUsers();
+    } catch (err: any) {
+      toast.error(err.response?.data?.msg || 'Failed to update quota');
+    } finally {
+      setIsBulkActionRunning(false);
+    }
+  };
+
+  const runBulkGrace = async () => {
+    if (selection.selectedCount === 0) {
+      return;
+    }
+
+    try {
+      setIsBulkActionRunning(true);
+      const result = await userService.bulkGrace({
+        userIds: selection.selectedIdsArray,
+        resetToDefault: bulkGraceResetToDefault,
+        ...(bulkGraceResetToDefault ? {} : { gracePeriodMinutes: bulkGraceMinutes }),
+      });
+      showBulkResultToast(result, 'user');
+      setBulkGraceModalOpen(false);
+      setBulkGraceResetToDefault(false);
+      selection.clearSelection();
+      await fetchUsers();
+    } catch (err: any) {
+      toast.error(err.response?.data?.msg || 'Failed to update grace period');
+    } finally {
+      setIsBulkActionRunning(false);
+    }
+  };
+
+  const bulkToolbarActions = [
+    {
+      id: 'edit',
+      label: 'Edit',
+      icon: 'edit',
+      onClick: () => {
+        if (selectedSingleUser) {
+          setSelectedUserForEdit(selectedSingleUser);
+          setIsEditModalOpen(true);
+        }
+      },
+      disabled: selection.selectedCount !== 1,
+      title: selection.selectedCount === 1 ? '' : 'Select exactly one user to edit',
+    },
+    {
+      id: 'view-attendance',
+      label: 'View Attendance',
+      icon: 'history',
+      onClick: () => {
+        if (selectedSingleUser) {
+          const userId = selectedSingleUser._id || selectedSingleUser.id;
+          if (userId) {
+            window.open(`/admin/attendance/users/${userId}`, '_blank');
+          }
+        }
+      },
+      disabled: selection.selectedCount !== 1,
+      title: selection.selectedCount === 1 ? '' : 'Select exactly one user',
+    },
+    {
+      id: 'reset-device',
+      label: 'Reset Device',
+      icon: 'restart_alt',
+      onClick: runBulkResetDevice,
+      disabled: isBulkActionRunning,
+    },
+    {
+      id: 'manage-quota',
+      label: 'Manage Quota',
+      icon: 'bar_chart',
+      onClick: () => setBulkQuotaModalOpen(true),
+      disabled: isBulkActionRunning || !canManageQuota,
+      hidden: !canManageQuota,
+    },
+    {
+      id: 'adjust-grace',
+      label: 'Adjust Grace',
+      icon: 'hourglass_empty',
+      onClick: () => setBulkGraceModalOpen(true),
+      disabled: isBulkActionRunning || !(isSuperAdmin || isCompanyAdmin),
+      hidden: !(isSuperAdmin || isCompanyAdmin),
+    },
+    {
+      id: 'delete',
+      label: 'Delete',
+      icon: 'delete',
+      onClick: () => setBulkDeleteModalOpen(true),
+      disabled: isBulkActionRunning,
+      danger: true,
+    },
+  ];
 
   return (
     <div className="relative flex h-auto min-h-screen w-full flex-col group/design-root">
@@ -558,14 +719,29 @@ const ManageUsers: React.FC = () => {
                 </div>
               </div>
               <div className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap hidden sm:block">
-                Total: <span className="font-semibold text-gray-900 dark:text-white">{filteredUsers.length}</span>
+                Total: <span className="font-semibold text-gray-900 dark:text-white">{totalUsers}</span>
               </div>
             </div>
           </div>
 
-          <EntityTable
-            data={filteredUsers}
-            columns={['Name', 'Email', 'Phone', 'Actions']}
+          {selection.selectedCount > 0 && (
+            <BulkActionToolbar
+              selectedCount={selection.selectedCount}
+              entityLabel="User"
+              actions={bulkToolbarActions}
+              onClear={selection.clearSelection}
+            />
+          )}
+
+          <BulkSelectableTable
+            rows={usersList}
+            columns={['Name', 'Email', 'Role', 'Phone', 'Actions']}
+            rowKey={(user) => user._id || user.id || ''}
+            selectedIds={selection.selectedIds}
+            allSelected={selection.allSelected}
+            someSelected={selection.someSelected}
+            onToggleAll={selection.selectAll}
+            onToggleRow={(id, index, shiftKey) => selection.toggleSelect(id, { index, shiftKey })}
             isLoading={isLoading}
             emptyMessage="No users found matching your criteria."
             renderRow={(user) => {
@@ -575,6 +751,64 @@ const ManageUsers: React.FC = () => {
               const isDeleting = deletingUser === userId;
               const userName = `${user.profile.firstName} ${user.profile.lastName}`;
               const canResetDevice = isSuperAdmin || isCompanyAdmin || isPlatformOwner;
+
+              const actionItems: RowActionMenuItem[] = [
+                {
+                  id: 'view-attendance',
+                  label: 'View Attendance',
+                  icon: 'history',
+                  onClick: () => window.open(`/admin/attendance/users/${userId}`, '_blank'),
+                },
+                {
+                  id: 'edit-profile',
+                  label: 'Edit Profile',
+                  icon: 'edit',
+                  hidden: !(isSuperAdmin || isCompanyAdmin),
+                  onClick: () => {
+                    setSelectedUserForEdit(user);
+                    setIsEditModalOpen(true);
+                  },
+                },
+                {
+                  id: 'manage-quota',
+                  label: 'Manage Quota',
+                  icon: 'bar_chart',
+                  hidden: !canManageQuota,
+                  onClick: () => handleOpenQuotaModal(user),
+                },
+                {
+                  id: 'reset-device',
+                  label: 'Reset Device ID',
+                  icon: 'restart_alt',
+                  hidden: !((isSuperAdmin && isDeviceLocked) || (isPlatformOwner && canResetDevice) || (isCompanyAdmin && canResetDevice)),
+                  disabled: isResetting,
+                  onClick: () => {
+                    if (isPlatformOwner) {
+                      handleResetDeviceOnly(userId);
+                    } else {
+                      handleResetDevice(userId);
+                    }
+                  },
+                },
+                {
+                  id: 'adjust-grace',
+                  label: 'Adjust Grace Period',
+                  icon: 'hourglass_empty',
+                  hidden: !(isSuperAdmin || isCompanyAdmin),
+                  onClick: () => {
+                    setSelectedUserForGracePeriod(user);
+                    setIsGracePeriodModalOpen(true);
+                  },
+                },
+                {
+                  id: 'delete',
+                  label: 'Delete User',
+                  icon: 'delete',
+                  danger: true,
+                  disabled: isDeleting,
+                  onClick: () => handleDeleteUser(userId, userName),
+                },
+              ];
 
               return (
                 <>
@@ -602,126 +836,224 @@ const ManageUsers: React.FC = () => {
                       </div>
                     </div>
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{user.email}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {user.email}
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">
+                      End User
+                    </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {user.profile.phone || 'N/A'}
-                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{user.profile.phone || 'N/A'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
-                    {(isSuperAdmin || canManageQuota || isPlatformOwner) && (
-                      <div className="relative inline-block text-left" ref={(el) => { menuRefs.current[userId] = el; }}>
-                        <button
-                          onClick={() => setOpenMenuId(openMenuId === userId ? null : userId)}
-                          className="text-gray-400 hover:text-gray-500 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                        >
-                          <span className="material-symbols-outlined text-xl">more_vert</span>
-                        </button>
-
-                        {openMenuId === userId && (
-                          <div className="absolute right-0 mt-2 w-56 origin-top-right divide-y divide-gray-100 dark:divide-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
-                            <div className="py-1">
-                              <button
-                                onClick={() => {
-                                  setOpenMenuId(null);
-                                  window.open(`/admin/attendance/users/${userId}`, '_blank');
-                                }}
-                                className="group flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                              >
-                                <span className="material-symbols-outlined text-lg mr-3 text-blue-500">history</span>
-                                View Attendance
-                              </button>
-
-                              {(isSuperAdmin || isCompanyAdmin) && (
-                                <button
-                                  onClick={() => {
-                                    setOpenMenuId(null);
-                                    setSelectedUserForEdit(user);
-                                    setIsEditModalOpen(true);
-                                  }}
-                                  className="group flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                  <span className="material-symbols-outlined text-lg mr-3 text-gray-400 group-hover:text-gray-500">edit</span>
-                                  Edit Profile
-                                </button>
-                              )}
-
-                              {canManageQuota && (
-                                <button
-                                  onClick={() => {
-                                    setOpenMenuId(null);
-                                    handleOpenQuotaModal(user);
-                                  }}
-                                  className="group flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                  <span className="material-symbols-outlined text-lg mr-3 text-gray-400 group-hover:text-gray-500">bar_chart</span>
-                                  Manage Quota
-                                </button>
-                              )}
-
-                              {((isSuperAdmin && isDeviceLocked) || (isPlatformOwner && canResetDevice) || (isCompanyAdmin && canResetDevice)) && (
-                                <button
-                                  onClick={() => {
-                                    setOpenMenuId(null);
-                                    if (isPlatformOwner) {
-                                      handleResetDeviceOnly(userId);
-                                    } else {
-                                      handleResetDevice(userId);
-                                    }
-                                  }}
-                                  disabled={isResetting}
-                                  className="group flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                  {isResetting ? (
-                                    <span className="animate-spin h-4 w-4 mr-3 border-2 border-gray-400 border-t-transparent rounded-full"></span>
-                                  ) : (
-                                    <span className="material-symbols-outlined text-lg mr-3 text-amber-500">restart_alt</span>
-                                  )}
-                                  Reset Device ID
-                                </button>
-                              )}
-
-                              {(isSuperAdmin || isCompanyAdmin) && (
-                                <button
-                                  onClick={() => {
-                                    setOpenMenuId(null);
-                                    setSelectedUserForGracePeriod(user);
-                                    setIsGracePeriodModalOpen(true);
-                                  }}
-                                  className="group flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                  <span className="material-symbols-outlined text-lg mr-3 text-purple-500">hourglass_empty</span>
-                                  Adjust Grace Period
-                                </button>
-                              )}
-
-                              <div className="py-1">
-                                <button
-                                  onClick={() => {
-                                    setOpenMenuId(null);
-                                    handleDeleteUser(userId, userName);
-                                  }}
-                                  disabled={isDeleting}
-                                  className="group flex w-full items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10"
-                                >
-                                  {isDeleting ? (
-                                    <span className="animate-spin h-4 w-4 mr-3 border-2 border-red-500 border-t-transparent rounded-full"></span>
-                                  ) : (
-                                    <span className="material-symbols-outlined text-lg mr-3">delete</span>
-                                  )}
-                                  Delete User
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    <RowActionMenu
+                      menuId={userId}
+                      openMenuId={openMenuId}
+                      setOpenMenuId={setOpenMenuId}
+                      items={actionItems}
+                    />
                   </td>
                 </>
               );
             }}
           />
+
+          <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Page {totalPages === 0 ? 0 : page} of {totalPages}
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600 dark:text-gray-400">Rows</label>
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm px-2 py-1"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <button
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                disabled={page <= 1 || isLoading}
+                className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-sm disabled:opacity-50"
+              >
+                Prev
+              </button>
+              <button
+                onClick={() => setPage((prev) => (totalPages > 0 ? Math.min(totalPages, prev + 1) : prev))}
+                disabled={page >= totalPages || isLoading || totalPages === 0}
+                className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-sm disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+
+          <ConfirmationModal
+            isOpen={bulkDeleteModalOpen}
+            title={`Delete ${selection.selectedCount} User${selection.selectedCount === 1 ? '' : 's'}?`}
+            description={`You are about to delete ${selection.selectedCount} user account${selection.selectedCount === 1 ? '' : 's'}. This action cannot be undone.`}
+            confirmLabel="Delete"
+            danger
+            isConfirming={isBulkActionRunning}
+            onCancel={() => setBulkDeleteModalOpen(false)}
+            onConfirm={runBulkDelete}
+          />
+
+          {bulkQuotaModalOpen && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full max-w-[95vw] mx-4">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold text-[#181511] dark:text-white">
+                      Bulk Manage Quota
+                    </h2>
+                    <button
+                      onClick={() => setBulkQuotaModalOpen(false)}
+                      className="text-[#8a7b60] dark:text-gray-400 hover:text-[#181511] dark:hover:text-white"
+                    >
+                      <span className="material-symbols-outlined">close</span>
+                    </button>
+                  </div>
+
+                  <p className="text-sm text-[#8a7b60] dark:text-gray-400 mb-4">
+                    Applying leave quota update to <strong>{selection.selectedCount}</strong> selected users.
+                  </p>
+
+                  <label className="flex items-center gap-2 text-sm mb-4 text-gray-700 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={bulkQuotaResetToDefault}
+                      onChange={(e) => setBulkQuotaResetToDefault(e.target.checked)}
+                    />
+                    Reset selected users to organization default quota
+                  </label>
+
+                  {!bulkQuotaResetToDefault && (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-[#181511] dark:text-white mb-2">
+                          Personal Leave (PL)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={bulkQuotaForm.pl}
+                          onChange={(e) => setBulkQuotaForm({ ...bulkQuotaForm, pl: parseInt(e.target.value, 10) || 0 })}
+                          className="w-full px-4 py-2 rounded-lg border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 text-[#181511] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f04129]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-[#181511] dark:text-white mb-2">
+                          Casual Leave (CL)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={bulkQuotaForm.cl}
+                          onChange={(e) => setBulkQuotaForm({ ...bulkQuotaForm, cl: parseInt(e.target.value, 10) || 0 })}
+                          className="w-full px-4 py-2 rounded-lg border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 text-[#181511] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f04129]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-[#181511] dark:text-white mb-2">
+                          Sick Leave (SL)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={bulkQuotaForm.sl}
+                          onChange={(e) => setBulkQuotaForm({ ...bulkQuotaForm, sl: parseInt(e.target.value, 10) || 0 })}
+                          className="w-full px-4 py-2 rounded-lg border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 text-[#181511] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f04129]"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      onClick={() => setBulkQuotaModalOpen(false)}
+                      className="flex-1 px-4 py-2 rounded-lg border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 text-[#181511] dark:text-white hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={runBulkQuota}
+                      disabled={isBulkActionRunning}
+                      className="flex-1 px-4 py-2 rounded-lg bg-[#f04129] hover:bg-[#d63a25] text-white transition-colors disabled:opacity-50"
+                    >
+                      {isBulkActionRunning ? 'Applying...' : 'Apply to Selected'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {bulkGraceModalOpen && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full max-w-[95vw] mx-4">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold text-[#181511] dark:text-white">
+                      Bulk Adjust Grace Period
+                    </h2>
+                    <button
+                      onClick={() => setBulkGraceModalOpen(false)}
+                      className="text-[#8a7b60] dark:text-gray-400 hover:text-[#181511] dark:hover:text-white"
+                    >
+                      <span className="material-symbols-outlined">close</span>
+                    </button>
+                  </div>
+
+                  <p className="text-sm text-[#8a7b60] dark:text-gray-400 mb-4">
+                    Applying grace period update to <strong>{selection.selectedCount}</strong> selected users.
+                  </p>
+
+                  <label className="flex items-center gap-2 text-sm mb-4 text-gray-700 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={bulkGraceResetToDefault}
+                      onChange={(e) => setBulkGraceResetToDefault(e.target.checked)}
+                    />
+                    Clear global grace override for selected users
+                  </label>
+
+                  {!bulkGraceResetToDefault && (
+                    <div>
+                      <label className="block text-sm font-medium text-[#181511] dark:text-white mb-2">
+                        Grace Period (Minutes)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="180"
+                        value={bulkGraceMinutes}
+                        onChange={(e) => setBulkGraceMinutes(Math.min(180, Math.max(0, parseInt(e.target.value, 10) || 0)))}
+                        className="w-full px-4 py-2 rounded-lg border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 text-[#181511] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f04129]"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      onClick={() => setBulkGraceModalOpen(false)}
+                      className="flex-1 px-4 py-2 rounded-lg border border-[#e6e2db] dark:border-slate-700 bg-white dark:bg-slate-900 text-[#181511] dark:text-white hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={runBulkGrace}
+                      disabled={isBulkActionRunning}
+                      className="flex-1 px-4 py-2 rounded-lg bg-[#f04129] hover:bg-[#d63a25] text-white transition-colors disabled:opacity-50"
+                    >
+                      {isBulkActionRunning ? 'Applying...' : 'Apply to Selected'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Create User Modal */}
           <EntityFormModal

@@ -74,6 +74,57 @@ const normalizeRequestPath = (url?: string): string => {
   return url.startsWith('/') ? url : `/${url}`;
 };
 
+const decodeJwtPayload = (token: string): Record<string, unknown> | null => {
+  const parts = token.split('.');
+  if (parts.length !== 3) {
+    return null;
+  }
+
+  if (typeof window === 'undefined' || typeof window.atob !== 'function') {
+    return null;
+  }
+
+  try {
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+    const decoded = window.atob(padded);
+    const parsed = JSON.parse(decoded);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const readStoredBearerToken = (): string | null => {
+  const rawToken = localStorage.getItem('token');
+  if (!rawToken) {
+    return null;
+  }
+
+  const token = rawToken.trim();
+  if (!token || token.toLowerCase() === 'cookie-auth') {
+    localStorage.removeItem('token');
+    return null;
+  }
+
+  if (token.split('.').length !== 3) {
+    localStorage.removeItem('token');
+    return null;
+  }
+
+  const payload = decodeJwtPayload(token);
+  const exp = payload?.exp;
+  if (typeof exp === 'number' && Number.isFinite(exp)) {
+    const expiresAtMs = exp * 1000;
+    if (Date.now() >= expiresAtMs) {
+      localStorage.removeItem('token');
+      return null;
+    }
+  }
+
+  return token;
+};
+
 const isCsrfExempt = (url?: string): boolean => {
   const path = normalizeRequestPath(url);
   if (!path) return false;
@@ -101,7 +152,7 @@ api.interceptors.request.use(
     }
 
     // Add Authorization header
-    const authToken = localStorage.getItem('token');
+    const authToken = readStoredBearerToken();
     if (authToken) {
       config.headers = config.headers ?? {};
       config.headers['Authorization'] = `Bearer ${authToken}`;
@@ -203,6 +254,7 @@ api.interceptors.response.use(
       try {
         // Attempt to refresh the token using HttpOnly cookies
         await api.post('/api/auth/refresh');
+        localStorage.removeItem('token');
 
         // If successful, process the queued requests
         isRefreshing = false;
