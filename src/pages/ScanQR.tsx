@@ -16,6 +16,42 @@ import {
 import { formatIST } from '../utils/time';
 
 import { appLogger } from '../shared/logger';
+
+interface ScanValidationTimelineStep {
+  key: 'qr' | 'device' | 'location' | 'time' | 'write';
+  label: string;
+  status: 'passed' | 'failed' | 'skipped' | 'pending';
+  detail: string;
+  at?: string;
+}
+
+interface ValidationSummary {
+  resultStatus: 'MARKED' | 'ALREADY_MARKED' | 'FAILED' | 'PENDING';
+  failedStep: ScanValidationTimelineStep['key'] | null;
+}
+
+const SCAN_VALIDATION_STEPS: ReadonlyArray<{
+  key: ScanValidationTimelineStep['key'];
+  label: string;
+}> = [
+  { key: 'qr', label: 'QR Validation' },
+  { key: 'device', label: 'Device Check' },
+  { key: 'location', label: 'Location Gate' },
+  { key: 'time', label: 'Date/Time Window' },
+  { key: 'write', label: 'Attendance Write' },
+];
+
+const SCAN_VALIDATION_STEP_INDEX: Record<ScanValidationTimelineStep['key'], number> = {
+  qr: 0,
+  device: 1,
+  location: 2,
+  time: 3,
+  write: 4,
+};
+
+const RESULT_REVEAL_DELAY_MS = 700;
+const RESULT_FINAL_HOLD_MS = 1800;
+
 const ScanQR: React.FC = () => {
   const [searchParams] = useSearchParams();
   const qrTokenFromUrl = searchParams.get('token') || searchParams.get('qrToken');
@@ -50,6 +86,9 @@ const ScanQR: React.FC = () => {
     hoursRemaining: number;
     minutesRemaining: number;
   } | null>(null);
+  const [validationTimeline, setValidationTimeline] = useState<ScanValidationTimelineStep[]>([]);
+  const [validationSummary, setValidationSummary] = useState<ValidationSummary | null>(null);
+  const [, setResultSequenceDone] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const qrCodeRegionId = 'qr-reader';
   const hasAutoSubmittedRef = useRef(false);
@@ -89,9 +128,174 @@ const ScanQR: React.FC = () => {
     return locationReasons.has(reason);
   };
 
+  const normalizeStepKey = (entry: any, index: number): ScanValidationTimelineStep['key'] | null => {
+    const keyRaw = String(entry?.key || '').trim().toLowerCase();
+    if (keyRaw === 'qr' || keyRaw === 'device' || keyRaw === 'location' || keyRaw === 'time' || keyRaw === 'write') {
+      return keyRaw;
+    }
+
+    const labelRaw = String(entry?.label || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ');
+    if (labelRaw.includes('qr')) return 'qr';
+    if (labelRaw.includes('device') || labelRaw.includes('browser')) return 'device';
+    if (labelRaw.includes('location')) return 'location';
+    if (labelRaw.includes('time') || labelRaw.includes('date')) return 'time';
+    if (labelRaw.includes('write') || labelRaw.includes('attendance')) return 'write';
+
+    return index < SCAN_VALIDATION_STEPS.length ? SCAN_VALIDATION_STEPS[index].key : null;
+  };
+
+  const normalizeStepStatus = (value: unknown): ScanValidationTimelineStep['status'] => {
+    const statusRaw = String(value || 'pending').toLowerCase();
+    if (statusRaw === 'passed' || statusRaw === 'failed' || statusRaw === 'skipped') {
+      return statusRaw;
+    }
+    return 'pending';
+  };
+
+  const resolveFailedStepFromReason = (payload: any): ValidationSummary['failedStep'] => {
+    const reason = String(payload?.reason || payload?.type || '').trim().toUpperCase();
+    if (!reason) return null;
+
+    const qrReasons = new Set([
+      'INVALID_QR',
+      'INVALID_QR_ORG',
+      'INVALID_QR_CLASS',
+      'INVALID_QR_SESSION',
+      'QR_VERSION_EXPIRED',
+      'SECURE_QR_REQUIRED',
+    ]);
+    const deviceReasons = new Set([
+      'DEVICE_MISMATCH',
+      'BROWSER_MISMATCH',
+      'DEVICE_BINDING_REQUIRED',
+      'DEVICE_KEY_MISMATCH',
+      'INVALID_DEVICE_PROOF',
+      'INVALID_DEVICE_SIGNATURE',
+      'DEVICE_REPLAY_DETECTED',
+      'DEVICE_TIMESTAMP_EXPIRED',
+    ]);
+    const locationReasons = new Set([
+      'OUT_OF_RANGE',
+      'LOCATION_REQUIRED',
+      'ACCURACY_REQUIRED',
+      'ACCURACY_TOO_LOW',
+      'INVALID_COORDINATES',
+      'SESSION_LOCATION_NOT_CONFIGURED',
+      'LOCATION_VERIFICATION_FAILED',
+      'INVALID_LOCATION_COORDS',
+      'INVALID_LOCATION_ZERO',
+      'INVALID_ACCURACY',
+      'INVALID_ACCURACY_RANGE',
+    ]);
+    const timeReasons = new Set(['ATTENDANCE_WINDOW_CLOSED', 'TOO_EARLY']);
+
+    if (qrReasons.has(reason)) return 'qr';
+    if (deviceReasons.has(reason)) return 'device';
+    if (locationReasons.has(reason)) return 'location';
+    if (timeReasons.has(reason)) return 'time';
+    return null;
+  };
+
+  const readValidationSummary = (payload: any): ValidationSummary => {
+    const rawSummary = payload?.validationSummary ?? {};
+    const resultStatusRaw = String(rawSummary?.resultStatus || payload?.status || '').toUpperCase();
+    const resultStatus: ValidationSummary['resultStatus'] =
+      resultStatusRaw === 'MARKED' || resultStatusRaw === 'ALREADY_MARKED' || resultStatusRaw === 'FAILED'
+        ? resultStatusRaw
+        : payload?.reason || payload?.type
+          ? 'FAILED'
+          : 'PENDING';
+
+    const failedStepRaw = String(rawSummary?.failedStep || '').trim().toLowerCase();
+    let failedStep: ValidationSummary['failedStep'] =
+      failedStepRaw === 'qr' || failedStepRaw === 'device' || failedStepRaw === 'location' || failedStepRaw === 'time' || failedStepRaw === 'write'
+        ? failedStepRaw
+        : resolveFailedStepFromReason(payload);
+
+    if (!failedStep && resultStatus === 'FAILED') {
+      failedStep = 'write';
+    }
+
+    return {
+      resultStatus,
+      failedStep,
+    };
+  };
+
+  const readValidationTimeline = (payload: any, summary: ValidationSummary): ScanValidationTimelineStep[] => {
+    const rawTimeline = Array.isArray(payload?.validationTimeline)
+      ? payload.validationTimeline
+      : [];
+    const parsedByKey = new Map<ScanValidationTimelineStep['key'], ScanValidationTimelineStep>();
+
+    rawTimeline.forEach((entry: any, index: number) => {
+      const key = normalizeStepKey(entry, index);
+      if (!key || parsedByKey.has(key)) return;
+      const fallbackLabel = SCAN_VALIDATION_STEPS[SCAN_VALIDATION_STEP_INDEX[key]].label;
+      parsedByKey.set(key, {
+        key,
+        label: typeof entry?.label === 'string' && entry.label.trim().length > 0
+          ? entry.label.trim()
+          : fallbackLabel,
+        status: normalizeStepStatus(entry?.status),
+        detail: typeof entry?.detail === 'string' ? entry.detail.trim() : '',
+        at: typeof entry?.at === 'string' ? entry.at : undefined,
+      });
+    });
+
+    const failedStep = summary.failedStep;
+    const failedStepIndex = failedStep ? SCAN_VALIDATION_STEP_INDEX[failedStep] : -1;
+    return SCAN_VALIDATION_STEPS.map(({ key, label }, index) => {
+      const parsed = parsedByKey.get(key);
+      let status = parsed?.status || 'pending';
+
+      if (failedStepIndex >= 0) {
+        if (index < failedStepIndex) {
+          status = status === 'skipped' ? 'skipped' : 'passed';
+        } else if (index === failedStepIndex) {
+          status = 'failed';
+        } else {
+          status = status === 'skipped' ? 'skipped' : 'pending';
+        }
+      } else if (summary.resultStatus === 'MARKED' || summary.resultStatus === 'ALREADY_MARKED') {
+        status = status === 'skipped' ? 'skipped' : 'passed';
+      } else if (summary.resultStatus === 'FAILED' && key === 'write') {
+        status = 'failed';
+      }
+
+      const detail = parsed?.detail && parsed.detail.length > 0
+        ? parsed.detail
+        : status === 'passed'
+          ? 'Validation passed.'
+          : status === 'failed'
+            ? 'Validation failed.'
+            : status === 'skipped'
+              ? 'Validation skipped.'
+              : 'Validation pending.';
+
+      return {
+        key,
+        label,
+        status,
+        detail,
+        at: parsed?.at,
+      };
+    });
+  };
+
   // Fetch all sessions on mount
   useEffect(() => {
     const fetchSessions = async () => {
+      if (directQrToken) {
+        setSessions([]);
+        setSessionError('');
+        setIsLoadingSessions(false);
+        return;
+      }
+
       setIsLoadingSessions(true);
       setSessionError('');
       try {
@@ -110,7 +314,7 @@ const ScanQR: React.FC = () => {
     };
 
     fetchSessions();
-  }, []);
+  }, [directQrToken]);
 
   // Fetch session info when selectedSessionId changes
   useEffect(() => {
@@ -269,10 +473,11 @@ const ScanQR: React.FC = () => {
       await html5QrCode.start(
         { facingMode: 'environment' }, // Use back camera
         {
-          fps: 5, // Lower fps = more processing time per frame for dense QR codes
+          fps: 12,
+          disableFlip: true,
           qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
             const minDim = Math.min(viewfinderWidth, viewfinderHeight);
-            const size = Math.floor(minDim * 0.85); // 85% of smallest dimension
+            const size = Math.floor(Math.max(220, minDim * 0.75));
             return { width: size, height: size };
           },
         },
@@ -326,6 +531,12 @@ const ScanQR: React.FC = () => {
     // PAUSE SCANNER IMMEDIATELY to prevent multiple scans
     setIsScannerPaused(true);
     isScannerPausedRef.current = true;
+    setValidationTimeline([]);
+    setValidationSummary(null);
+    setResultSequenceDone(false);
+    setShowDeviceMismatchModal(false);
+    setShowTooEarlyModal(false);
+    setTooEarlyInfo(null);
 
     // Stop scanning immediately
     await stopScanning();
@@ -492,6 +703,12 @@ const ScanQR: React.FC = () => {
   };
 
   const handleAttendanceResponse = (data: any) => {
+    const summary = readValidationSummary(data);
+    const timeline = readValidationTimeline(data, summary);
+    setValidationSummary(summary);
+    setValidationTimeline(timeline);
+    setResultSequenceDone(false);
+
     if (data.status === 'MARKED' || data.status === 'ALREADY_MARKED') {
       const sessionLabel = data?.name || data?.sessionName || 'Session';
       const orgLabel = data?.organizationName || 'Organization';
@@ -505,10 +722,6 @@ const ScanQR: React.FC = () => {
       setIsProcessing(false);
 
       setSessionInfo((prev: any) => ({ ...prev, ...data, confirmationMessage }));
-
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 2500);
       return;
     }
 
@@ -518,6 +731,11 @@ const ScanQR: React.FC = () => {
   const handleScanFailure = (data: any) => {
     setIsProcessing(false);
     setMessageType('error');
+    const summary = readValidationSummary(data);
+    const timeline = readValidationTimeline(data, summary);
+    setValidationSummary(summary);
+    setValidationTimeline(timeline);
+    setResultSequenceDone(false);
 
     if (data.reason === 'OUT_OF_RANGE') {
       const dist = data.distanceMeters || 0;
@@ -555,6 +773,12 @@ const ScanQR: React.FC = () => {
     setCameraError(false);
     setIsSuccess(false);
     setIsScannerPaused(false); // Unpause scanner
+    setValidationTimeline([]);
+    setValidationSummary(null);
+    setResultSequenceDone(false);
+    setShowDeviceMismatchModal(false);
+    setShowTooEarlyModal(false);
+    setTooEarlyInfo(null);
 
     // Stop any existing scanner
     await stopScanning();
@@ -579,6 +803,9 @@ const ScanQR: React.FC = () => {
     setCameraError(false);
     setIsScannerPaused(false);
     setSessionInfo(null);
+    setValidationTimeline([]);
+    setValidationSummary(null);
+    setResultSequenceDone(false);
     hasAutoSubmittedRef.current = false;
     stopScanning();
     if (qrTokenFromUrl) {
@@ -608,6 +835,13 @@ const ScanQR: React.FC = () => {
           src="/animations/success.lottie"
           title={isAlreadyMarked ? 'Attendance Already Marked' : 'Attendance Marked Successfully'}
           description={`${confirmationLine}\nClass: ${sessionInfo?.className || 'Class'}\nSession: ${sessionInfo?.name || sessionInfo?.sessionName || 'Session'}\nDate: ${sessionDate}${orgLine}${statusLine}${checkInLine}${subText}`}
+          timeline={validationTimeline}
+          revealDelayMs={RESULT_REVEAL_DELAY_MS}
+          finalHoldMs={RESULT_FINAL_HOLD_MS}
+          onSequenceComplete={() => {
+            setResultSequenceDone(true);
+            navigate('/dashboard');
+          }}
           loop={false}
         />
       );
@@ -615,11 +849,31 @@ const ScanQR: React.FC = () => {
 
     // Error State (non-camera errors)
     if (messageType === 'error' && !cameraError) {
+      const failedStepLabel = validationSummary?.failedStep
+        ? SCAN_VALIDATION_STEPS[SCAN_VALIDATION_STEP_INDEX[validationSummary.failedStep]].label
+        : null;
+      const failureDescription = failedStepLabel
+        ? `${message || 'Invalid QR code. Please try again.'}\nFailed at: ${failedStepLabel}`
+        : (message || 'Invalid QR code. Please try again.');
       return (
         <FullScreenAnimation
           src="/animations/warning.lottie"
           title="Scan Failed"
-          description={message || 'Invalid QR code. Please try again.'}
+          description={failureDescription}
+          timeline={validationTimeline}
+          revealDelayMs={RESULT_REVEAL_DELAY_MS}
+          finalHoldMs={RESULT_FINAL_HOLD_MS}
+          onSequenceComplete={() => {
+            setResultSequenceDone(true);
+          }}
+          primaryAction={{
+            label: qrTokenFromUrl ? 'Try Again' : 'Scan Again',
+            onClick: handleRetry,
+          }}
+          secondaryAction={{
+            label: qrTokenFromUrl ? 'Close' : 'Back to Sessions',
+            onClick: handleBackToList,
+          }}
           loop={false}
         />
       );

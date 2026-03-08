@@ -30,13 +30,13 @@ const ScanDeepLinkBridge: React.FC = () => {
 
     const encodedToken = encodeURIComponent(qrToken);
     const deepLinkUrl = `attendmark://scan?token=${encodedToken}`;
-    const fallbackPath = `/app-download?token=${encodedToken}`;
+    const fallbackPath = `/scan-web?token=${encodedToken}`;
 
     let fallbackTriggered = false;
     const fallbackTimer = window.setTimeout(() => {
       fallbackTriggered = true;
       navigate(fallbackPath, { replace: true });
-    }, 1500);
+    }, 1400);
 
     const visibilityHandler = () => {
       if (document.visibilityState === 'hidden' && !fallbackTriggered) {
@@ -45,6 +45,16 @@ const ScanDeepLinkBridge: React.FC = () => {
     };
 
     document.addEventListener('visibilitychange', visibilityHandler);
+
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = deepLinkUrl;
+    document.body.appendChild(iframe);
+    window.setTimeout(() => {
+      if (iframe.parentNode) {
+        iframe.parentNode.removeChild(iframe);
+      }
+    }, 350);
     window.location.href = deepLinkUrl;
 
     return () => {
@@ -63,8 +73,25 @@ const ScanDeepLinkBridge: React.FC = () => {
             </h1>
             <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
               If the app is installed, this link will open it automatically.
-              If not, you will be redirected to the download page.
+              If not, you will continue in the web scanner flow.
             </p>
+            {qrToken && (
+              <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
+                <a
+                  href={`attendmark://scan?token=${encodeURIComponent(qrToken)}`}
+                  className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white hover:bg-[#d63a25]"
+                >
+                  Open App Manually
+                </a>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/scan-web?token=${encodeURIComponent(qrToken)}`, { replace: true })}
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  Continue on Web
+                </button>
+              </div>
+            )}
           </div>
         </main>
       </div>

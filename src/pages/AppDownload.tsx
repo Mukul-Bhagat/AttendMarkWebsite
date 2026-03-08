@@ -12,6 +12,9 @@ const AppDownload: React.FC = () => {
   const deepLink = token
     ? `attendmark://scan?token=${encodeURIComponent(token)}`
     : 'attendmark://scan';
+  const webScanLink = token
+    ? `/scan-web?token=${encodeURIComponent(token)}`
+    : '/scan-web';
 
   return (
     <div className="group/design-root relative flex min-h-screen w-full flex-col bg-background-light dark:bg-background-dark">
@@ -23,7 +26,7 @@ const AppDownload: React.FC = () => {
             </h1>
             <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
               This attendance QR is handled securely in the AttendMark mobile app.
-              Install the app on your Android device and scan again.
+              If the app is not available on this device, you can continue in the web scanner.
             </p>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
@@ -33,6 +36,12 @@ const AppDownload: React.FC = () => {
               >
                 Open AttendMark App
               </a>
+              <Link
+                to={webScanLink}
+                className="inline-flex items-center justify-center rounded-lg border border-primary px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/5"
+              >
+                Continue in Web Scanner
+              </Link>
               <Link
                 to="/login"
                 className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
@@ -56,4 +65,3 @@ const AppDownload: React.FC = () => {
 };
 
 export default AppDownload;
-

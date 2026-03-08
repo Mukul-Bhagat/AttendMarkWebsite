@@ -364,9 +364,13 @@ const SessionDetails: React.FC = () => {
     );
   }
 
-  const universalScanBaseUrl =
-    (import.meta.env.VITE_UNIVERSAL_SCAN_BASE_URL as string | undefined)?.trim() ||
-    'https://attendmark.com/scan';
+  const configuredUniversalScanBaseUrl =
+    (import.meta.env.VITE_UNIVERSAL_SCAN_BASE_URL as string | undefined)?.trim();
+  const runtimeScanBaseUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin.replace(/\/+$/, '')}/scan`
+      : 'https://attendmark.com/scan';
+  const universalScanBaseUrl = configuredUniversalScanBaseUrl || runtimeScanBaseUrl;
   const qrValue = qrToken
     ? `${universalScanBaseUrl}?token=${encodeURIComponent(qrToken)}`
     : '';

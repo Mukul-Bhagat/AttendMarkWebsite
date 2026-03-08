@@ -44,7 +44,10 @@ const LoginPage: React.FC = () => {
   const errorPersistRef = useRef<string>('');
 
   // Get the redirect path from location state, default to /dashboard
-  const from = (location.state as any)?.from?.pathname || '/dashboard';
+  const fromLocation = (location.state as any)?.from;
+  const from = fromLocation
+    ? `${fromLocation.pathname || ''}${fromLocation.search || ''}${fromLocation.hash || ''}` || '/dashboard'
+    : '/dashboard';
 
   const { email, password } = formData;
 

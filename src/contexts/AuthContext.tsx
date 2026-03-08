@@ -49,6 +49,8 @@ interface IAuthContext {
 
 // Create the context
 const AuthContext = createContext<IAuthContext | undefined>(undefined);
+const ACCESS_TOKEN_STORAGE_KEY = 'token';
+const REFRESH_TOKEN_STORAGE_KEY = 'refreshToken';
 
 const normalizeAuthUser = (user: IUser): IUser => {
   const fallbackRawRole = String(user.rawRole || user.role || '').trim();
@@ -131,7 +133,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         appLogger.error('Failed to verify session:', err);
         setToken(null);
         setUser(null);
-        localStorage.removeItem('token');
+        localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+        localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
       }
       setIsLoading(false);
     };
@@ -174,13 +177,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Logout function
   const logout = () => {
+    const refreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
     deactivateWebPushDevice().catch((error) => {
       appLogger.warn('Failed to deactivate web push device during logout', error);
     });
     setToken(null);
     setUser(null);
-    localStorage.removeItem('token');
-    api.post('/api/auth/logout').catch(console.error);
+    localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    api
+      .post(
+        '/api/auth/logout',
+        {},
+        refreshToken
+          ? {
+            headers: {
+              'X-Refresh-Token': refreshToken,
+            },
+          }
+          : undefined,
+      )
+      .catch(console.error);
   };
 
   // Refetch user data from the backend
@@ -212,7 +229,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { user, token: newAccessToken } = response.data;
 
       // Clear org-scoped UI state/cache before applying new context
-      localStorage.removeItem('token'); // Clears token on org switch
+      // Keep auth tokens written by response interceptor for the newly selected organization.
       try {
         sessionStorage.clear();
       } catch {
@@ -222,7 +239,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Update user state
       if (newAccessToken) {
         setToken(newAccessToken);
-        localStorage.setItem('token', newAccessToken);
+        localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, newAccessToken);
       } else {
         setToken('cookie-auth');
       }

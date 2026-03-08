@@ -4,6 +4,8 @@ import { getApiUrl } from './utils/apiUrl';
 import { appLogger } from './shared/logger';
 // Get API base URL from centralized utility (includes production fallback)
 const API_BASE_URL = getApiUrl();
+const ACCESS_TOKEN_STORAGE_KEY = 'token';
+const REFRESH_TOKEN_STORAGE_KEY = 'refreshToken';
 
 // Log resolved API URL at module load (once at app startup)
 if (import.meta.env.PROD) {
@@ -74,6 +76,60 @@ const normalizeRequestPath = (url?: string): string => {
   return url.startsWith('/') ? url : `/${url}`;
 };
 
+const normalizeJwtLikeToken = (value: unknown): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const token = value.trim();
+  if (!token || token.toLowerCase() === 'cookie-auth') {
+    return null;
+  }
+
+  return token.split('.').length === 3 ? token : null;
+};
+
+const normalizeOpaqueToken = (value: unknown): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const token = value.trim();
+  return token.length > 0 ? token : null;
+};
+
+const clearStoredAuthTokens = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+};
+
+const persistAuthTokensFromPayload = (
+  payload: unknown,
+): { accessToken: string | null; refreshToken: string | null } => {
+  const emptyResult = { accessToken: null, refreshToken: null };
+  if (typeof window === 'undefined' || !payload || typeof payload !== 'object') {
+    return emptyResult;
+  }
+
+  const data = payload as Record<string, unknown>;
+  const accessToken = normalizeJwtLikeToken(data.accessToken ?? data.token);
+  const refreshToken = normalizeOpaqueToken(data.refreshToken);
+
+  if (accessToken) {
+    localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, accessToken);
+  }
+
+  if (refreshToken) {
+    localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
+  }
+
+  return { accessToken, refreshToken };
+};
+
 const decodeJwtPayload = (token: string): Record<string, unknown> | null => {
   const parts = token.split('.');
   if (parts.length !== 3) {
@@ -96,19 +152,14 @@ const decodeJwtPayload = (token: string): Record<string, unknown> | null => {
 };
 
 const readStoredBearerToken = (): string | null => {
-  const rawToken = localStorage.getItem('token');
+  const rawToken = localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
   if (!rawToken) {
     return null;
   }
 
-  const token = rawToken.trim();
-  if (!token || token.toLowerCase() === 'cookie-auth') {
-    localStorage.removeItem('token');
-    return null;
-  }
-
-  if (token.split('.').length !== 3) {
-    localStorage.removeItem('token');
+  const token = normalizeJwtLikeToken(rawToken);
+  if (!token) {
+    localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
     return null;
   }
 
@@ -117,9 +168,24 @@ const readStoredBearerToken = (): string | null => {
   if (typeof exp === 'number' && Number.isFinite(exp)) {
     const expiresAtMs = exp * 1000;
     if (Date.now() >= expiresAtMs) {
-      localStorage.removeItem('token');
+      localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
       return null;
     }
+  }
+
+  return token;
+};
+
+const readStoredRefreshToken = (): string | null => {
+  const rawToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+  if (!rawToken) {
+    return null;
+  }
+
+  const token = normalizeOpaqueToken(rawToken);
+  if (!token) {
+    localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    return null;
   }
 
   return token;
@@ -158,6 +224,17 @@ api.interceptors.request.use(
       config.headers['Authorization'] = `Bearer ${authToken}`;
     }
 
+    const requestPath = normalizeRequestPath(config.url);
+    const isRefreshRequest =
+      requestPath === '/api/auth/refresh' || requestPath === '/api/v1/auth/refresh';
+    if (isRefreshRequest) {
+      const refreshToken = readStoredRefreshToken();
+      if (refreshToken) {
+        config.headers = config.headers ?? {};
+        config.headers['X-Refresh-Token'] = refreshToken;
+      }
+    }
+
     // HttpOnly cookies automatically sent
     return config;
   },
@@ -186,6 +263,22 @@ api.interceptors.response.use(
   (response) => {
     // CRITICAL: Skip any auth-related side effects for public routes
     const url = response.config.url || '';
+    const normalizedPath = normalizeRequestPath(url);
+    const isTokenIssuerRoute =
+      /^\/api\/(?:v1\/)?auth\/(login|select-organization|mobile\/select-organization|switch-organization|refresh)$/.test(
+        normalizedPath,
+      ) ||
+      /^\/api\/(?:v1\/)?platform\/login$/.test(normalizedPath);
+    const isLogoutRoute =
+      normalizedPath === '/api/auth/logout' || normalizedPath === '/api/v1/auth/logout';
+
+    if (isTokenIssuerRoute) {
+      persistAuthTokensFromPayload(response.data);
+    }
+    if (isLogoutRoute) {
+      clearStoredAuthTokens();
+    }
+
     const isPublicRoute =
       url.includes('/api/auth/register') ||
       url.includes('/api/auth/forgot-password') ||
@@ -253,8 +346,11 @@ api.interceptors.response.use(
 
       try {
         // Attempt to refresh the token using HttpOnly cookies
-        await api.post('/api/auth/refresh');
-        localStorage.removeItem('token');
+        const refreshResponse = await api.post('/api/auth/refresh');
+        const refreshedTokens = persistAuthTokensFromPayload(refreshResponse.data);
+        if (!refreshedTokens.accessToken) {
+          localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+        }
 
         // If successful, process the queued requests
         isRefreshing = false;
@@ -266,6 +362,7 @@ api.interceptors.response.use(
         // If refresh fails, we must force logout
         isRefreshing = false;
         processQueue(refreshError, null);
+        clearStoredAuthTokens();
 
         // Only redirect if NOT on auth pages
         const currentPath = window.location.pathname;
