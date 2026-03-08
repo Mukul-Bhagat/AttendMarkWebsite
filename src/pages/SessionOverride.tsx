@@ -5,14 +5,16 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import api from '../api';
 import GoogleMapPicker from '../components/GoogleMapPicker';
 import ModeSelector from '../components/ModeSelector';
+import AttendanceAccessConfigurator from '../components/attendance/AttendanceAccessConfigurator';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import ModeBadge from '../components/ModeBadge';
 import Toast from '../components/Toast';
-import { ISession } from '../types';
+import { IAttendanceAccess, ISession } from '../types';
 import { appLogger } from '../shared/logger';
 import { normalizeSessionMode, type SessionMode } from '../utils/sessionMode';
 import SkeletonCard from '../components/SkeletonCard';
 import { nowIST } from '../utils/time';
+import { createDefaultAttendanceAccess, normalizeAttendanceAccess } from '../utils/attendanceAccess';
 
 const SessionOverride: React.FC = () => {
   const navigate = useNavigate();
@@ -41,6 +43,7 @@ const SessionOverride: React.FC = () => {
     radius: 100,
     reason: '',
   });
+  const [attendanceAccess, setAttendanceAccess] = useState<IAttendanceAccess>(createDefaultAttendanceAccess());
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -73,6 +76,7 @@ const SessionOverride: React.FC = () => {
           radius: sessionData.radius || 100,
           reason: '',
         });
+        setAttendanceAccess(normalizeAttendanceAccess(sessionData.attendanceAccess));
 
         if (sessionData.location?.geolocation?.latitude && sessionData.location?.geolocation?.longitude) {
           setSelectedCoordinates({
@@ -128,6 +132,7 @@ const SessionOverride: React.FC = () => {
         mode: formData.mode,
         startTime: formData.startTime,
         endTime: formData.endTime,
+        attendanceAccess: normalizeAttendanceAccess(attendanceAccess),
       };
 
       if (formData.mode === 'PHYSICAL' || formData.mode === 'HYBRID') {
@@ -282,6 +287,14 @@ const SessionOverride: React.FC = () => {
             </div>
             <ModeSelector value={formData.mode} onChange={(mode) => setFormData((prev) => ({ ...prev, mode }))} />
           </div>
+
+          <AttendanceAccessConfigurator
+            value={attendanceAccess}
+            onChange={setAttendanceAccess}
+            title="Attendance Access"
+            description="Switch attendance methods for this active session only. Existing marked records stay unchanged."
+            compact
+          />
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <label className="flex flex-col rounded-xl border border-[#e6e2db] bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">

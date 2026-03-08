@@ -7,8 +7,6 @@ import AttendanceCheckbox from './AttendanceCheckbox';
 
 // ✅ NEW COMPONENTS
 import EnhancedManualUpdateModal from './EnhancedManualUpdateModal';
-import AttendanceAuditViewer from './AttendanceAuditViewer';
-import ManualEditBadge from './ManualEditBadge';
 
 // ✅ PERMISSIONS
 import { canAdjustAttendance } from '../../utils/attendancePermissions';
@@ -84,12 +82,14 @@ interface Summary {
 interface SessionAttendanceViewProps {
     sessionId: string;
     sessionDate?: string;
+    onAttendanceChanged?: () => void;
     onClose?: () => void;
 }
 
 const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
     sessionId,
     sessionDate,
+    onAttendanceChanged,
     onClose
 }) => {
     // ✅ AUTH CONTEXT
@@ -125,10 +125,16 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
     const [newStatusForModal, setNewStatusForModal] = useState<'PRESENT' | 'ABSENT' | 'LATE'>('PRESENT');
 
     // ✅ NEW: Audit viewer state
-    const [isAuditViewerOpen, setIsAuditViewerOpen] = useState(false);
-
     // Permissions (using new permission system)
     const canEdit = canAdjustAttendance(currentUser);
+
+    const normalizeTargetDate = (value?: string | null): string | undefined => {
+        if (!value) return undefined;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return undefined;
+        return parsed.toISOString().slice(0, 10);
+    };
 
     // Fetch attendance data
     const fetchAttendance = async () => {
@@ -260,6 +266,11 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
+    useEffect(() => {
+        setCurrentPage(1);
+        fetchAttendance();
+    }, [statusFilter]);
+
     // ✅ NEW: Handle checkbox change (triggers adjust modal)
     const handleCheckboxChange = (user: User, checked: boolean) => {
         if (!canEdit) return;
@@ -282,11 +293,12 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                 newStatus: finalStatus,
                 reason,
                 lateMinutes,
-                targetDate: sessionDate
+                targetDate: normalizeTargetDate(sessionDate)
             });
 
             // 🔥 CRITICAL: Re-fetch from backend (single source of truth)
             await fetchAttendance();
+            onAttendanceChanged?.();
 
             // Close modal
             setIsAdjustModalOpen(false);
@@ -343,15 +355,6 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                             </button>
 
                             {/* ✅ NEW: Audit Trail Button (Permission-gated) - Hidden on mobile */}
-                            {canEdit && (
-                                <button
-                                    onClick={() => setIsAuditViewerOpen(true)}
-                                    className="hidden sm:flex px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium items-center gap-2"
-                                >
-                                    <span className="material-symbols-outlined text-lg">history</span>
-                                    View Audit Trail
-                                </button>
-                            )}
                             {onClose && (
                                 <button
                                     onClick={onClose}
@@ -490,17 +493,6 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                                                         </div>
                                                     </div>
                                                     {/* ✅ NEW: Manual Edit Badge */}
-                                                    {user.modificationHistory && user.modificationHistory.length > 0 && (
-                                                        <ManualEditBadge
-                                                            isModified={true}
-                                                            modifiedBy={user.modificationHistory[user.modificationHistory.length - 1]?.modifiedBy}
-                                                            modifiedAt={user.modificationHistory[user.modificationHistory.length - 1]?.modifiedAt}
-                                                            modificationCount={user.modificationHistory.length}
-                                                            onViewHistory={() => {
-                                                                setIsAuditViewerOpen(true);
-                                                            }}
-                                                        />
-                                                    )}
                                                 </div>
                                             </td>
                                             <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
@@ -581,9 +573,9 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                                                     Late by {user.lateByMinutes} min
                                                 </span>
                                             )}
-                                            {user.modificationHistory && user.modificationHistory.length > 0 && (
+                                            {user.isManuallyModified && user.updatedBy && (
                                                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                                                    Modified {user.modificationHistory.length}x
+                                                    Modified by {user.updatedBy.name}
                                                 </span>
                                             )}
                                         </div>
@@ -660,18 +652,6 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                     onCancel={() => {
                         setIsAdjustModalOpen(false);
                         setSelectedUserForAdjust(null);
-                    }}
-                />
-            )}
-
-            {isAuditViewerOpen && (
-                <AttendanceAuditViewer
-                    sessionId={sessionId}
-                    sessionName={sessionDetails?.sessionName || 'Session'}
-                    sessionDate={sessionDate}
-                    isOpen={isAuditViewerOpen}
-                    onClose={() => {
-                        setIsAuditViewerOpen(false);
                     }}
                 />
             )}

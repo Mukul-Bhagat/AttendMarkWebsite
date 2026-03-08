@@ -53,7 +53,12 @@ const AttendanceTrendChart: React.FC<AttendanceTrendChartProps> = ({ data }) => 
                 weekMap[weekStr].late++;
             } else if (point.status === 'PRESENT') {
                 weekMap[weekStr].present++;
-            } else if (point.status === 'LEAVE' || point.status === 'ON_LEAVE') {
+            } else if (
+                point.status === 'LEAVE' ||
+                point.status === 'ON_LEAVE' ||
+                point.status === 'LEAVE_APPROVED' ||
+                point.status === 'APPROVED_LEAVE'
+            ) {
                 weekMap[weekStr].leave++;
             } else {
                 weekMap[weekStr].absent++;

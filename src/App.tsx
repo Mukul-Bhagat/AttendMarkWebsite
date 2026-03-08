@@ -27,6 +27,7 @@ import PlatformDashboard from './pages/PlatformDashboard';
 import PlatformAuditLogs from './pages/PlatformAuditLogs';
 import AdminAuditLogs from './pages/AdminAuditLogs';
 import AdminNotifications from './pages/AdminNotifications';
+import NotificationSystemDiagnostics from './pages/NotificationSystemDiagnostics';
 import DataBackup from './pages/DataBackup';
 import EmailAutomationSettings from './pages/EmailAutomationSettings';
 import OrganizationSettings from './pages/OrganizationSettings';
@@ -132,6 +133,7 @@ function App() {
             <Route path="/platform/dashboard" element={<PlatformDashboard />} />
             <Route path="/platform/audit-logs" element={<PlatformAuditLogs />} />
             <Route path="/admin/notifications" element={<AdminNotifications />} />
+            <Route path="/admin/system/notifications" element={<NotificationSystemDiagnostics />} />
           </Route>
         </Route>
 

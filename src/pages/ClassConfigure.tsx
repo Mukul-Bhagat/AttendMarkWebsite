@@ -9,11 +9,14 @@ import api from '../api';
 import GoogleMapPicker from '../components/GoogleMapPicker';
 import AddUsersModal from '../components/AddUsersModal';
 import ModeSelector from '../components/ModeSelector';
+import AttendanceAccessConfigurator from '../components/attendance/AttendanceAccessConfigurator';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import ModeBadge from '../components/ModeBadge';
 import Toast from '../components/Toast';
 import { toISTDateString, nowIST } from '../utils/time';
 import { normalizeSessionMode, type SessionMode } from '../utils/sessionMode';
+import { IAttendanceAccess } from '../types';
+import { createDefaultAttendanceAccess, normalizeAttendanceAccess } from '../utils/attendanceAccess';
 import { appLogger } from '../shared/logger';
 import SkeletonCard from '../components/SkeletonCard';
 
@@ -43,6 +46,7 @@ interface ConfigVersionPayload {
   };
   defaults: {
     mode: SessionMode;
+    attendanceAccess?: IAttendanceAccess;
     physicalPolicy?: {
       radiusMeters?: number;
       center?: { latitude: number; longitude: number };
@@ -122,6 +126,7 @@ const ClassConfigure: React.FC = () => {
     radius: 100,
     hybridDefaultMode: 'PHYSICAL' as 'PHYSICAL' | 'REMOTE',
   });
+  const [attendanceAccess, setAttendanceAccess] = useState<IAttendanceAccess>(createDefaultAttendanceAccess());
 
   const [selectedCoordinates, setSelectedCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
   const [showMapPicker, setShowMapPicker] = useState(false);
@@ -204,6 +209,7 @@ const ClassConfigure: React.FC = () => {
             radius: physicalPolicy?.radiusMeters || 100,
             hybridDefaultMode: configData.defaults?.hybridPolicy?.defaultParticipantMode || 'PHYSICAL',
           });
+          setAttendanceAccess(normalizeAttendanceAccess(configData.defaults?.attendanceAccess));
 
           setInitialMode(mode);
         } else {
@@ -215,6 +221,7 @@ const ClassConfigure: React.FC = () => {
             startDate: todayKey,
           }));
           setInitialMode('PHYSICAL');
+          setAttendanceAccess(createDefaultAttendanceAccess());
         }
 
         await fetchEnrollments(id);
@@ -316,10 +323,12 @@ const ClassConfigure: React.FC = () => {
 
   const buildDefaults = () => {
     const locationLabel = formData.locationLabel || classBatch?.name || 'Class Location';
+    const normalizedAttendanceAccess = normalizeAttendanceAccess(attendanceAccess);
 
     if (formData.mode === 'REMOTE') {
       return {
         mode: 'REMOTE' as SessionMode,
+        attendanceAccess: normalizedAttendanceAccess,
         remotePolicy: {
           meetingLink: formData.meetingLink || undefined,
           geoRequired: false,
@@ -330,6 +339,7 @@ const ClassConfigure: React.FC = () => {
     if (formData.mode === 'HYBRID') {
       return {
         mode: 'HYBRID' as SessionMode,
+        attendanceAccess: normalizedAttendanceAccess,
         hybridPolicy: {
           allowPhysical: true,
           allowRemote: true,
@@ -351,6 +361,7 @@ const ClassConfigure: React.FC = () => {
 
     return {
       mode: 'PHYSICAL' as SessionMode,
+      attendanceAccess: normalizedAttendanceAccess,
       physicalPolicy: {
         mapRequired: true,
         geoRequired: true,
@@ -751,6 +762,13 @@ const ClassConfigure: React.FC = () => {
               </div>
             )}
           </div>
+
+          <AttendanceAccessConfigurator
+            value={attendanceAccess}
+            onChange={setAttendanceAccess}
+            title="Attendance Access"
+            description="Set class-level attendance access defaults for generated sessions. You can still override a live session later."
+          />
 
           {(formData.mode === 'PHYSICAL' || formData.mode === 'HYBRID') && (
             <div className="flex flex-col gap-6 rounded-xl border border-[#e6e2db] bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">

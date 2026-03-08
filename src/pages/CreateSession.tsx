@@ -4,10 +4,13 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth, IUser as IAuthUser } from '../contexts/AuthContext';
 import AddUsersModal from '../components/AddUsersModal';
 import GoogleMapPicker from '../components/GoogleMapPicker';
+import AttendanceAccessConfigurator from '../components/attendance/AttendanceAccessConfigurator';
 import { X } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import { nowIST, formatIST, toISTDateString, istDayStart } from '../utils/time';
+import { IAttendanceAccess } from '../types';
+import { createDefaultAttendanceAccess, normalizeAttendanceAccess } from '../utils/attendanceAccess';
 
 import { appLogger } from '../shared/logger';
 interface IUser {
@@ -54,6 +57,7 @@ const CreateSession: React.FC = () => {
     weeklyDays: [] as string[],
     sessionAdmin: '', // Only for SuperAdmin
   });
+  const [attendanceAccess, setAttendanceAccess] = useState<IAttendanceAccess>(createDefaultAttendanceAccess());
 
   // Custom dates for Random frequency
   const [selectedDates, setSelectedDates] = useState<Date[]>([]);
@@ -208,6 +212,8 @@ const CreateSession: React.FC = () => {
     setIsSubmitting(true);
 
     try {
+      const normalizedAttendanceAccess = normalizeAttendanceAccess(attendanceAccess);
+
       // Combine users based on sessionType
       let combinedAssignedUsers: Array<{
         userId: string;
@@ -293,6 +299,7 @@ const CreateSession: React.FC = () => {
             : null,  // Send null when no admin selected
           useOrganizationGracePeriod: useOrgGracePeriod,
           gracePeriod: !useOrgGracePeriod ? customGracePeriod : undefined,
+          attendanceAccess: normalizedAttendanceAccess,
         };
 
         const { data } = await api.post('/api/classes', classBatchData);
@@ -327,6 +334,7 @@ const CreateSession: React.FC = () => {
             ? formData.sessionAdmin  // Send only ID
             : null,  // Send null when no admin selected
           classBatchId: existingClassId || undefined, // Link to existing class if provided
+          attendanceAccess: normalizedAttendanceAccess,
         };
 
         await api.post('/api/sessions', sessionData);
@@ -1067,6 +1075,13 @@ const CreateSession: React.FC = () => {
               </label>
             </div>
           )}
+
+          <AttendanceAccessConfigurator
+            value={attendanceAccess}
+            onChange={setAttendanceAccess}
+            title="Attendance Access"
+            description="Choose which attendance methods are available in this session. QR and one-tap share the same validation pipeline."
+          />
 
           {/* Footer Buttons */}
           <div className="flex justify-end space-x-4 pt-4">

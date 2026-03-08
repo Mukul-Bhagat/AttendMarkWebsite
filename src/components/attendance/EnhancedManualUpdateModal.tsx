@@ -137,7 +137,14 @@ const EnhancedManualUpdateModal: React.FC<ManualUpdateModalProps> = ({
             setReason('');
             toast.success('Attendance adjusted successfully');
         } catch (error: any) {
-            toast.error(error?.response?.data?.message || 'Failed to adjust attendance');
+            const errorData = error?.response?.data;
+            const validationError = Array.isArray(errorData?.errors) ? errorData.errors[0]?.msg : null;
+            toast.error(
+                errorData?.message ||
+                errorData?.msg ||
+                validationError ||
+                'Failed to adjust attendance'
+            );
             // Keep modal open on error
             setIsSubmitting(false);
         }

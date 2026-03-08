@@ -41,6 +41,18 @@ const postFirebaseConfigToServiceWorker = async (
   });
 };
 
+const getServiceWorkerRegistrationUrl = (): string => {
+  const params = new URLSearchParams({
+    apiKey: firebaseWebConfig.apiKey || '',
+    authDomain: firebaseWebConfig.authDomain || '',
+    projectId: firebaseWebConfig.projectId || '',
+    messagingSenderId: firebaseWebConfig.messagingSenderId || '',
+    appId: firebaseWebConfig.appId || '',
+  });
+
+  return `/firebase-messaging-sw.js?${params.toString()}`;
+};
+
 let workerRegistrationPromise: Promise<ServiceWorkerRegistration | null> | null = null;
 
 export const bootstrapNotificationServiceWorker = async (): Promise<ServiceWorkerRegistration | null> => {
@@ -54,8 +66,9 @@ export const bootstrapNotificationServiceWorker = async (): Promise<ServiceWorke
 
   if (!workerRegistrationPromise) {
     workerRegistrationPromise = navigator.serviceWorker
-      .register('/firebase-messaging-sw.js')
+      .register(getServiceWorkerRegistrationUrl())
       .then(async (registration) => {
+        // Compatibility fallback for existing active workers.
         await postFirebaseConfigToServiceWorker(registration);
         return registration;
       })
@@ -74,10 +87,12 @@ export const requestNotificationPermission = async (): Promise<NotificationPermi
   }
 
   if (Notification.permission === 'granted') {
+    console.log('[Notifications] Notification permission result: granted');
     return 'granted';
   }
 
   const permission = await Notification.requestPermission();
+  console.log('[Notifications] Notification permission result:', permission);
   return permission;
 };
 
@@ -104,16 +119,19 @@ export const registerWebPushDevice = async (): Promise<string | null> => {
 
   const permission = await requestNotificationPermission();
   if (permission !== 'granted') {
+    console.warn('[Notifications] Permission not granted. Push registration skipped.');
     return null;
   }
 
   const messaging = await getMessagingInstance();
   if (!messaging) {
+    console.warn('[Notifications] Messaging instance unavailable. Push registration skipped.');
     return null;
   }
 
   const registration = await bootstrapNotificationServiceWorker();
   if (!registration) {
+    console.warn('[Notifications] Service worker registration unavailable.');
     return null;
   }
 
@@ -129,20 +147,30 @@ export const registerWebPushDevice = async (): Promise<string | null> => {
   });
 
   if (!token) {
+    console.warn('[Notifications] Firebase token generation returned empty token.');
     return null;
   }
+
+  console.log('[Notifications] FCM token generated:', token);
 
   const storedToken = getStoredToken();
   if (storedToken === token) {
     return token;
   }
 
-  await api.post('/api/notifications/devices/register', {
-    fcmToken: token,
-    platform: 'web',
-    deviceId: getOrCreateDeviceId(),
-    appVersion: import.meta.env.VITE_APP_VERSION || 'web',
-  });
+  try {
+    await api.post('/api/notifications/devices/register', {
+      fcmToken: token,
+      platform: 'web',
+      deviceId: getOrCreateDeviceId(),
+      appVersion: import.meta.env.VITE_APP_VERSION || 'web',
+    });
+
+    console.log('[Notifications] FCM token registered with backend.');
+  } catch (error) {
+    console.error('[Notifications] Failed to register FCM token with backend.', error);
+    throw error;
+  }
 
   storeToken(token);
   return token;

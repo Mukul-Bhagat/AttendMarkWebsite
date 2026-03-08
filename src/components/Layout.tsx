@@ -146,6 +146,9 @@ const Layout: React.FC = () => {
                 <li>
                   <NavLinkItem to="/admin/notifications" icon="notifications">Notifications</NavLinkItem>
                 </li>
+                <li>
+                  <NavLinkItem to="/admin/system/notifications" icon="monitor_heart">System Health</NavLinkItem>
+                </li>
               </>
             ) : (
               <>
@@ -234,6 +237,9 @@ const Layout: React.FC = () => {
                         </li>
                         <li>
                           <NavLinkItem to="/admin/notifications" icon="notifications">Notifications</NavLinkItem>
+                        </li>
+                        <li>
+                          <NavLinkItem to="/admin/system/notifications" icon="monitor_heart">System Health</NavLinkItem>
                         </li>
                       </>
                     )}
@@ -361,6 +367,9 @@ const Layout: React.FC = () => {
                 <li>
                   <NavLinkItem to="/admin/notifications" icon="notifications">Notifications</NavLinkItem>
                 </li>
+                <li>
+                  <NavLinkItem to="/admin/system/notifications" icon="monitor_heart">System Health</NavLinkItem>
+                </li>
               </>
             ) : (
               <>
@@ -443,6 +452,9 @@ const Layout: React.FC = () => {
                         </li>
                         <li>
                           <NavLinkItem to="/admin/notifications" icon="notifications">Notifications</NavLinkItem>
+                        </li>
+                        <li>
+                          <NavLinkItem to="/admin/system/notifications" icon="monitor_heart">System Health</NavLinkItem>
                         </li>
                       </>
                     )}

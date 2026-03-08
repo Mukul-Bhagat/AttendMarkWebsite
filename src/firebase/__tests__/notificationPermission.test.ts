@@ -38,28 +38,34 @@ const setupServiceWorker = () => {
     postMessage: vi.fn(),
   } as unknown as ServiceWorker;
 
+  const register = vi.fn();
   const registration = {
     active: activeWorker,
   } as ServiceWorkerRegistration;
 
+  register.mockResolvedValue(registration);
+
   Object.defineProperty(window.navigator, 'serviceWorker', {
     configurable: true,
     value: {
-      register: vi.fn().mockResolvedValue(registration),
+      register,
       ready: Promise.resolve(registration),
     },
   });
 
-  return { registration, activeWorker };
+  return { registration, activeWorker, register };
 };
 
 describe('notificationPermission', () => {
+  let registerSpy: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv('VITE_FIREBASE_VAPID_KEY', 'test-vapid-key');
     localStorage.clear();
 
-    setupServiceWorker();
+    const setup = setupServiceWorker();
+    registerSpy = setup.register;
 
     Object.defineProperty(window, 'Notification', {
       configurable: true,
@@ -81,6 +87,9 @@ describe('notificationPermission', () => {
     const token = await registerWebPushDevice();
 
     expect(token).toBe('token-123');
+    expect(registerSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/firebase-messaging-sw.js?'),
+    );
     expect(mockApiPost).toHaveBeenCalledWith(
       '/api/notifications/devices/register',
       expect.objectContaining({

@@ -76,6 +76,70 @@ const AttendanceReportTab: React.FC<AttendanceReportTabProps> = ({
         return formatIST(new Date(dateStr).getTime());
     };
 
+    const formatRecordDate = (record: IMyAttendanceRecord): string => {
+        if (record.checkInTime) {
+            return formatDateTime(record.checkInTime);
+        }
+        return record.attendanceDate || 'N/A';
+    };
+
+    const normalizeRecordStatus = (
+        record: IMyAttendanceRecord,
+    ): 'PRESENT' | 'LATE' | 'ABSENT' | 'HALF_DAY' | 'LEAVE_APPROVED' => {
+        const token = String(record.attendanceStatus || '').trim().toUpperCase();
+        if (token === 'LEAVE_APPROVED' || token === 'ON_LEAVE') return 'LEAVE_APPROVED';
+        if (token === 'HALF_DAY') return 'HALF_DAY';
+        if (token === 'LATE' || record.isLate) return 'LATE';
+        if (token === 'PRESENT') return 'PRESENT';
+        return 'ABSENT';
+    };
+
+    const renderStatusBadge = (record: IMyAttendanceRecord) => {
+        const status = normalizeRecordStatus(record);
+        if (status === 'LEAVE_APPROVED') {
+            return (
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                    Leave (Approved)
+                </span>
+            );
+        }
+        if (status === 'HALF_DAY') {
+            return (
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800">
+                    Half Day
+                </span>
+            );
+        }
+        if (status === 'LATE') {
+            return (
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800">
+                    Late {record.lateByMinutes ? `(${record.lateByMinutes}m)` : ''}
+                </span>
+            );
+        }
+        if (status === 'PRESENT') {
+            return (
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 border border-green-200 dark:border-green-800">
+                    Present
+                </span>
+            );
+        }
+        return (
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 border border-red-200 dark:border-red-800">
+                Absent
+            </span>
+        );
+    };
+
+    const resolveMarkedViaLabel = (record: IMyAttendanceRecord): string => {
+        if (record.markedViaLabel) return record.markedViaLabel;
+        if (record.markingMethod === 'ONE_TAP') return 'One-Tap Check-In';
+        if (record.markingMethod === 'QR') return 'QR Check-In';
+        if (record.markingMethod === 'FACE_VERIFY') return 'Face Verify';
+        if (record.sourceContext === 'MANUAL_ADJUST') return 'Manual Adjustment';
+        return 'Legacy';
+    };
+
     const handleClearFilter = () => {
         setSearchQuery('');
     };
@@ -175,13 +239,14 @@ const AttendanceReportTab: React.FC<AttendanceReportTabProps> = ({
                             <th className="px-6 py-4 text-xs font-black text-text-secondary-light uppercase tracking-widest">Session</th>
                             <th className="px-6 py-4 text-xs font-black text-text-secondary-light uppercase tracking-widest">Date & Time</th>
                             <th className="px-6 py-4 text-xs font-black text-text-secondary-light uppercase tracking-widest">Attendance</th>
+                            <th className="px-6 py-4 text-xs font-black text-text-secondary-light uppercase tracking-widest">Marked Via</th>
                             <th className="px-6 py-4 text-xs font-black text-text-secondary-light uppercase tracking-widest">Remarks</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-border-light dark:divide-border-dark">
                         {currentRecords.length === 0 ? (
                             <tr>
-                                <td colSpan={4} className="px-6 py-20 text-center text-text-secondary-light font-medium">
+                                <td colSpan={5} className="px-6 py-20 text-center text-text-secondary-light font-medium">
                                     No records found matching your filters.
                                 </td>
                             </tr>
@@ -200,23 +265,16 @@ const AttendanceReportTab: React.FC<AttendanceReportTabProps> = ({
                                     </td>
                                     <td className="px-6 py-5">
                                         <div className="text-sm font-semibold text-text-secondary-light dark:text-text-secondary-dark">
-                                            {formatDateTime(record.checkInTime)}
+                                            {formatRecordDate(record)}
                                         </div>
                                     </td>
                                     <td className="px-6 py-5">
-                                        {record.isLate ? (
-                                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800">
-                                                Late {record.lateByMinutes ? `(${record.lateByMinutes}m)` : ''}
-                                            </span>
-                                        ) : record.locationVerified ? (
-                                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 border border-green-200 dark:border-green-800">
-                                                Verified
-                                            </span>
-                                        ) : (
-                                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 border border-red-200 dark:border-red-800">
-                                                Unverified
-                                            </span>
-                                        )}
+                                        {renderStatusBadge(record)}
+                                    </td>
+                                    <td className="px-6 py-5">
+                                        <span className="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-200">
+                                            {resolveMarkedViaLabel(record)}
+                                        </span>
                                     </td>
                                     <td className="px-6 py-5">
                                         <div className="text-xs text-text-secondary-light dark:text-text-secondary-dark">

@@ -52,6 +52,11 @@ const getCurrentMonthRange = () => {
   };
 };
 
+const clampPercentage = (value: number): number => {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(100, Math.max(0, value));
+};
+
 const AttendanceReport: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [classes, setClasses] = useState<IClassBatch[]>([]);
@@ -141,12 +146,16 @@ const AttendanceReport: React.FC = () => {
           overallAbsent: data?.overallAbsent ?? 0,
           dailyBreakdown: normalizedDaily,
           timeline: Array.isArray(data?.timeline)
-            ? data.timeline
+            ? data.timeline.map((item: any) => ({
+              ...item,
+              percentage: clampPercentage(Number(item?.percentage ?? 0)),
+              lateCount: Number(item?.lateCount ?? 0),
+            }))
             : normalizedDaily.map((item: any) => ({
               date: item.date,
-              percentage: item.totalStudents > 0
-                ? Math.round((((item.present + item.late) / item.totalStudents) * 100) * 100) / 100
-                : 0,
+              percentage: clampPercentage((item.present + item.late + item.absent) > 0
+                ? Math.round((((item.present + item.late) / (item.present + item.late + item.absent)) * 100) * 100) / 100
+                : 0),
               lateCount: item.late || 0,
             })),
           summary: data?.summary || {
@@ -167,7 +176,7 @@ const AttendanceReport: React.FC = () => {
           present: log.present ?? log.presentCount ?? 0,
           late: log.late ?? log.lateCount ?? 0,
           absent: log.absent ?? log.absentCount ?? 0,
-          attendancePercentage: log.attendancePercentage ?? 0,
+          attendancePercentage: clampPercentage(Number(log.attendancePercentage ?? 0)),
         })));
       }
     } catch (err: any) {
@@ -589,6 +598,9 @@ const AttendanceReport: React.FC = () => {
         <SessionAttendanceView
           sessionId={viewingSessionId}
           sessionDate={viewingSessionDate}
+          onAttendanceChanged={() => {
+            handleViewReport();
+          }}
           onClose={() => {
             setViewingSessionId(null);
             setViewingSessionDate(null);

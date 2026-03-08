@@ -2,12 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import api from '../api';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth, IUser as IAuthUser } from '../contexts/AuthContext';
-import { ISession } from '../types';
+import { IAttendanceAccess, ISession } from '../types';
 import AddUsersModal from '../components/AddUsersModal';
 import GoogleMapPicker from '../components/GoogleMapPicker';
+import AttendanceAccessConfigurator from '../components/attendance/AttendanceAccessConfigurator';
 import { ArrowLeft, X } from 'lucide-react';
 
 import SkeletonCard from '../components/SkeletonCard';
+import { createDefaultAttendanceAccess, normalizeAttendanceAccess } from '../utils/attendanceAccess';
 import { appLogger } from '../shared/logger';
 interface IUser {
   _id: string;
@@ -64,6 +66,7 @@ const EditSession: React.FC = () => {
     weeklyDays: [] as string[],
     sessionAdmin: '', // Only for SuperAdmin
   });
+  const [attendanceAccess, setAttendanceAccess] = useState<IAttendanceAccess>(createDefaultAttendanceAccess());
 
   const [assignedUsers, setAssignedUsers] = useState<IUser[]>([]); // Legacy: for Physical/Remote single mode
   const [physicalUsers, setPhysicalUsers] = useState<IUser[]>([]); // For Hybrid: Physical attendees
@@ -130,6 +133,7 @@ const EditSession: React.FC = () => {
           weeklyDays: data.weeklyDays || [],
           sessionAdmin: data.sessionAdmin || '',
         });
+        setAttendanceAccess(normalizeAttendanceAccess(data.attendanceAccess));
 
         // Load location coordinates
         if (data.location?.geolocation?.latitude && data.location?.geolocation?.longitude) {
@@ -304,6 +308,8 @@ const EditSession: React.FC = () => {
     setIsSubmitting(true);
 
     try {
+      const normalizedAttendanceAccess = normalizeAttendanceAccess(attendanceAccess);
+
       // Combine users based on sessionType
       let combinedAssignedUsers: Array<{
         userId: string;
@@ -383,6 +389,7 @@ const EditSession: React.FC = () => {
           ? formData.radius
           : undefined,
         sessionAdmin: isSuperAdmin && formData.sessionAdmin ? formData.sessionAdmin : undefined,
+        attendanceAccess: normalizedAttendanceAccess,
       };
 
       await api.put(`/api/sessions/${sessionId}`, sessionData);
@@ -842,6 +849,13 @@ const EditSession: React.FC = () => {
                   </label>
                 </div>
               )}
+
+              <AttendanceAccessConfigurator
+                value={attendanceAccess}
+                onChange={setAttendanceAccess}
+                title="Attendance Access"
+                description="Configure QR, one-tap, and future face verify modes for this session."
+              />
 
               {/* Footer Actions */}
               <div className="flex flex-col sm:flex-row-reverse items-center gap-4 pt-4 border-t border-gray-200 dark:border-gray-800">

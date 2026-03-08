@@ -1,3 +1,31 @@
+export type AttendanceMethod = 'QR' | 'ONE_TAP' | 'FACE_VERIFY';
+export type AttendanceChannel = 'APP' | 'WEB' | 'ADMIN';
+export type AttendanceSourceContext =
+  | 'SELF_SERVICE'
+  | 'MANUAL_ADJUST'
+  | 'ISSUE_APPROVED'
+  | 'LEAVE_APPROVED'
+  | 'SYSTEM_CLOSE';
+export type FaceVerifyReadiness = 'PLANNED' | 'ACTIVE';
+
+export interface IAttendanceAccess {
+  qr: {
+    enabled: boolean;
+    channels: AttendanceChannel[];
+  };
+  oneTap: {
+    enabled: boolean;
+    channels: AttendanceChannel[];
+  };
+  faceVerify: {
+    enabled: boolean;
+    channels: AttendanceChannel[];
+    readiness: FaceVerifyReadiness;
+  };
+  defaultMethod: AttendanceMethod;
+  allowLiveMethodSwitch: boolean;
+}
+
 // ClassBatch interface (Parent container for Sessions)
 export interface IClassBatch {
   _id: string;
@@ -57,6 +85,7 @@ export interface IClassBatch {
 // Session interface matching the backend model
 export interface ISession {
   _id: string;
+  attendanceSessionId?: string | null;
   name: string;
   description?: string;
   frequency: 'OneTime' | 'Daily' | 'Weekly' | 'Monthly' | 'Random';
@@ -83,6 +112,11 @@ export interface ISession {
     longitude: number;
   }; // Legacy field
   radius?: number;
+  attendanceAccess?: IAttendanceAccess;
+  availableMethods?: AttendanceMethod[];
+  requirements?: string[];
+  alreadyMarked?: boolean;
+  markedVia?: string | null;
   assignedUsers: Array<{
     userId: string;
     email: string;
@@ -110,7 +144,12 @@ export interface IMyAttendanceRecord {
   userId: string;
   sessionId: ISession | null; // Full session object or null if session was deleted
   classBatchId?: { _id: string; name: string } | null; // Reference to ClassBatch
-  checkInTime: string; // ISO date string
+  checkInTime?: string | null; // ISO date string
+  checkOutTime?: string | null;
+  attendanceStatus?: 'PRESENT' | 'LATE' | 'ABSENT' | 'HALF_DAY' | 'LEAVE_APPROVED' | 'ON_LEAVE';
+  attendanceDate?: string;
+  isHalfDay?: boolean;
+  isOnLeave?: boolean;
   locationVerified: boolean;
   isLate: boolean; // Whether this attendance was marked late
   lateByMinutes?: number; // Number of minutes late (if isLate is true)
@@ -119,6 +158,17 @@ export interface IMyAttendanceRecord {
     longitude: number;
   };
   deviceId: string;
+  sourceContext?: AttendanceSourceContext;
+  markingMethod?: AttendanceMethod | null;
+  markingChannel?: AttendanceChannel | null;
+  markedViaLabel?: string;
+  securityChecks?: {
+    deviceVerified?: boolean;
+    locationVerified?: boolean;
+    hardwareBackedKeyVerified?: boolean;
+    qrVerified?: boolean;
+    faceVerified?: boolean;
+  } | null;
   createdAt: string;
   updatedAt: string;
 }

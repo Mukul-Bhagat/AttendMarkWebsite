@@ -9,6 +9,7 @@ import { formatIST } from '../utils/time';
 import ModeBadge from '../components/ModeBadge';
 import { normalizeSessionMode } from '../utils/sessionMode';
 import SkeletonCard from '../components/SkeletonCard';
+import AttendanceHub from './AttendanceHub';
 
 import { appLogger } from '../shared/logger';
 
@@ -60,13 +61,6 @@ const SessionDetails: React.FC = () => {
     if (isSessionAdmin && session.sessionAdmin === user.id) return true;
     return false;
   };
-
-  // Redirect End Users to scanner instead of showing details page
-  useEffect(() => {
-    if (isEndUser && id) {
-      navigate(`/scan-web?sessionId=${id}`, { replace: true });
-    }
-  }, [isEndUser, id, navigate]);
 
   // 🛡️ AUTO-MIGRATE LEGACY URLS
   // Converts /sessions/XXX_DATE -> /sessions/XXX?date=DATE
@@ -320,6 +314,10 @@ const SessionDetails: React.FC = () => {
     }
     return '/classes';
   };
+
+  if (isEndUser) {
+    return <AttendanceHub />;
+  }
 
   if (isLoading) {
     return (

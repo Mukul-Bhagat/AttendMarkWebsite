@@ -1,21 +1,36 @@
 import { appLogger } from '../shared/logger';
+
 /**
- * Get the API base URL from environment variables
- * Falls back to empty string for Vite proxy in development
- * 
- * @returns API base URL (e.g., 'https://api.example.com' or '')
+ * Get the API base URL from environment variables.
+ * Falls back to empty string for Vite proxy in development.
  */
-// Hardcoded production URL as a safety fallback
 const PROD_API_URL = 'https://attend-mark.onrender.com';
 
-export const getApiUrl = (): string => {
-  const envUrl = import.meta.env.VITE_API_URL || '';
+const normalizeEnvApiUrl = (rawValue: string): string => {
+  const trimmed = rawValue.trim();
+  if (!trimmed) {
+    return '';
+  }
 
-  // SAFETY CHECK: If we are in production build, but the API URL is either missing
-  // or pointing to localhost (misconfiguration), force use of the production URL.
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed.replace(/\/+$/, '');
+  }
+
+  return `https://${trimmed.replace(/\/+$/, '')}`;
+};
+
+export const getApiUrl = (): string => {
+  const envUrl = normalizeEnvApiUrl(import.meta.env.VITE_API_URL || '');
+
   if (import.meta.env.PROD) {
-    if (!envUrl || envUrl.includes('localhost') || envUrl.includes('127.0.0.1')) {
-      appLogger.warn('⚠️ PROD detected but VITE_API_URL is missing or localhost. Falling back to production URL.');
+    if (
+      !envUrl ||
+      envUrl.includes('localhost') ||
+      envUrl.includes('127.0.0.1')
+    ) {
+      appLogger.warn(
+        'PROD detected but VITE_API_URL is missing or localhost. Falling back to production URL.',
+      );
       return PROD_API_URL;
     }
   }
@@ -23,16 +38,8 @@ export const getApiUrl = (): string => {
   return envUrl;
 };
 
-/**
- * Get the full API URL for a given endpoint
- * 
- * @param endpoint - API endpoint (e.g., '/api/auth/login')
- * @returns Full API URL
- */
 export const getApiEndpoint = (endpoint: string): string => {
   const baseUrl = getApiUrl();
-  // Remove leading slash from endpoint if baseUrl already ends with one
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   return baseUrl ? `${baseUrl}${cleanEndpoint}` : cleanEndpoint;
 };
-

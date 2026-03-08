@@ -120,7 +120,8 @@ export const canAdjustAttendance = (user: User | null | undefined): boolean => {
     return (
         ctx.role === Role.PLATFORM_OWNER ||
         ctx.roleProfile === RoleProfile.SUPER_ADMIN ||
-        ctx.roleProfile === RoleProfile.COMPANY_ADMIN
+        ctx.roleProfile === RoleProfile.COMPANY_ADMIN ||
+        ctx.roleProfile === RoleProfile.MANAGER
     );
 };
 
@@ -136,7 +137,8 @@ export const canViewAuditTrail = (user: User | null | undefined): boolean => {
     return (
         ctx.role === Role.PLATFORM_OWNER ||
         ctx.roleProfile === RoleProfile.SUPER_ADMIN ||
-        ctx.roleProfile === RoleProfile.COMPANY_ADMIN
+        ctx.roleProfile === RoleProfile.COMPANY_ADMIN ||
+        ctx.roleProfile === RoleProfile.MANAGER
     );
 };
 
@@ -154,11 +156,8 @@ export const getPermissionDeniedMessage = (user: User | null | undefined): strin
 
     const profile = resolveUserRoleContext(user).roleProfile;
 
-    if (profile === RoleProfile.MANAGER) {
-        return 'Only Company Admins can adjust attendance. Managers have read-only access.';
-    }
     if (profile === RoleProfile.SESSION_ADMIN) {
-        return 'Only Company Admins can adjust attendance. Session Admins have read-only access.';
+        return 'Session Admins have read-only access for attendance adjustments.';
     }
     if (profile === RoleProfile.END_USER) {
         return 'You do not have permission to adjust attendance.';
@@ -232,8 +231,8 @@ export const canAdjustSession = (
  * Permission constants for easy reference
  */
 export const PERMISSION_ROLES = {
-    CAN_ADJUST: [Role.COMPANY_ADMIN, RoleProfile.SUPER_ADMIN, Role.PLATFORM_OWNER],
-    CAN_VIEW_AUDIT: [Role.COMPANY_ADMIN, RoleProfile.SUPER_ADMIN, Role.PLATFORM_OWNER],
+    CAN_ADJUST: [Role.COMPANY_ADMIN, RoleProfile.SUPER_ADMIN, RoleProfile.MANAGER, Role.PLATFORM_OWNER],
+    CAN_VIEW_AUDIT: [Role.COMPANY_ADMIN, RoleProfile.SUPER_ADMIN, RoleProfile.MANAGER, Role.PLATFORM_OWNER],
     CAN_EXPORT: [Role.COMPANY_ADMIN, Role.PLATFORM_OWNER, RoleProfile.MANAGER, RoleProfile.SESSION_ADMIN],
     NO_ACCESS: [Role.USER]
 } as const;

@@ -16,6 +16,9 @@ import customParseFormat from 'dayjs/plugin/customParseFormat';
 
 interface ILeaveRequest {
   _id: string;
+  userName?: string;
+  userEmail?: string;
+  userRole?: string;
   userId: string | {
     _id: string;
     email: string;
@@ -43,6 +46,7 @@ interface ILeaveRequest {
       lastName: string;
     };
   };
+  approvedByName?: string;
   rejectionReason?: string;
   approvalNote?: string;
   attachment?: string; // Legacy file path/URL
@@ -666,6 +670,9 @@ const Leaves: React.FC = () => {
 
   // Get user name from leave request
   function getUserName(leave: ILeaveRequest): string {
+    if (leave.userName && leave.userName.trim().length > 0) {
+      return leave.userName.trim();
+    }
     if (typeof leave.userId === 'object' && leave.userId.profile) {
       if (leave.userId.profile.firstName && leave.userId.profile.lastName) {
         return `${leave.userId.profile.firstName} ${leave.userId.profile.lastName}`;
@@ -680,7 +687,25 @@ const Leaves: React.FC = () => {
     return '';
   }
 
+  function getUserEmail(leave: ILeaveRequest): string {
+    if (leave.userEmail && leave.userEmail.trim().length > 0) {
+      return leave.userEmail.trim();
+    }
+    if (typeof leave.userId === 'object' && leave.userId.email) {
+      return leave.userId.email;
+    }
+    return '';
+  }
+
   function getUserInitialsForLeave(leave: ILeaveRequest): string {
+    if (leave.userName && leave.userName.trim().length > 0) {
+      const parts = leave.userName
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2);
+      const initials = parts.map((part) => part[0]?.toUpperCase() || '').join('');
+      if (initials) return initials;
+    }
     if (typeof leave.userId === 'object' && leave.userId.profile) {
       const first = leave.userId.profile.firstName?.[0] || '';
       const last = leave.userId.profile.lastName?.[0] || '';
@@ -699,6 +724,27 @@ const Leaves: React.FC = () => {
     if (!raw) return null;
     if (raw.startsWith('http') || raw.startsWith('data:')) return raw;
     return `${getApiUrl()}${raw}`;
+  }
+
+  function getApproverName(leave: ILeaveRequest): string {
+    if (leave.approvedByName && leave.approvedByName.trim().length > 0) {
+      return leave.approvedByName.trim();
+    }
+    if (typeof leave.approvedBy === 'object') {
+      const first = leave.approvedBy.profile?.firstName || '';
+      const last = leave.approvedBy.profile?.lastName || '';
+      const full = `${first} ${last}`.trim();
+      if (full) return full;
+      if (leave.approvedBy.email) return leave.approvedBy.email;
+    }
+    return 'Unknown';
+  }
+
+  function getLeaveUserId(leave: ILeaveRequest): string {
+    if (typeof leave.userId === 'object') {
+      return leave.userId._id || '';
+    }
+    return leave.userId || '';
   }
 
   function getLeaveEndDate(leave: ILeaveRequest): string {
@@ -756,9 +802,9 @@ const Leaves: React.FC = () => {
               <p className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark truncate">
                 {getUserName(leave) || 'Unknown User'}
               </p>
-              {typeof leave.userId === 'object' && leave.userId.email && (
+              {getUserEmail(leave) && (
                 <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark truncate">
-                  {leave.userId.email}
+                  {getUserEmail(leave)}
                 </p>
               )}
             </div>
@@ -787,13 +833,11 @@ const Leaves: React.FC = () => {
           {leave.leaveType} - {leave.daysCount} {leave.daysCount === 1 ? 'day' : 'days'}
         </p>
 
-        {options.showApprover && leave.approvedBy && (
+        {options.showApprover && (leave.approvedBy || leave.approvedByName) && (
           <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-2">
             {leave.status === 'Approved' ? 'Approved by: ' : 'Rejected by: '}
             <span className="font-medium text-text-primary-light dark:text-text-primary-dark">
-              {typeof leave.approvedBy === 'object'
-                ? `${leave.approvedBy.profile.firstName} ${leave.approvedBy.profile.lastName}`
-                : 'Unknown'}
+              {getApproverName(leave)}
             </span>
           </p>
         )}
@@ -1016,54 +1060,13 @@ const Leaves: React.FC = () => {
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
 
-    // Get applicant name - handle multiple cases with improved fallback
-    let applicantName: string;
-    if (typeof leave.userId === 'object' && leave.userId.profile) {
-      // userId is populated object - check if firstName exists
-      if (leave.userId.profile.firstName && leave.userId.profile.lastName) {
-        applicantName = `${leave.userId.profile.firstName} ${leave.userId.profile.lastName}`;
-      } else if (user?.profile?.firstName && user?.profile?.lastName) {
-        // Fallback to current user if userId profile is incomplete
-        applicantName = `${user.profile.firstName} ${user.profile.lastName}`;
-      } else {
-        applicantName = 'N/A';
-      }
-    } else if (typeof leave.userId === 'string') {
-      // userId is just an ID string - check if it matches current user
-      if (user && leave.userId === user.id) {
-        // User is viewing their own leave - use AuthContext user data
-        applicantName = `${user.profile.firstName} ${user.profile.lastName}`;
-      } else {
-        // Viewing someone else's leave - show ID
-        applicantName = `Employee ID: ${leave.userId}`;
-      }
-    } else {
-      // Fallback to current user
-      applicantName = (user?.profile?.firstName && user?.profile?.lastName)
+    const applicantName =
+      getUserName(leave) ||
+      ((user?.profile?.firstName && user?.profile?.lastName)
         ? `${user.profile.firstName} ${user.profile.lastName}`
-        : 'N/A';
-    }
+        : 'N/A');
 
-    // Get applicant email - handle multiple cases with improved fallback
-    let applicantEmail: string;
-    if (typeof leave.userId === 'object' && leave.userId.email) {
-      // userId is populated object
-      applicantEmail = leave.userId.email;
-    } else if (typeof leave.userId === 'object' && !leave.userId.email && user?.email) {
-      // userId is object but email missing - fallback to current user
-      applicantEmail = user.email;
-    } else if (typeof leave.userId === 'string') {
-      // userId is ID string - check if it matches current user
-      if (user && leave.userId === user.id) {
-        applicantEmail = user.email;
-      } else {
-        // Fallback to current user email or N/A
-        applicantEmail = user?.email || 'N/A';
-      }
-    } else {
-      // Fallback to current user email
-      applicantEmail = user?.email || 'N/A';
-    }
+    const applicantEmail = getUserEmail(leave) || user?.email || 'N/A';
 
     pdf.text(`Name: ${applicantName}`, margin, yPos);
     yPos += 6;
@@ -1101,8 +1104,8 @@ const Leaves: React.FC = () => {
 
     // Approval Date and Approved By (only for Approved status)
     if (leave.status === 'Approved') {
-      if (leave.updatedAt) {
-        const approvedDate = formatIST(new Date(leave.updatedAt).getTime(), {
+      if (leave.approvedAt || leave.updatedAt) {
+        const approvedDate = formatIST(new Date(leave.approvedAt || leave.updatedAt || '').getTime(), {
           year: 'numeric',
           month: 'long',
           day: 'numeric',
@@ -1111,10 +1114,8 @@ const Leaves: React.FC = () => {
         yPos += 6;
       }
 
-      if (leave.approvedBy) {
-        const approverName = typeof leave.approvedBy === 'object'
-          ? `${leave.approvedBy.profile.firstName} ${leave.approvedBy.profile.lastName}`
-          : 'N/A';
+      if (leave.approvedBy || leave.approvedByName) {
+        const approverName = getApproverName(leave);
         pdf.text(`Approved By: ${approverName}`, margin, yPos);
         yPos += 6;
       }
@@ -1137,7 +1138,7 @@ const Leaves: React.FC = () => {
     yPos += 10;
 
     // Rejection Information (only for Rejected status)
-    if (leave.status === 'Rejected' && leave.approvedBy) {
+    if (leave.status === 'Rejected' && (leave.approvedBy || leave.approvedByName)) {
       pdf.setFontSize(12);
       pdf.setFont('helvetica', 'bold');
       pdf.text('Rejection Information', margin, yPos);
@@ -1145,14 +1146,12 @@ const Leaves: React.FC = () => {
 
       pdf.setFontSize(10);
       pdf.setFont('helvetica', 'normal');
-      const rejectorName = typeof leave.approvedBy === 'object'
-        ? `${leave.approvedBy.profile.firstName} ${leave.approvedBy.profile.lastName}`
-        : 'N/A';
+      const rejectorName = getApproverName(leave);
       pdf.text(`Rejected By: ${rejectorName}`, margin, yPos);
       yPos += 6;
 
-      if (leave.updatedAt) {
-        const rejectedDate = formatIST(new Date(leave.updatedAt).getTime());
+      if (leave.rejectedAt || leave.updatedAt) {
+        const rejectedDate = formatIST(new Date(leave.rejectedAt || leave.updatedAt || '').getTime());
         pdf.text(`Rejected On: ${rejectedDate}`, margin, yPos);
         yPos += 6;
       }
@@ -2215,18 +2214,16 @@ const Leaves: React.FC = () => {
                 <h3 className="text-xs font-semibold text-text-secondary-light dark:text-text-secondary-dark mb-1">
                   Approval Information
                 </h3>
-                {selectedLeave.status === 'Approved' && selectedLeave.approvedBy ? (
+                {selectedLeave.status === 'Approved' && (selectedLeave.approvedBy || selectedLeave.approvedByName) ? (
                   <div className="space-y-1">
                     <p className="text-sm text-text-primary-light dark:text-text-primary-dark">
                       <span className="font-medium">Approved By:</span>{' '}
-                      {typeof selectedLeave.approvedBy === 'object'
-                        ? `${selectedLeave.approvedBy.profile.firstName} ${selectedLeave.approvedBy.profile.lastName}`
-                        : 'N/A'}
+                      {getApproverName(selectedLeave)}
                     </p>
-                    {selectedLeave.updatedAt && (
+                    {(selectedLeave.approvedAt || selectedLeave.updatedAt) && (
                       <p className="text-sm text-text-primary-light dark:text-text-primary-dark">
                         <span className="font-medium">Approved On:</span>{' '}
-                        {formatIST(new Date(selectedLeave.updatedAt).getTime(), {
+                        {formatIST(new Date(selectedLeave.approvedAt || selectedLeave.updatedAt || '').getTime(), {
                           year: 'numeric',
                           month: 'short',
                           day: 'numeric',
@@ -2234,18 +2231,16 @@ const Leaves: React.FC = () => {
                       </p>
                     )}
                   </div>
-                ) : selectedLeave.status === 'Rejected' && selectedLeave.approvedBy ? (
+                ) : selectedLeave.status === 'Rejected' && (selectedLeave.approvedBy || selectedLeave.approvedByName) ? (
                   <div className="space-y-1">
                     <p className="text-sm text-text-primary-light dark:text-text-primary-dark">
                       <span className="font-medium">Rejected By:</span>{' '}
-                      {typeof selectedLeave.approvedBy === 'object'
-                        ? `${selectedLeave.approvedBy.profile.firstName} ${selectedLeave.approvedBy.profile.lastName}`
-                        : 'N/A'}
+                      {getApproverName(selectedLeave)}
                     </p>
-                    {selectedLeave.updatedAt && (
+                    {(selectedLeave.rejectedAt || selectedLeave.updatedAt) && (
                       <p className="text-sm text-text-primary-light dark:text-text-primary-dark">
                         <span className="font-medium">Rejected On:</span>{' '}
-                        {formatIST(new Date(selectedLeave.updatedAt).getTime(), {
+                        {formatIST(new Date(selectedLeave.rejectedAt || selectedLeave.updatedAt || '').getTime(), {
                           year: 'numeric',
                           month: 'short',
                           day: 'numeric',
@@ -2342,8 +2337,7 @@ const Leaves: React.FC = () => {
               {/* Show Approve/Reject buttons for Admins/Staff when viewing pending leaves that are not their own */}
               {isAdminOrStaff &&
                 selectedLeave.status === 'Pending' &&
-                typeof selectedLeave.userId === 'object' &&
-                selectedLeave.userId._id !== user?.id ? (
+                getLeaveUserId(selectedLeave) !== user?.id ? (
                 <div className="flex justify-end gap-3">
                   <button
                     onClick={() => {

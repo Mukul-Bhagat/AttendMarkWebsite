@@ -1,16 +1,24 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Clock3, ShieldCheck, XCircle } from 'lucide-react';
+import {
+    AlertTriangle,
+    CheckCircle2,
+    Clock3,
+    Eye,
+    ShieldCheck,
+    XCircle,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import {
+    AttendanceIssueDto,
+    AttendanceIssueStatus,
+    IssueWorkflowStatus,
     approveAttendanceIssue,
     createAttendanceIssue,
     getAttendanceIssueQueue,
     getMyAttendanceIssues,
     rejectAttendanceIssue,
 } from '../../api/attendanceIssuesApi';
-
-type IssueStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 interface AttendanceIssuePanelProps {
     isOpen: boolean;
@@ -23,10 +31,83 @@ interface AttendanceIssuePanelProps {
     onIssueUpdated?: () => void;
 }
 
-const statusBadge = (status: IssueStatus) => {
+type QueueFilter = IssueWorkflowStatus | 'ALL';
+
+const statusBadge = (status: IssueWorkflowStatus) => {
     if (status === 'APPROVED') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
     if (status === 'REJECTED') return 'bg-red-100 text-red-700 border-red-200';
     return 'bg-amber-100 text-amber-700 border-amber-200';
+};
+
+const formatWorkflowStatus = (status: IssueWorkflowStatus): string => {
+    if (status === 'APPROVED') return 'Approved';
+    if (status === 'REJECTED') return 'Rejected';
+    return 'Pending';
+};
+
+const formatAttendanceStatus = (status?: AttendanceIssueStatus): string => {
+    if (status === 'LEAVE_APPROVED' || status === 'ON_LEAVE') return 'Leave (Approved)';
+    if (status === 'HALF_DAY') return 'Half Day';
+    if (status === 'LATE') return 'Late';
+    if (status === 'PRESENT') return 'Present';
+    return 'Absent';
+};
+
+const formatTimestamp = (value?: string): string => {
+    if (!value) return 'N/A';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleString();
+};
+
+const toInitials = (name: string): string => {
+    const tokens = name
+        .split(' ')
+        .map((token) => token.trim())
+        .filter(Boolean)
+        .slice(0, 2);
+    if (tokens.length === 0) return 'U';
+    return tokens.map((token) => token[0]?.toUpperCase() || '').join('');
+};
+
+const resolveRequesterName = (issue: AttendanceIssueDto): string => {
+    if (issue.requesterName && issue.requesterName.trim().length > 0) {
+        return issue.requesterName.trim();
+    }
+    const first = issue.requesterUserId?.profile?.firstName?.trim() || '';
+    const last = issue.requesterUserId?.profile?.lastName?.trim() || '';
+    const full = `${first} ${last}`.trim();
+    if (full) return full;
+    if (issue.requesterEmail?.trim()) return issue.requesterEmail.trim();
+    return issue.requesterUserId?.email || 'Unknown User';
+};
+
+const resolveRequesterEmail = (issue: AttendanceIssueDto): string => {
+    if (issue.requesterEmail && issue.requesterEmail.trim().length > 0) {
+        return issue.requesterEmail.trim();
+    }
+    return issue.requesterUserId?.email || '';
+};
+
+const resolveRequesterAvatar = (issue: AttendanceIssueDto): string | null => {
+    return (
+        issue.requesterAvatar ||
+        issue.requesterUserId?.profile?.avatarUrl ||
+        issue.requesterUserId?.profileImageUrl ||
+        issue.requesterUserId?.profilePicture ||
+        null
+    );
+};
+
+const resolveReviewerName = (issue: AttendanceIssueDto): string => {
+    if (issue.decidedByName && issue.decidedByName.trim().length > 0) {
+        return issue.decidedByName.trim();
+    }
+    const first = issue.decidedByUserId?.profile?.firstName?.trim() || '';
+    const last = issue.decidedByUserId?.profile?.lastName?.trim() || '';
+    const full = `${first} ${last}`.trim();
+    if (full) return full;
+    return issue.decidedByUserId?.email || 'Reviewer';
 };
 
 const AttendanceIssuePanel: React.FC<AttendanceIssuePanelProps> = ({
@@ -43,12 +124,13 @@ const AttendanceIssuePanel: React.FC<AttendanceIssuePanelProps> = ({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [loadingMy, setLoadingMy] = useState(false);
     const [loadingQueue, setLoadingQueue] = useState(false);
-    const [myIssues, setMyIssues] = useState<any[]>([]);
-    const [queueIssues, setQueueIssues] = useState<any[]>([]);
-    const [queueFilter, setQueueFilter] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'>('PENDING');
+    const [myIssues, setMyIssues] = useState<AttendanceIssueDto[]>([]);
+    const [queueIssues, setQueueIssues] = useState<AttendanceIssueDto[]>([]);
+    const [queueFilter, setQueueFilter] = useState<QueueFilter>('PENDING');
+    const [expandedIssueId, setExpandedIssueId] = useState<string | null>(null);
 
     const [sessionDate, setSessionDate] = useState(defaultSessionDate);
-    const [requestedStatus, setRequestedStatus] = useState<'PRESENT' | 'LATE' | 'ABSENT' | 'ON_LEAVE' | 'HALF_DAY'>('PRESENT');
+    const [requestedStatus, setRequestedStatus] = useState<AttendanceIssueStatus>('PRESENT');
     const [reason, setReason] = useState('');
     const [requestedCheckInAt, setRequestedCheckInAt] = useState('');
     const [requestedCheckOutAt, setRequestedCheckOutAt] = useState('');
@@ -106,6 +188,7 @@ const AttendanceIssuePanel: React.FC<AttendanceIssuePanelProps> = ({
         setRequestedStatus('PRESENT');
         setRequestedCheckInAt('');
         setRequestedCheckOutAt('');
+        setExpandedIssueId(null);
     };
 
     const handleCreateIssue = async () => {
@@ -149,6 +232,10 @@ const AttendanceIssuePanel: React.FC<AttendanceIssuePanelProps> = ({
         return `No ${queueFilter.toLowerCase()} issues in queue.`;
     }, [queueFilter]);
 
+    const toggleIssueDetails = (issueId: string) => {
+        setExpandedIssueId((current) => (current === issueId ? null : issueId));
+    };
+
     const handleApprove = async (issueId: string) => {
         const approvalNote = window.prompt('Approval note (optional):') || undefined;
         try {
@@ -174,6 +261,138 @@ const AttendanceIssuePanel: React.FC<AttendanceIssuePanelProps> = ({
         } catch (err: any) {
             toast.error(err.response?.data?.message || err.response?.data?.msg || 'Rejection failed');
         }
+    };
+
+    const renderIssueCard = (
+        issue: AttendanceIssueDto,
+        options: { canReviewActions?: boolean },
+    ) => {
+        const requesterName = resolveRequesterName(issue);
+        const requesterEmail = resolveRequesterEmail(issue);
+        const requesterAvatar = resolveRequesterAvatar(issue);
+        const requestedAt = issue.requestedAt || issue.createdAt;
+        const isExpanded = expandedIssueId === issue._id;
+
+        return (
+            <div
+                key={issue._id}
+                className="rounded-2xl border border-border-light dark:border-border-dark p-4 bg-background-light/40 dark:bg-background-dark/50"
+            >
+                <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                        <div className="h-10 w-10 rounded-full bg-primary/15 text-primary flex items-center justify-center overflow-hidden font-bold text-xs flex-shrink-0">
+                            {requesterAvatar ? (
+                                <img
+                                    src={requesterAvatar}
+                                    alt={requesterName}
+                                    className="w-full h-full object-cover"
+                                />
+                            ) : (
+                                <span>{toInitials(requesterName)}</span>
+                            )}
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-sm font-black text-text-primary-light dark:text-text-primary-dark truncate">
+                                {requesterName}
+                            </p>
+                            <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark truncate">
+                                {requesterEmail || 'No email snapshot'}
+                            </p>
+                            <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-1">
+                                Date: {issue.sessionDateKey || 'N/A'}
+                            </p>
+                        </div>
+                    </div>
+                    <span className={`px-2.5 py-1 text-[11px] font-bold rounded-full border ${statusBadge(issue.status)}`}>
+                        {formatWorkflowStatus(issue.status)}
+                    </span>
+                </div>
+
+                <p className="mt-3 text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                    {issue.reason || 'No reason provided'}
+                </p>
+
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                    <div className="rounded-lg bg-background-light dark:bg-background-dark p-2">
+                        <p className="font-bold text-text-secondary-light">Current</p>
+                        <p className="text-text-primary-light dark:text-text-primary-dark">
+                            {formatAttendanceStatus(issue.currentSnapshot?.status)}
+                        </p>
+                    </div>
+                    <div className="rounded-lg bg-background-light dark:bg-background-dark p-2">
+                        <p className="font-bold text-text-secondary-light">Requested</p>
+                        <p className="text-text-primary-light dark:text-text-primary-dark">
+                            {formatAttendanceStatus(issue.requestedCorrection?.status)}
+                        </p>
+                    </div>
+                    <div className="rounded-lg bg-background-light dark:bg-background-dark p-2">
+                        <p className="font-bold text-text-secondary-light">Requested At</p>
+                        <p className="text-text-primary-light dark:text-text-primary-dark">
+                            {formatTimestamp(requestedAt)}
+                        </p>
+                    </div>
+                </div>
+
+                {isExpanded && (
+                    <div className="mt-3 rounded-xl border border-border-light dark:border-border-dark bg-background-light/70 dark:bg-background-dark/70 p-3 text-xs space-y-2">
+                        <p className="text-text-secondary-light dark:text-text-secondary-dark">
+                            <span className="font-bold text-text-primary-light dark:text-text-primary-dark">Request ID:</span>{' '}
+                            {issue._id}
+                        </p>
+                        {issue.status !== 'PENDING' && (
+                            <>
+                                <p className="text-text-secondary-light dark:text-text-secondary-dark">
+                                    <span className="font-bold text-text-primary-light dark:text-text-primary-dark">Reviewed By:</span>{' '}
+                                    {resolveReviewerName(issue)}
+                                </p>
+                                <p className="text-text-secondary-light dark:text-text-secondary-dark">
+                                    <span className="font-bold text-text-primary-light dark:text-text-primary-dark">Reviewed At:</span>{' '}
+                                    {formatTimestamp(issue.decidedAt)}
+                                </p>
+                            </>
+                        )}
+                        {issue.approvalNote && issue.approvalNote.trim().length > 0 && (
+                            <p className="text-emerald-700 dark:text-emerald-400">
+                                <span className="font-bold">Approval Note:</span> {issue.approvalNote}
+                            </p>
+                        )}
+                        {issue.rejectionReason && issue.rejectionReason.trim().length > 0 && (
+                            <p className="text-red-700 dark:text-red-400">
+                                <span className="font-bold">Rejection Reason:</span> {issue.rejectionReason}
+                            </p>
+                        )}
+                    </div>
+                )}
+
+                <div className="mt-3 flex items-center gap-2">
+                    {options.canReviewActions && issue.status === 'PENDING' && (
+                        <>
+                            <button
+                                onClick={() => handleApprove(issue._id)}
+                                className="flex-1 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold flex items-center justify-center gap-2 transition-colors"
+                            >
+                                <CheckCircle2 size={16} />
+                                Approve
+                            </button>
+                            <button
+                                onClick={() => handleReject(issue._id)}
+                                className="flex-1 h-10 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold flex items-center justify-center gap-2 transition-colors"
+                            >
+                                <XCircle size={16} />
+                                Reject
+                            </button>
+                        </>
+                    )}
+                    <button
+                        onClick={() => toggleIssueDetails(issue._id)}
+                        className="h-10 px-4 rounded-xl border border-border-light dark:border-border-dark text-sm font-bold text-text-primary-light dark:text-text-primary-dark hover:bg-background-light dark:hover:bg-background-dark transition-colors flex items-center justify-center gap-2"
+                    >
+                        <Eye size={16} />
+                        {isExpanded ? 'Hide' : 'View'}
+                    </button>
+                </div>
+            </div>
+        );
     };
 
     return (
@@ -244,12 +463,12 @@ const AttendanceIssuePanel: React.FC<AttendanceIssuePanelProps> = ({
                                     </label>
                                     <label className="block">
                                         <span className="text-xs font-black uppercase tracking-wider text-text-secondary-light">Requested Status</span>
-                                        <select value={requestedStatus} onChange={(e) => setRequestedStatus(e.target.value as any)} className="mt-2 w-full px-3 py-2 rounded-xl border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark">
+                                        <select value={requestedStatus} onChange={(e) => setRequestedStatus(e.target.value as AttendanceIssueStatus)} className="mt-2 w-full px-3 py-2 rounded-xl border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark">
                                             <option value="PRESENT">Present</option>
                                             <option value="LATE">Late</option>
                                             <option value="HALF_DAY">Half Day</option>
                                             <option value="ABSENT">Absent</option>
-                                            <option value="ON_LEAVE">Approved Leave</option>
+                                            <option value="LEAVE_APPROVED">Leave (Approved)</option>
                                         </select>
                                     </label>
                                 </div>
@@ -285,23 +504,7 @@ const AttendanceIssuePanel: React.FC<AttendanceIssuePanelProps> = ({
                                         No attendance issues raised yet.
                                     </div>
                                 )}
-                                {myIssues.map((issue) => (
-                                    <div key={issue._id} className="rounded-2xl border border-border-light dark:border-border-dark p-4 bg-background-light/40 dark:bg-background-dark/50">
-                                        <div className="flex items-center justify-between gap-3">
-                                            <div className="text-sm font-bold text-text-primary-light dark:text-text-primary-dark">
-                                                {issue.sessionDateKey}
-                                            </div>
-                                            <span className={`px-2.5 py-1 text-[11px] font-bold rounded-full border ${statusBadge(issue.status)}`}>{issue.status}</span>
-                                        </div>
-                                        <div className="mt-2 text-xs text-text-secondary-light dark:text-text-secondary-dark">
-                                            Requested: <span className="font-bold text-text-primary-light dark:text-text-primary-dark">{issue.requestedCorrection?.status}</span>
-                                        </div>
-                                        <p className="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark">{issue.reason}</p>
-                                        {issue.rejectionReason && (
-                                            <p className="mt-2 text-sm text-red-600 dark:text-red-400">Rejected: {issue.rejectionReason}</p>
-                                        )}
-                                    </div>
-                                ))}
+                                {myIssues.map((issue) => renderIssueCard(issue, { canReviewActions: false }))}
                             </div>
                         )}
 
@@ -309,7 +512,7 @@ const AttendanceIssuePanel: React.FC<AttendanceIssuePanelProps> = ({
                             <div className="space-y-3 animate-in slide-in-from-right-3 duration-300">
                                 <div className="flex items-center justify-between gap-3">
                                     <h3 className="text-sm font-black uppercase tracking-wider text-text-secondary-light">Review Filter</h3>
-                                    <select value={queueFilter} onChange={(e) => setQueueFilter(e.target.value as any)} className="px-3 py-2 rounded-xl border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark text-sm">
+                                    <select value={queueFilter} onChange={(e) => setQueueFilter(e.target.value as QueueFilter)} className="px-3 py-2 rounded-xl border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark text-sm">
                                         <option value="PENDING">Pending</option>
                                         <option value="APPROVED">Approved</option>
                                         <option value="REJECTED">Rejected</option>
@@ -322,47 +525,7 @@ const AttendanceIssuePanel: React.FC<AttendanceIssuePanelProps> = ({
                                         {queueEmptyMessage}
                                     </div>
                                 )}
-                                {queueIssues.map((issue) => (
-                                    <div key={issue._id} className="rounded-2xl border border-border-light dark:border-border-dark p-4 bg-background-light/40 dark:bg-background-dark/50">
-                                        <div className="flex items-center justify-between gap-3">
-                                            <div>
-                                                <p className="text-sm font-black text-text-primary-light dark:text-text-primary-dark">{issue.sessionDateKey}</p>
-                                                <p className="text-xs text-text-secondary-light mt-1">
-                                                    Requested by {(issue.requesterUserId?.profile?.firstName || 'User')} {(issue.requesterUserId?.profile?.lastName || '')}
-                                                </p>
-                                            </div>
-                                            <span className={`px-2.5 py-1 text-[11px] font-bold rounded-full border ${statusBadge(issue.status)}`}>{issue.status}</span>
-                                        </div>
-                                        <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                                            <div className="rounded-lg bg-background-light dark:bg-background-dark p-2">
-                                                <p className="font-bold text-text-secondary-light">Current</p>
-                                                <p className="text-text-primary-light dark:text-text-primary-dark">{issue.currentSnapshot?.status || 'N/A'}</p>
-                                            </div>
-                                            <div className="rounded-lg bg-background-light dark:bg-background-dark p-2">
-                                                <p className="font-bold text-text-secondary-light">Requested</p>
-                                                <p className="text-text-primary-light dark:text-text-primary-dark">{issue.requestedCorrection?.status || 'N/A'}</p>
-                                            </div>
-                                        </div>
-                                        <p className="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark">{issue.reason}</p>
-                                        {issue.status === 'PENDING' && (
-                                            <div className="mt-3 flex items-center gap-2">
-                                                <button onClick={() => handleApprove(issue._id)} className="flex-1 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold flex items-center justify-center gap-2 transition-colors">
-                                                    <CheckCircle2 size={16} />
-                                                    Approve
-                                                </button>
-                                                <button onClick={() => handleReject(issue._id)} className="flex-1 h-10 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold flex items-center justify-center gap-2 transition-colors">
-                                                    <XCircle size={16} />
-                                                    Reject
-                                                </button>
-                                            </div>
-                                        )}
-                                        {issue.status !== 'PENDING' && (
-                                            <div className="mt-3 text-xs text-text-secondary-light">
-                                                Reviewed by {(issue.decidedByUserId?.profile?.firstName || 'Reviewer')} {(issue.decidedByUserId?.profile?.lastName || '')}
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
+                                {queueIssues.map((issue) => renderIssueCard(issue, { canReviewActions: true }))}
                             </div>
                         )}
                     </div>
