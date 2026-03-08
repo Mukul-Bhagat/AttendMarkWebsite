@@ -4,8 +4,10 @@ import api from '../api';
 import { appLogger } from '../shared/logger';
 import {
   firebaseWebConfig,
+  firebaseWebConfigIssues,
   getMessagingInstance,
   hasFirebaseMessagingConfig,
+  isConfiguredFirebaseValue,
 } from './firebase';
 
 const FCM_TOKEN_STORAGE_KEY = 'notification_web_fcm_token';
@@ -114,6 +116,11 @@ export const registerWebPushDevice = async (): Promise<string | null> => {
   }
 
   if (!hasFirebaseMessagingConfig) {
+    console.warn(
+      `[Notifications] Firebase web config is incomplete or uses placeholders. Invalid keys: ${
+        firebaseWebConfigIssues.join(', ') || 'unknown'
+      }`,
+    );
     return null;
   }
 
@@ -136,8 +143,8 @@ export const registerWebPushDevice = async (): Promise<string | null> => {
   }
 
   const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
-  if (!vapidKey) {
-    appLogger.warn('Missing VITE_FIREBASE_VAPID_KEY. Push registration skipped.');
+  if (!isConfiguredFirebaseValue(vapidKey)) {
+    appLogger.warn('Missing or placeholder VITE_FIREBASE_VAPID_KEY. Push registration skipped.');
     return null;
   }
 

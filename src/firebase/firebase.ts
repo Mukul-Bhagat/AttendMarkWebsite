@@ -11,13 +11,33 @@ export const firebaseWebConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
+export const isConfiguredFirebaseValue = (value: string | undefined): boolean => {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    return false;
+  }
+
+  const lowered = normalized.toLowerCase();
+  return !(
+    lowered === '...' ||
+    lowered.endsWith('...') ||
+    lowered.includes('placeholder') ||
+    lowered.includes('changeme') ||
+    lowered.includes('your_')
+  );
+};
+
+export const firebaseWebConfigIssues = Object.entries(firebaseWebConfig)
+  .filter(([, value]) => !isConfiguredFirebaseValue(value))
+  .map(([key]) => key);
+
 export const hasFirebaseMessagingConfig = [
   firebaseWebConfig.apiKey,
   firebaseWebConfig.authDomain,
   firebaseWebConfig.projectId,
   firebaseWebConfig.messagingSenderId,
   firebaseWebConfig.appId,
-].every((value) => typeof value === 'string' && value.trim().length > 0);
+].every((value) => isConfiguredFirebaseValue(value));
 
 let appInstance: FirebaseApp | null = null;
 let messagingPromise: Promise<Messaging | null> | null = null;
@@ -41,7 +61,11 @@ export const getMessagingInstance = async (): Promise<Messaging | null> => {
   }
 
   if (!hasFirebaseMessagingConfig) {
-    appLogger.warn('Firebase messaging env config is incomplete. Push registration skipped.');
+    appLogger.warn(
+      `Firebase messaging env config is incomplete or uses placeholders. Invalid keys: ${firebaseWebConfigIssues.join(
+        ', ',
+      ) || 'unknown'}. Push registration skipped.`,
+    );
     return null;
   }
 

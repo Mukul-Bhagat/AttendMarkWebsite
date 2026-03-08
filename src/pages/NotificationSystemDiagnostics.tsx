@@ -1,6 +1,10 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import api from '../api';
+import {
+  firebaseWebConfigIssues,
+  hasFirebaseMessagingConfig,
+} from '../firebase/firebase';
 
 type FirebaseStatus = {
   firebaseConnected: boolean;
@@ -179,6 +183,10 @@ const NotificationSystemDiagnostics: React.FC = () => {
     const source = tokenStatus?.tokens?.activeByPlatform || {};
     return Object.entries(source);
   }, [tokenStatus]);
+  const browserPermission =
+    typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
+  const serviceWorkerSupport =
+    typeof window !== 'undefined' && 'serviceWorker' in navigator ? 'Supported' : 'Unsupported';
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 p-4 sm:p-6 lg:p-8">
@@ -189,7 +197,8 @@ const NotificationSystemDiagnostics: React.FC = () => {
               Notification System Diagnostics
             </h1>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Live status for Firebase, Redis, queue worker, and device token registration.
+              Live status for Firebase, Redis, queue worker, device token registration, and
+              browser push configuration.
             </p>
           </div>
 
@@ -218,11 +227,7 @@ const NotificationSystemDiagnostics: React.FC = () => {
         ) : null}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <DiagnosticsCard
-            title="Notification Health"
-            loading={loading}
-            error={errors.health}
-          >
+          <DiagnosticsCard title="Notification Health" loading={loading} error={errors.health}>
             <ValueRow label="Redis" value={healthStatus?.redis ? 'Healthy' : 'Unhealthy'} />
             <ValueRow
               label="Worker"
@@ -237,11 +242,7 @@ const NotificationSystemDiagnostics: React.FC = () => {
             <ValueRow label="Failed Jobs" value={healthStatus?.failedJobs ?? 0} />
           </DiagnosticsCard>
 
-          <DiagnosticsCard
-            title="Firebase Status"
-            loading={loading}
-            error={errors.firebase}
-          >
+          <DiagnosticsCard title="Firebase Status" loading={loading} error={errors.firebase}>
             <ValueRow
               label="Connection"
               value={firebaseStatus?.firebaseConnected ? 'Connected' : 'Disconnected'}
@@ -279,11 +280,7 @@ const NotificationSystemDiagnostics: React.FC = () => {
             <ValueRow label="Error" value={redisStatus?.error || 'None'} />
           </DiagnosticsCard>
 
-          <DiagnosticsCard
-            title="Device Token Inventory"
-            loading={loading}
-            error={errors.tokens}
-          >
+          <DiagnosticsCard title="Device Token Inventory" loading={loading} error={errors.tokens}>
             <ValueRow label="Total" value={tokenStatus?.tokens?.total ?? 0} />
             <ValueRow label="Active" value={tokenStatus?.tokens?.active ?? 0} />
             <ValueRow label="Inactive" value={tokenStatus?.tokens?.inactive ?? 0} />
@@ -296,6 +293,23 @@ const NotificationSystemDiagnostics: React.FC = () => {
                 <ValueRow key={platform} label={`Active (${platform})`} value={count} />
               ))
             )}
+          </DiagnosticsCard>
+
+          <DiagnosticsCard title="Web Push Client" loading={false}>
+            <ValueRow
+              label="Firebase Web Config"
+              value={hasFirebaseMessagingConfig ? 'Ready' : 'Invalid'}
+            />
+            <ValueRow label="Permission" value={browserPermission} />
+            <ValueRow label="Service Worker" value={serviceWorkerSupport} />
+            <ValueRow
+              label="Invalid Keys"
+              value={
+                firebaseWebConfigIssues.length > 0
+                  ? firebaseWebConfigIssues.join(', ')
+                  : 'None'
+              }
+            />
           </DiagnosticsCard>
         </div>
       </div>

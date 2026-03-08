@@ -20,7 +20,9 @@ vi.mock('../firebase', () => ({
     messagingSenderId: 'sender-id',
     appId: 'app-id',
   },
+  firebaseWebConfigIssues: [],
   hasFirebaseMessagingConfig: true,
+  isConfiguredFirebaseValue: (value: string) => Boolean(value),
   getMessagingInstance: mockGetMessagingInstance,
 }));
 
