@@ -47,6 +47,14 @@ interface ILeaveRequest {
     };
   };
   approvedByName?: string;
+  sendTo?: Array<string | {
+    _id: string;
+    email?: string;
+    profile?: {
+      firstName?: string;
+      lastName?: string;
+    };
+  }>;
   rejectionReason?: string;
   approvalNote?: string;
   attachment?: string; // Legacy file path/URL
@@ -186,6 +194,8 @@ const Leaves: React.FC = () => {
 
   // Check if user is Admin/Staff
   const isAdminOrStaff = isSuperAdmin || isCompanyAdmin || isManager || isSessionAdmin;
+  const canSelfReview = isSuperAdmin || isCompanyAdmin;
+  const currentUserId = user?.id || '';
 
   // Form state
   const [formData, setFormData] = useState({
@@ -291,9 +301,11 @@ const Leaves: React.FC = () => {
       try {
         const { data: users } = await api.get('/api/users/my-organization');
         // Filter for Admins/Staff (SuperAdmin, CompanyAdmin, Manager, SessionAdmin)
-        const staff = users.filter((u: IUser) =>
-          ['SuperAdmin', 'CompanyAdmin', 'Manager', 'SessionAdmin'].includes(u.role)
-        );
+        const staff = users
+          .filter((u: IUser) =>
+            ['SuperAdmin', 'CompanyAdmin', 'Manager', 'SessionAdmin'].includes(u.role)
+          )
+          .filter((u: IUser) => canSelfReview || u._id !== currentUserId);
         setStaffUsers(staff);
       } catch (err) {
         appLogger.error('Failed to fetch staff:', err);
@@ -301,9 +313,15 @@ const Leaves: React.FC = () => {
     };
 
     if (isModalOpen) {
+      if (!canSelfReview && currentUserId) {
+        setFormData(prev => ({
+          ...prev,
+          sendTo: (prev.sendTo || []).filter(id => id !== currentUserId),
+        }));
+      }
       fetchStaff();
     }
-  }, [isModalOpen]);
+  }, [isModalOpen, canSelfReview, currentUserId]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -431,6 +449,9 @@ const Leaves: React.FC = () => {
   // Validate form
   const validateForm = () => {
     const errors: { [key: string]: string } = {};
+    const sanitizedRecipients = (formData.sendTo || []).filter((recipientId) =>
+      canSelfReview || recipientId !== currentUserId,
+    );
 
     if (!formData.subject.trim()) {
       errors.subject = 'Subject is required';
@@ -444,8 +465,10 @@ const Leaves: React.FC = () => {
       errors.reason = 'Reason is required';
     }
 
-    if (!formData.sendTo || formData.sendTo.length === 0) {
-      errors.sendTo = 'Please select at least one recipient';
+    if (sanitizedRecipients.length === 0) {
+      errors.sendTo = canSelfReview
+        ? 'Please select at least one recipient'
+        : 'Please select at least one recipient other than yourself';
     }
 
     if (selectedFile) {
@@ -487,10 +510,22 @@ const Leaves: React.FC = () => {
       formDataToSend.append('leaveType', formData.leaveType);
       formDataToSend.append('dates', JSON.stringify(datesArray));
       formDataToSend.append('reason', formData.reason);
+      const sanitizedRecipients = (formData.sendTo || []).filter((recipientId) =>
+        canSelfReview || recipientId !== currentUserId,
+      );
 
       // Append sendTo as array
-      if (formData.sendTo && formData.sendTo.length > 0) {
-        formDataToSend.append('sendTo', JSON.stringify(formData.sendTo));
+      if (sanitizedRecipients.length > 0) {
+        formDataToSend.append('sendTo', JSON.stringify(sanitizedRecipients));
+      } else {
+        setFormErrors({
+          sendTo: canSelfReview
+            ? 'Please select at least one recipient'
+            : 'Please select at least one recipient other than yourself',
+        });
+        setIsSubmitting(false);
+        setUploadProgress(null);
+        return;
       }
 
       // Append file if selected
@@ -551,6 +586,13 @@ const Leaves: React.FC = () => {
 
   // Handle sendTo selection
   const handleSendToToggle = (userId: string) => {
+    if (!canSelfReview && userId === currentUserId) {
+      setFormErrors(prev => ({
+        ...prev,
+        sendTo: 'Managers and Session Admins cannot assign leave to themselves',
+      }));
+      return;
+    }
     setFormData(prev => {
       const currentSendTo = prev.sendTo || [];
       if (currentSendTo.includes(userId)) {
@@ -745,6 +787,15 @@ const Leaves: React.FC = () => {
       return leave.userId._id || '';
     }
     return leave.userId || '';
+  }
+
+  function isAssignedReviewer(leave: ILeaveRequest): boolean {
+    if (!currentUserId) return false;
+    if (!Array.isArray(leave.sendTo) || leave.sendTo.length === 0) return false;
+    return leave.sendTo.some((reviewer) => {
+      if (typeof reviewer === 'string') return reviewer === currentUserId;
+      return reviewer?._id === currentUserId;
+    });
   }
 
   function getLeaveEndDate(leave: ILeaveRequest): string {
@@ -2337,7 +2388,10 @@ const Leaves: React.FC = () => {
               {/* Show Approve/Reject buttons for Admins/Staff when viewing pending leaves that are not their own */}
               {isAdminOrStaff &&
                 selectedLeave.status === 'Pending' &&
-                getLeaveUserId(selectedLeave) !== user?.id ? (
+                (
+                  getLeaveUserId(selectedLeave) !== currentUserId ||
+                  (canSelfReview && isAssignedReviewer(selectedLeave))
+                ) ? (
                 <div className="flex justify-end gap-3">
                   <button
                     onClick={() => {

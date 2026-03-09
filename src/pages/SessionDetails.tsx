@@ -5,7 +5,7 @@ import { ISession } from '../types';
 import { QRCodeCanvas } from 'qrcode.react';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { formatIST } from '../utils/time';
+import { formatIST, nowIST } from '../utils/time';
 import ModeBadge from '../components/ModeBadge';
 import { normalizeSessionMode } from '../utils/sessionMode';
 import SkeletonCard from '../components/SkeletonCard';
@@ -15,7 +15,63 @@ import { appLogger } from '../shared/logger';
 
 const QR_TOKEN_MAX_ATTEMPTS = 3;
 const QR_TOKEN_RETRY_DELAY_MS = 400;
+const QR_CACHE_EXPIRY_BUFFER_MS = 10 * 1000;
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+type CachedQrTokenPayload = {
+  token: string;
+  expiresAt: string;
+  cachedAt: number;
+};
+
+const buildQrCacheKey = (sessionId: string, dateKey?: string) =>
+  `attendmark:qr:${sessionId}:${dateKey || 'today'}`;
+
+const readCachedQrToken = (cacheKey: string): CachedQrTokenPayload | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(cacheKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CachedQrTokenPayload;
+    if (!parsed?.token || !parsed?.expiresAt) {
+      return null;
+    }
+    const expiresAtMs = Date.parse(parsed.expiresAt);
+    if (!Number.isFinite(expiresAtMs) || expiresAtMs <= nowIST() + QR_CACHE_EXPIRY_BUFFER_MS) {
+      window.sessionStorage.removeItem(cacheKey);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const writeCachedQrToken = (cacheKey: string, payload: CachedQrTokenPayload) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(cacheKey, JSON.stringify(payload));
+  } catch {
+    // Best-effort cache only.
+  }
+};
+
+const extractErrorStatus = (error: unknown): number | undefined => {
+  const candidate = (error as { response?: { status?: unknown } })?.response?.status;
+  return typeof candidate === 'number' ? candidate : undefined;
+};
+
+const extractErrorMessage = (error: unknown): string => {
+  if (error instanceof Error && typeof error.message === 'string') {
+    return error.message;
+  }
+  return '';
+};
+
+const extractBackendMsg = (error: unknown): string => {
+  const candidate = (error as { response?: { data?: { msg?: unknown } } })?.response?.data?.msg;
+  return typeof candidate === 'string' ? candidate : '';
+};
 
 const SessionDetails: React.FC = () => {
   const [session, setSession] = useState<ISession | null>(null);
@@ -32,7 +88,10 @@ const SessionDetails: React.FC = () => {
   const [qrTokenError, setQrTokenError] = useState('');
   const [isQrLoading, setIsQrLoading] = useState(false);
   const [isSharingQr, setIsSharingQr] = useState(false);
+  const [qrSecondsRemaining, setQrSecondsRemaining] = useState<number | null>(null);
   const qrCanvasWrapperRef = useRef<HTMLDivElement | null>(null);
+  const qrTokenRef = useRef('');
+  const qrExpiresAtRef = useRef<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isSuperAdmin, isSessionAdmin, isEndUser } = useAuth();
@@ -131,6 +190,11 @@ const SessionDetails: React.FC = () => {
   }, [id, isEndUser, location.search]);
 
   useEffect(() => {
+    qrTokenRef.current = qrToken;
+    qrExpiresAtRef.current = qrExpiresAt;
+  }, [qrToken, qrExpiresAt]);
+
+  useEffect(() => {
     if (!id || isEndUser || !session || session.isCancelled) {
       return;
     }
@@ -138,9 +202,8 @@ const SessionDetails: React.FC = () => {
     let isStale = false;
 
     const fetchQrToken = async () => {
-      setIsQrLoading(true);
-      setQrToken('');
-      setQrExpiresAt(null);
+      const existingTokenAtStart = qrTokenRef.current;
+      const existingExpiresAt = qrExpiresAtRef.current;
       setQrTokenError('');
 
       const query = new URLSearchParams(location.search);
@@ -150,8 +213,17 @@ const SessionDetails: React.FC = () => {
       const requestUrl = resolvedDate
         ? `/api/sessions/${qrSessionId}/qr-token?date=${encodeURIComponent(resolvedDate)}`
         : `/api/sessions/${qrSessionId}/qr-token`;
+      const cacheKey = buildQrCacheKey(qrSessionId, resolvedDate);
+      const cachedToken = readCachedQrToken(cacheKey);
 
-      let lastError: any = null;
+      if (cachedToken) {
+        setQrToken(cachedToken.token);
+        setQrExpiresAt(cachedToken.expiresAt);
+      }
+
+      setIsQrLoading(true);
+
+      let lastError: unknown = null;
 
       for (let attempt = 1; attempt <= QR_TOKEN_MAX_ATTEMPTS; attempt += 1) {
         try {
@@ -166,15 +238,22 @@ const SessionDetails: React.FC = () => {
           setQrToken(token);
           setQrExpiresAt(data?.expiresAt || null);
           setQrTokenError('');
+          if (data?.expiresAt) {
+            writeCachedQrToken(cacheKey, {
+              token,
+              expiresAt: data.expiresAt,
+              cachedAt: nowIST(),
+            });
+          }
           return;
-        } catch (err: any) {
+        } catch (err: unknown) {
           lastError = err;
-          const status = err?.response?.status;
+          const status = extractErrorStatus(err);
           const shouldRetry = (!status || status >= 500) && attempt < QR_TOKEN_MAX_ATTEMPTS;
           appLogger.error('Failed to fetch QR token:', {
             attempt,
             status,
-            message: err?.message,
+            message: extractErrorMessage(err),
           });
 
           if (!shouldRetry) {
@@ -186,9 +265,17 @@ const SessionDetails: React.FC = () => {
       }
 
       if (isStale) return;
-      const backendMessage = typeof lastError?.response?.data?.msg === 'string'
-        ? lastError.response.data.msg
-        : '';
+      const backendMessage = extractBackendMsg(lastError);
+      const hasUnexpiredCurrentToken = Boolean(
+        existingTokenAtStart &&
+        existingExpiresAt &&
+        Date.parse(existingExpiresAt) > nowIST() + QR_CACHE_EXPIRY_BUFFER_MS,
+      );
+      const hasFallbackToken = Boolean(cachedToken?.token || hasUnexpiredCurrentToken);
+      if (hasFallbackToken) {
+        setQrTokenError('Live refresh failed. Showing the last valid secure QR.');
+        return;
+      }
       setQrTokenError(backendMessage || 'Unable to generate secure QR token. Please refresh and try again.');
       setQrToken('');
       setQrExpiresAt(null);
@@ -203,7 +290,36 @@ const SessionDetails: React.FC = () => {
     return () => {
       isStale = true;
     };
-  }, [id, isEndUser, session?._id, session?.occurrenceDate, session?.isCancelled, location.search]);
+  }, [id, isEndUser, session, session?._id, session?.occurrenceDate, session?.isCancelled, location.search]);
+
+  useEffect(() => {
+    if (!qrExpiresAt) {
+      setQrSecondsRemaining(null);
+      return;
+    }
+
+    const expiresAtMs = Date.parse(qrExpiresAt);
+    if (!Number.isFinite(expiresAtMs)) {
+      setQrSecondsRemaining(null);
+      return;
+    }
+
+    const updateRemaining = () => {
+      const nextSeconds = Math.floor((expiresAtMs - nowIST()) / 1000);
+      setQrSecondsRemaining(nextSeconds > 0 ? nextSeconds : 0);
+    };
+
+    updateRemaining();
+    const timerId = window.setInterval(updateRemaining, 1000);
+    return () => window.clearInterval(timerId);
+  }, [qrExpiresAt]);
+
+  const formatQrCountdown = (totalSeconds: number) => {
+    const safeSeconds = totalSeconds > 0 ? totalSeconds : 0;
+    const minutes = Math.floor(safeSeconds / 60);
+    const seconds = safeSeconds % 60;
+    return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+  };
 
   const handleShareQrImage = async () => {
     if (!session || !qrToken || isQrLoading || isSharingQr) return;
@@ -366,16 +482,21 @@ const SessionDetails: React.FC = () => {
 
   const configuredUniversalScanBaseUrl =
     (import.meta.env.VITE_UNIVERSAL_SCAN_BASE_URL as string | undefined)?.trim();
+  const useCompactQrPayload =
+    ((import.meta.env.VITE_QR_COMPACT_PAYLOAD as string | undefined)?.trim() || 'true') !== 'false';
   const runtimeScanBaseUrl =
     typeof window !== 'undefined'
       ? `${window.location.origin.replace(/\/+$/, '')}/scan`
       : 'https://attendmark.com/scan';
   const universalScanBaseUrl = configuredUniversalScanBaseUrl || runtimeScanBaseUrl;
   const qrValue = qrToken
-    ? `${universalScanBaseUrl}?token=${encodeURIComponent(qrToken)}`
+    ? (useCompactQrPayload
+      ? qrToken
+      : `${universalScanBaseUrl}?token=${encodeURIComponent(qrToken)}`)
     : '';
   const hasQrValue = Boolean(qrValue);
   const showQrLoadingState = isQrLoading || (!hasQrValue && !qrTokenError);
+  const isQrNearExpiry = typeof qrSecondsRemaining === 'number' && qrSecondsRemaining <= 60;
 
   const formatDate = (dateString: string) => {
     try {
@@ -695,9 +816,22 @@ const SessionDetails: React.FC = () => {
                     <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">Generating secure QR token...</p>
                   )}
                   {!isQrLoading && qrExpiresAt && (
-                    <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                      Expires at {new Date(qrExpiresAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
+                    <div className="mt-3 space-y-1 text-xs">
+                      {typeof qrSecondsRemaining === 'number' && (
+                        <p
+                          className={
+                            isQrNearExpiry
+                              ? 'font-semibold text-orange-600 dark:text-orange-400'
+                              : 'text-gray-600 dark:text-gray-300'
+                          }
+                        >
+                          Expires in {formatQrCountdown(qrSecondsRemaining)}
+                        </p>
+                      )}
+                      <p className="text-gray-500 dark:text-gray-400">
+                        Expires at {formatIST(Date.parse(qrExpiresAt), { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
                   )}
                   {qrTokenError && (
                     <p className="mt-3 text-xs text-orange-600 dark:text-orange-400">{qrTokenError}</p>
