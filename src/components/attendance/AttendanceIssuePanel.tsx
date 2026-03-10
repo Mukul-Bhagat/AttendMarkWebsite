@@ -71,14 +71,24 @@ const toInitials = (name: string): string => {
 };
 
 const resolveRequesterName = (issue: AttendanceIssueDto): string => {
-    if (issue.requesterName && issue.requesterName.trim().length > 0) {
-        return issue.requesterName.trim();
+    const snapshot = issue.requesterName?.trim() || '';
+    const snapshotToken = snapshot.toUpperCase();
+    if (
+        snapshot.length > 0 &&
+        snapshotToken !== 'UNKNOWN USER' &&
+        snapshotToken !== 'UNKNOWN'
+    ) {
+        return snapshot;
     }
     const first = issue.requesterUserId?.profile?.firstName?.trim() || '';
     const last = issue.requesterUserId?.profile?.lastName?.trim() || '';
     const full = `${first} ${last}`.trim();
     if (full) return full;
-    if (issue.requesterEmail?.trim()) return issue.requesterEmail.trim();
+    if (issue.requesterEmail?.trim()) {
+        const email = issue.requesterEmail.trim();
+        const [localPart] = email.split('@');
+        return localPart || email;
+    }
     return issue.requesterUserId?.email || 'Unknown User';
 };
 
