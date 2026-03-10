@@ -31,6 +31,7 @@ interface DashboardSummary {
 const Dashboard: React.FC = () => {
   const { user, isPlatformOwner, logout } = useAuth();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [ongoingSessions, setOngoingSessions] = useState<ISession[]>([]);
   const [upcomingSessions, setUpcomingSessions] = useState<ISession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -47,25 +48,31 @@ const Dashboard: React.FC = () => {
         try {
           const { data: sessions } = await api.get('/api/sessions');
           if (sessions && Array.isArray(sessions)) {
-            // Filter for upcoming sessions (startDate is in the future or today)
             const now = nowIST();
-            const upcoming = sessions
-              .filter((session: ISession) => {
-                const sessionDate = sessionTimeToIST(session.startDate, session.startTime);
-                const endDate = session.endTime
+            const sessionWithTimes = sessions
+              .map((session: ISession) => {
+                const startAt = sessionTimeToIST(session.startDate, session.startTime);
+                const endAt = session.endTime
                   ? sessionTimeToIST(session.endDate || session.startDate, session.endTime)
-                  : sessionDate + 60 * 60 * 1000; // fallback to 1 hr duration
-                return endDate >= now;
+                  : startAt + 60 * 60 * 1000; // fallback to 1 hr duration
+                return { session, startAt, endAt };
               })
-              .sort((a: ISession, b: ISession) => {
-                const dateA = sessionTimeToIST(a.startDate, a.startTime);
-                const dateB = sessionTimeToIST(b.startDate, b.startTime);
-                return dateA - dateB;
-              })
-              .slice(0, 3); // Get top 3 upcoming sessions
+              .filter((entry) => Number.isFinite(entry.startAt) && Number.isFinite(entry.endAt));
 
+            const ongoing = sessionWithTimes
+              .filter(({ startAt, endAt }) => now >= startAt && now <= endAt)
+              .sort((a, b) => a.startAt - b.startAt)
+              .map(({ session }) => session)
+              .slice(0, 3);
+
+            const upcoming = sessionWithTimes
+              .filter(({ startAt }) => startAt > now)
+              .sort((a, b) => a.startAt - b.startAt)
+              .map(({ session }) => session)
+              .slice(0, 3);
+
+            setOngoingSessions(ongoing);
             setUpcomingSessions(upcoming);
-
           }
         } catch (sessionErr) {
           appLogger.error('Failed to fetch sessions:', sessionErr);
@@ -113,14 +120,59 @@ const Dashboard: React.FC = () => {
     return 'text-text-secondary-light dark:text-text-secondary-dark'; // No data or 0 assigned
   };
 
-  const isSessionOngoing = (session: ISession) => {
-    const now = nowIST();
-    const startDate = sessionTimeToIST(session.startDate, session.startTime);
-    const endDate = session.endTime
-      ? sessionTimeToIST(session.endDate || session.startDate, session.endTime)
-      : startDate + 60 * 60 * 1000;
-    return now >= startDate && now <= endDate;
-  };
+  const renderSessionCard = (session: ISession, ongoing: boolean) => (
+    <Link
+      key={session._id}
+      to={`/sessions/${session._id}`}
+      className={`flex items-center justify-between p-4 rounded-lg transition-colors bg-background-light dark:bg-background-dark ${
+        ongoing
+          ? 'border border-green-500 hover:bg-green-500/10'
+          : 'border border-gray-100 dark:border-gray-800 hover:bg-[#f04129]/10'
+      }`}
+    >
+      <div className="flex items-center gap-4">
+        <div
+          className={`flex h-12 w-12 items-center justify-center rounded-lg ${
+            ongoing ? 'bg-green-500/20 text-green-600' : 'bg-[#f04129]/20 text-[#f04129]'
+          }`}
+        >
+          <span className="material-symbols-outlined">
+            {ongoing ? 'play_circle' : 'event'}
+          </span>
+        </div>
+        <div>
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-text-primary-light dark:text-text-primary-dark">
+              {session.classBatchId && typeof session.classBatchId === 'object'
+                ? (session.classBatchId as any).name
+                : session.name}
+            </p>
+            {ongoing && (
+              <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500"></span>
+                </span>
+                Ongoing
+              </span>
+            )}
+          </div>
+          <p
+            className={`text-sm ${
+              ongoing
+                ? 'text-green-700 dark:text-green-400 font-medium'
+                : 'text-text-secondary-light dark:text-text-secondary-dark'
+            }`}
+          >
+            {formatSessionDate(session.startDate, session.startTime)}
+          </p>
+        </div>
+      </div>
+      <span className="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark">
+        chevron_right
+      </span>
+    </Link>
+  );
 
   const getRoleDisplay = () => {
     if (!user?.role) return '';
@@ -275,63 +327,39 @@ const Dashboard: React.FC = () => {
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Left Column: Upcoming Sessions */}
+        {/* Left Column: Ongoing + Upcoming Sessions */}
         <div className="lg:col-span-2">
-          <div className="w-full rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm h-full">
-            <h2 className="text-xl font-bold mb-4 text-text-primary-light dark:text-text-primary-dark">Upcoming Classes/Batches</h2>
-            <div className="flex flex-col gap-4">
-              {upcomingSessions.length > 0 ? (
-                upcomingSessions.map((session) => {
-                  const ongoing = isSessionOngoing(session);
-                  return (
-                    <Link
-                      key={session._id}
-                      to={`/sessions/${session._id}`}
-                      className={`flex items-center justify-between p-4 rounded-lg transition-colors bg-background-light dark:bg-background-dark ${ongoing
-                          ? 'border border-green-500 hover:bg-green-500/10'
-                          : 'border border-gray-100 dark:border-gray-800 hover:bg-[#f04129]/10'
-                        }`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${ongoing ? 'bg-green-500/20 text-green-600' : 'bg-[#f04129]/20 text-[#f04129]'
-                          }`}>
-                          <span className="material-symbols-outlined">
-                            {ongoing ? 'play_circle' : 'event'}
-                          </span>
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-semibold text-text-primary-light dark:text-text-primary-dark">
-                              {session.classBatchId && typeof session.classBatchId === 'object'
-                                ? (session.classBatchId as any).name
-                                : session.name}
-                            </p>
-                            {ongoing && (
-                              <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                <span className="relative flex h-2 w-2">
-                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"></span>
-                                  <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500"></span>
-                                </span>
-                                Ongoing
-                              </span>
-                            )}
-                          </div>
-                          <p className={`text-sm ${ongoing ? 'text-green-700 dark:text-green-400 font-medium' : 'text-text-secondary-light dark:text-text-secondary-dark'}`}>
-                            {formatSessionDate(session.startDate, session.startTime)}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark">chevron_right</span>
-                    </Link>
-                  );
-                })
-              ) : (
-                <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm py-4">No upcoming classes/batches scheduled.</p>
-              )}
+          <div className="flex flex-col gap-6">
+            <div className="w-full rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm">
+              <h2 className="text-xl font-bold mb-4 text-text-primary-light dark:text-text-primary-dark">Ongoing Sessions</h2>
+              <div className="flex flex-col gap-4">
+                {ongoingSessions.length > 0 ? (
+                  ongoingSessions.map((session) => renderSessionCard(session, true))
+                ) : (
+                  <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm py-4">
+                    No sessions are ongoing right now.
+                  </p>
+                )}
+              </div>
+              <div className="mt-4 pt-4 border-t border-border-light dark:border-border-dark flex justify-end">
+                <Link to="/sessions" className="text-[#f04129] font-medium text-sm hover:underline">View All Sessions &rarr;</Link>
+              </div>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-border-light dark:border-border-dark flex justify-end">
-              <Link to="/sessions" className="text-[#f04129] font-medium text-sm hover:underline">View All Sessions &rarr;</Link>
+            <div className="w-full rounded-xl bg-surface-light dark:bg-surface-dark p-6 border border-border-light dark:border-border-dark shadow-sm">
+              <h2 className="text-xl font-bold mb-4 text-text-primary-light dark:text-text-primary-dark">Upcoming Classes/Batches</h2>
+              <div className="flex flex-col gap-4">
+                {upcomingSessions.length > 0 ? (
+                  upcomingSessions.map((session) => renderSessionCard(session, false))
+                ) : (
+                  <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm py-4">
+                    No upcoming classes/batches scheduled.
+                  </p>
+                )}
+              </div>
+              <div className="mt-4 pt-4 border-t border-border-light dark:border-border-dark flex justify-end">
+                <Link to="/sessions" className="text-[#f04129] font-medium text-sm hover:underline">View All Sessions &rarr;</Link>
+              </div>
             </div>
           </div>
         </div>

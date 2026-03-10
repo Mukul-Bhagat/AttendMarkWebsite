@@ -5,7 +5,7 @@ import { ISession } from '../types';
 import { QRCodeCanvas } from 'qrcode.react';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { formatIST, nowIST } from '../utils/time';
+import { formatIST, nowIST, toISTDateString } from '../utils/time';
 import ModeBadge from '../components/ModeBadge';
 import { normalizeSessionMode } from '../utils/sessionMode';
 import SkeletonCard from '../components/SkeletonCard';
@@ -189,13 +189,30 @@ const SessionDetails: React.FC = () => {
     fetchSession();
   }, [id, isEndUser, location.search]);
 
+  const query = new URLSearchParams(location.search);
+  const queryDate = query.get('date');
+  const qrDateSource = queryDate || session?.occurrenceDate || session?.startDate;
+  const qrDateKey = qrDateSource ? toISTDateString(qrDateSource) : null;
+  const todayKey = toISTDateString(nowIST());
+  const isQrDayActive = Boolean(qrDateKey && qrDateKey === todayKey);
+
   useEffect(() => {
     qrTokenRef.current = qrToken;
     qrExpiresAtRef.current = qrExpiresAt;
   }, [qrToken, qrExpiresAt]);
 
   useEffect(() => {
-    if (!id || isEndUser || !session || session.isCancelled) {
+    if (!session) return;
+    if (!isQrDayActive) {
+      setQrToken('');
+      setQrExpiresAt(null);
+      setQrTokenError('');
+      setIsQrLoading(false);
+    }
+  }, [session, isQrDayActive]);
+
+  useEffect(() => {
+    if (!id || isEndUser || !session || session.isCancelled || !isQrDayActive) {
       return;
     }
 
@@ -290,7 +307,7 @@ const SessionDetails: React.FC = () => {
     return () => {
       isStale = true;
     };
-  }, [id, isEndUser, session, session?._id, session?.occurrenceDate, session?.isCancelled, location.search]);
+  }, [id, isEndUser, session, session?._id, session?.occurrenceDate, session?.isCancelled, location.search, isQrDayActive]);
 
   useEffect(() => {
     if (!qrExpiresAt) {
@@ -538,9 +555,6 @@ const SessionDetails: React.FC = () => {
     }
   };
 
-  const query = new URLSearchParams(location.search);
-  const queryDate = query.get('date');
-  const qrDateSource = queryDate || session.occurrenceDate || session.startDate;
   const qrDateLabel = qrDateSource ? formatDate(qrDateSource) : 'N/A';
   const qrClassName =
     session.classBatchId && typeof session.classBatchId === 'object'
@@ -770,9 +784,11 @@ const SessionDetails: React.FC = () => {
                   </div>
                 )}
                 <div className="w-full">
-                  <div className="mb-6 flex items-center justify-between gap-3">
-                    <h2 className="text-xl font-semibold text-[#181511] dark:text-white">Scan this code for attendance</h2>
-                    {hasQrValue && (
+                  <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <h2 className="text-lg sm:text-xl font-semibold text-[#181511] dark:text-white text-center sm:text-left">
+                      Scan this code for attendance
+                    </h2>
+                    {hasQrValue && isQrDayActive && (
                       <button
                         type="button"
                         onClick={handleShareQrImage}
@@ -784,15 +800,25 @@ const SessionDetails: React.FC = () => {
                       </button>
                     )}
                   </div>
-                  {hasQrValue ? (
+                  {!isQrDayActive ? (
+                    <div className="w-full max-w-[320px] aspect-square border border-amber-200 dark:border-amber-700 rounded-lg flex flex-col items-center justify-center p-4 mx-auto bg-amber-50 dark:bg-amber-900/20 text-center">
+                      <span className="material-symbols-outlined text-4xl text-amber-500 dark:text-amber-400 mb-2">schedule</span>
+                      <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+                        QR available on the session day only (IST).
+                      </p>
+                      <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                        This QR will appear at 12:00 AM IST and close after the day ends.
+                      </p>
+                    </div>
+                  ) : hasQrValue ? (
                     <div
                       ref={qrCanvasWrapperRef}
-                      className="w-64 h-64 sm:w-80 sm:h-80 border border-gray-200 dark:border-gray-700 rounded-lg flex items-center justify-center p-4 mx-auto bg-gray-50 dark:bg-background-dark"
+                      className="w-full max-w-[280px] sm:max-w-[320px] aspect-square border border-gray-200 dark:border-gray-700 rounded-lg flex items-center justify-center p-4 mx-auto bg-gray-50 dark:bg-background-dark"
                     >
-                      <QRCodeCanvas value={qrValue} size={256} level="L" includeMargin={true} />
+                      <QRCodeCanvas value={qrValue} size={240} level="L" includeMargin={true} />
                     </div>
                   ) : showQrLoadingState ? (
-                    <div className="w-64 h-64 sm:w-80 sm:h-80 border border-gray-200 dark:border-gray-700 rounded-lg flex flex-col items-center justify-center p-4 mx-auto bg-gray-50 dark:bg-background-dark text-center">
+                    <div className="w-full max-w-[280px] sm:max-w-[320px] aspect-square border border-gray-200 dark:border-gray-700 rounded-lg flex flex-col items-center justify-center p-4 mx-auto bg-gray-50 dark:bg-background-dark text-center">
                       <span className="material-symbols-outlined text-4xl text-gray-500 dark:text-gray-400 mb-2 animate-spin">progress_activity</span>
                       <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                         Generating secure QR...
@@ -802,7 +828,7 @@ const SessionDetails: React.FC = () => {
                       </p>
                     </div>
                   ) : (
-                    <div className="w-64 h-64 sm:w-80 sm:h-80 border border-red-200 dark:border-red-800 rounded-lg flex flex-col items-center justify-center p-4 mx-auto bg-red-50 dark:bg-red-900/20 text-center">
+                    <div className="w-full max-w-[280px] sm:max-w-[320px] aspect-square border border-red-200 dark:border-red-800 rounded-lg flex flex-col items-center justify-center p-4 mx-auto bg-red-50 dark:bg-red-900/20 text-center">
                       <span className="material-symbols-outlined text-4xl text-red-500 dark:text-red-400 mb-2">error</span>
                       <p className="text-sm font-semibold text-red-700 dark:text-red-300">
                         Secure QR unavailable
@@ -812,10 +838,10 @@ const SessionDetails: React.FC = () => {
                       </p>
                     </div>
                   )}
-                  {isQrLoading && (
+                  {isQrDayActive && isQrLoading && (
                     <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">Generating secure QR token...</p>
                   )}
-                  {!isQrLoading && qrExpiresAt && (
+                  {isQrDayActive && !isQrLoading && qrExpiresAt && (
                     <div className="mt-3 space-y-1 text-xs">
                       {typeof qrSecondsRemaining === 'number' && (
                         <p
@@ -833,7 +859,7 @@ const SessionDetails: React.FC = () => {
                       </p>
                     </div>
                   )}
-                  {qrTokenError && (
+                  {isQrDayActive && qrTokenError && (
                     <p className="mt-3 text-xs text-orange-600 dark:text-orange-400">{qrTokenError}</p>
                   )}
                   <div className="mt-5 space-y-1 text-left text-xs font-light text-gray-500 dark:text-gray-400">
