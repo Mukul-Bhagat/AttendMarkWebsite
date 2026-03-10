@@ -2,7 +2,7 @@ import React from 'react';
 import { Calendar, ChevronDown } from 'lucide-react';
 
 interface AnalyticsFiltersProps {
-    classes: Array<{ _id: string; name: string }>;
+    classes: Array<{ _id: string; name: string; label?: string }>;
     selectedClass: string;
     startDate: string;
     endDate: string;
@@ -48,7 +48,7 @@ const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
                                 {classes.length === 0 && <option value="">No enrolled classes</option>}
                                 {Array.isArray(classes) && classes.map((classBatch) => (
                                     <option key={classBatch._id} value={classBatch._id}>
-                                        {classBatch.name}
+                                        {classBatch.label || classBatch.name}
                                     </option>
                                 ))}
                             </select>

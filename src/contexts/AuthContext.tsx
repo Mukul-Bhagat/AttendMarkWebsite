@@ -12,6 +12,9 @@ export interface IUser {
   rawRole?: string;
   canonicalRole?: Role;
   roleProfile?: RoleProfile;
+  organizationSettings?: {
+    staffAttendanceAccess?: boolean;
+  };
   profile: {
     firstName: string;
     lastName: string;

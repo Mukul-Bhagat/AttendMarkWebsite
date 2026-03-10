@@ -19,6 +19,9 @@ interface User {
     roleProfile?: RoleProfile;
     organizationId?: string;
     organizationName?: string;
+    organizationSettings?: {
+        staffAttendanceAccess?: boolean;
+    };
 }
 
 const resolveUserRoleContext = (userOrRole: User | string) => {
@@ -117,11 +120,14 @@ export const canAdjustAttendance = (user: User | null | undefined): boolean => {
     }
 
     const ctx = resolveUserRoleContext(user);
+    const staffEnabled =
+        (ctx.roleProfile === RoleProfile.MANAGER || ctx.roleProfile === RoleProfile.SESSION_ADMIN) &&
+        user.organizationSettings?.staffAttendanceAccess === true;
     return (
         ctx.role === Role.PLATFORM_OWNER ||
         ctx.roleProfile === RoleProfile.SUPER_ADMIN ||
         ctx.roleProfile === RoleProfile.COMPANY_ADMIN ||
-        ctx.roleProfile === RoleProfile.MANAGER
+        staffEnabled
     );
 };
 
@@ -134,11 +140,14 @@ export const canViewAuditTrail = (user: User | null | undefined): boolean => {
     }
 
     const ctx = resolveUserRoleContext(user);
+    const staffEnabled =
+        (ctx.roleProfile === RoleProfile.MANAGER || ctx.roleProfile === RoleProfile.SESSION_ADMIN) &&
+        user.organizationSettings?.staffAttendanceAccess === true;
     return (
         ctx.role === Role.PLATFORM_OWNER ||
         ctx.roleProfile === RoleProfile.SUPER_ADMIN ||
         ctx.roleProfile === RoleProfile.COMPANY_ADMIN ||
-        ctx.roleProfile === RoleProfile.MANAGER
+        staffEnabled
     );
 };
 
@@ -157,7 +166,10 @@ export const getPermissionDeniedMessage = (user: User | null | undefined): strin
     const profile = resolveUserRoleContext(user).roleProfile;
 
     if (profile === RoleProfile.SESSION_ADMIN) {
-        return 'Session Admins have read-only access for attendance adjustments.';
+        return 'Session Admins need the organization setting for attendance report access to adjust attendance.';
+    }
+    if (profile === RoleProfile.MANAGER) {
+        return 'Managers need the organization setting for attendance report access to adjust attendance.';
     }
     if (profile === RoleProfile.END_USER) {
         return 'You do not have permission to adjust attendance.';

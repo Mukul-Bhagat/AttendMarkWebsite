@@ -54,6 +54,15 @@ interface User {
     manualUpdatedAt: string | null;
     updateReason: string | null;
     modificationHistory?: ModificationHistoryEntry[];
+    markedViaLabel?: string | null;
+    markingMethod?: string | null;
+    markingChannel?: string | null;
+    sourceContext?: string | null;
+    gracePeriodMinutes?: number | null;
+    onTimeWithinGrace?: boolean;
+    leaveStatus?: 'Approved' | 'Pending' | 'Rejected' | 'None';
+    leaveType?: string | null;
+    modifiedByNames?: string[];
 }
 
 interface SessionDetails {
@@ -324,6 +333,98 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
         });
     };
 
+    const resolveTimingLabel = (user: User): string | null => {
+        if (user.status === 'LATE') {
+            return user.lateByMinutes !== null ? `Late by ${user.lateByMinutes} min` : 'Late';
+        }
+        if (user.status === 'PRESENT') {
+            return user.onTimeWithinGrace ? 'On time (Grace)' : 'On time';
+        }
+        return null;
+    };
+
+    const resolveMethodLabel = (user: User): string | null => {
+        const sourceContext = user.sourceContext || '';
+        if (['MANUAL_ADJUST', 'ISSUE_APPROVED', 'LEAVE_APPROVED'].includes(sourceContext)) {
+            return 'Manual Adjustment';
+        }
+        if (user.markingMethod === 'ONE_TAP') return 'One-Tap Check-In';
+        if (user.markingMethod === 'FACE_VERIFY') return 'Face Verify';
+        if (user.markingMethod === 'QR') return 'QR Check-In';
+        return user.markedViaLabel || null;
+    };
+
+    const resolveLeaveLabel = (user: User): string | null => {
+        if (user.status !== 'ABSENT') return null;
+        const status = user.leaveStatus || 'None';
+        const typeSuffix = user.leaveType ? ` (${user.leaveType})` : '';
+        if (status === 'Approved') return `Leave Approved${typeSuffix}`;
+        if (status === 'Pending') return `Leave Pending${typeSuffix}`;
+        if (status === 'Rejected') return `Leave Rejected${typeSuffix}`;
+        return 'No Leave Applied';
+    };
+
+    const renderInfoChips = (user: User) => {
+        const timingLabel = resolveTimingLabel(user);
+        const methodLabel = resolveMethodLabel(user);
+        const showMethod = !!methodLabel && (user.status !== 'ABSENT' || user.isManuallyModified);
+        const showVerification = user.status === 'PRESENT' || user.status === 'LATE';
+        const leaveLabel = resolveLeaveLabel(user);
+        const modifierNames = Array.isArray(user.modifiedByNames) ? user.modifiedByNames : [];
+        const modifiedByLabel = modifierNames.length > 0 ? `Modified by ${modifierNames.join(' -> ')}` : null;
+
+        return (
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+                {timingLabel && (
+                    <span
+                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${user.status === 'LATE'
+                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                            : user.onTimeWithinGrace
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300'
+                                : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                            }`}
+                    >
+                        {timingLabel}
+                    </span>
+                )}
+                {showMethod && (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-700/40 dark:text-slate-200">
+                        {methodLabel}
+                    </span>
+                )}
+                {showVerification && (
+                    <span
+                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${user.locationVerified
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                            }`}
+                    >
+                        {user.locationVerified ? 'Verified' : 'Not Verified'}
+                    </span>
+                )}
+                {leaveLabel && (
+                    <span
+                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${user.leaveStatus === 'Approved'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                            : user.leaveStatus === 'Pending'
+                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                : user.leaveStatus === 'Rejected'
+                                    ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                    : 'bg-gray-100 text-gray-700 dark:bg-gray-700/40 dark:text-gray-200'
+                            }`}
+                    >
+                        {leaveLabel}
+                    </span>
+                )}
+                {modifiedByLabel && (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                        {modifiedByLabel}
+                    </span>
+                )}
+            </div>
+        );
+    };
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 sm:p-4">
             <div className="bg-white dark:bg-slate-800 sm:rounded-lg shadow-xl w-full max-w-7xl h-full sm:max-h-[90vh] overflow-hidden flex flex-col">
@@ -502,18 +603,7 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                                                 {formatDateTime(user.checkInTime)}
                                             </td>
                                             <td className="px-4 py-4">
-                                                <div className="flex flex-col gap-1">
-                                                    {user.isLate && (
-                                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-                                                            Late by {user.lateByMinutes} min
-                                                        </span>
-                                                    )}
-                                                    {user.isManuallyModified && user.updatedBy && (
-                                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                                                            Modified by {user.updatedBy.name}
-                                                        </span>
-                                                    )}
-                                                </div>
+                                                {renderInfoChips(user)}
                                             </td>
                                             {/* ✅ NEW: Adjust Attendance Button (Permission-gated) */}
                                             {canEdit && (
@@ -567,17 +657,8 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                                         </div>
 
                                         {/* Info Badges */}
-                                        <div className="flex flex-wrap gap-2 mb-3">
-                                            {user.isLate && (
-                                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-                                                    Late by {user.lateByMinutes} min
-                                                </span>
-                                            )}
-                                            {user.isManuallyModified && user.updatedBy && (
-                                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                                                    Modified by {user.updatedBy.name}
-                                                </span>
-                                            )}
+                                        <div className="mb-3">
+                                            {renderInfoChips(user)}
                                         </div>
 
                                         {/* Check-in Time */}

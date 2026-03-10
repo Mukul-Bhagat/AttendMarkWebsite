@@ -15,6 +15,7 @@ const OrganizationSettings: React.FC = () => {
         lateAttendanceLimit: 30,
         isStrictAttendance: false,
         markLateAfterSessionStart: false,
+        staffAttendanceAccess: false,
         yearlyQuotaPL: 12,
         yearlyQuotaCL: 12,
         yearlyQuotaSL: 10,
@@ -50,6 +51,7 @@ const OrganizationSettings: React.FC = () => {
                         lateAttendanceLimit: data.lateAttendanceLimit ?? 30,
                         isStrictAttendance: data.isStrictAttendance || false,
                         markLateAfterSessionStart: data.markLateAfterSessionStart || false,
+                        staffAttendanceAccess: data.staffAttendanceAccess ?? false,
                         yearlyQuotaPL: data.yearlyQuotaPL || 12,
                         yearlyQuotaCL: data.yearlyQuotaCL || 12,
                         yearlyQuotaSL: data.yearlyQuotaSL || 10,
@@ -95,6 +97,7 @@ const OrganizationSettings: React.FC = () => {
                 lateAttendanceLimit: organizationSettings.lateAttendanceLimit,
                 isStrictAttendance: organizationSettings.isStrictAttendance,
                 markLateAfterSessionStart: organizationSettings.markLateAfterSessionStart,
+                staffAttendanceAccess: organizationSettings.staffAttendanceAccess,
                 yearlyQuotaPL: organizationSettings.yearlyQuotaPL,
                 yearlyQuotaCL: organizationSettings.yearlyQuotaCL,
                 yearlyQuotaSL: organizationSettings.yearlyQuotaSL,
@@ -347,6 +350,37 @@ const OrganizationSettings: React.FC = () => {
                                 >
                                     <span
                                         className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${organizationSettings.isStrictAttendance ? 'translate-x-6' : 'translate-x-1'
+                                            }`}
+                                    />
+                                </button>
+                            </div>
+
+                            {/* Staff Attendance Report Access Toggle */}
+                            <div className="flex items-center justify-between p-4 rounded-lg border border-border-light dark:border-border-dark">
+                                <div className="flex items-center gap-3">
+                                    <span className="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark">assessment</span>
+                                    <div>
+                                        <p className="text-sm font-medium text-text-primary-light dark:text-text-primary-dark">
+                                            Staff Attendance Report Access
+                                        </p>
+                                        <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                                            Allow Managers and Session Admins to view attendance reports, analytics, and manage attendance. Report share approvals remain admin-only.
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setOrganizationSettings({
+                                            ...organizationSettings,
+                                            staffAttendanceAccess: !organizationSettings.staffAttendanceAccess,
+                                        })
+                                    }
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${organizationSettings.staffAttendanceAccess ? 'bg-[#f04129]' : 'bg-gray-300 dark:bg-gray-600'
+                                        }`}
+                                >
+                                    <span
+                                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${organizationSettings.staffAttendanceAccess ? 'translate-x-6' : 'translate-x-1'
                                             }`}
                                     />
                                 </button>

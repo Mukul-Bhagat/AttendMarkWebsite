@@ -20,6 +20,10 @@ import { appLogger } from '../shared/logger';
 interface EnrolledClassOption {
   _id: string;
   name: string;
+  label?: string;
+  isActive?: boolean;
+  lifecycleState?: string;
+  endDate?: string;
 }
 
 const getDaysInMonth = (year: number, monthOneBased: number): number => {
@@ -65,10 +69,35 @@ const normalizeClassOptions = (input: unknown): EnrolledClassOption[] => {
     const rawId = (item as any)?._id || (item as any)?.id || (item as any)?.classId || (item as any)?.classBatchId;
     const classId = typeof rawId === 'string' ? rawId : rawId?.toString?.();
     const className = (item as any)?.name || (item as any)?.className || (item as any)?.title || 'Unnamed Class';
+    const isActive = (item as any)?.isActive;
+    const lifecycleState = (item as any)?.lifecycleState;
+    const endDate = (item as any)?.endDate || (item as any)?.endAt;
+
+    let isEnded = isActive === false;
+    const stateToken = String(lifecycleState || '').toUpperCase();
+    if (stateToken === 'ARCHIVED') {
+      isEnded = true;
+    }
+    if (!isEnded && endDate) {
+      const endKey = toISTDateString(new Date(endDate));
+      const todayKey = toISTDateString(nowIST());
+      if (endKey < todayKey) {
+        isEnded = true;
+      }
+    }
+
+    const label = isEnded ? `${className} (Ended)` : className;
 
     if (!classId || seen.has(classId)) continue;
     seen.add(classId);
-    normalized.push({ _id: classId, name: className });
+    normalized.push({
+      _id: classId,
+      name: className,
+      label,
+      isActive,
+      lifecycleState,
+      endDate: endDate?.toString?.() || (typeof endDate === 'string' ? endDate : undefined),
+    });
   }
 
   return normalized;
@@ -334,7 +363,7 @@ const MyAttendance: React.FC = () => {
 
           {activeTab === 'report' && !selectedClass && (
             <div className="bg-surface-light dark:bg-surface-dark rounded-xl shadow-sm border border-border-light dark:border-border-dark p-10 text-center text-text-secondary-light dark:text-text-secondary-dark">
-              No active classes available for attendance logs.
+              No classes available for attendance logs.
             </div>
           )}
 

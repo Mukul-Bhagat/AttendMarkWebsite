@@ -34,6 +34,8 @@ export interface IClassBatch {
   createdBy: string;
   startDate?: string;
   endDate?: string;
+  isActive?: boolean;
+  lifecycleState?: string;
   defaultTime?: string; // HH:mm format
   defaultLocation?: string;
   useOrganizationGracePeriod?: boolean;

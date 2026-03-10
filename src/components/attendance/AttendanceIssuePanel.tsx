@@ -24,7 +24,7 @@ interface AttendanceIssuePanelProps {
     isOpen: boolean;
     onClose: () => void;
     classId: string;
-    classes: Array<{ _id: string; name: string }>;
+    classes: Array<{ _id: string; name: string; label?: string }>;
     onClassChange: (classId: string) => void;
     defaultSessionDate: string;
     canReview: boolean;
@@ -461,7 +461,7 @@ const AttendanceIssuePanel: React.FC<AttendanceIssuePanelProps> = ({
                                         {classes.length === 0 && <option value="">No enrolled classes</option>}
                                         {classes.map((classBatch) => (
                                             <option key={classBatch._id} value={classBatch._id}>
-                                                {classBatch.name}
+                                                {classBatch.label || classBatch.name}
                                             </option>
                                         ))}
                                     </select>

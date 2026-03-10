@@ -14,6 +14,12 @@ const Layout: React.FC = () => {
   const { user, isSuperAdmin, isCompanyAdmin, isManager, isSessionAdmin, isPlatformOwner, isLoading } = useAuth();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const staffReportAccess = user?.organizationSettings?.staffAttendanceAccess === true;
+  const canAccessAttendanceReports =
+    isSuperAdmin ||
+    isCompanyAdmin ||
+    isPlatformOwner ||
+    ((isManager || isSessionAdmin) && staffReportAccess);
 
   // Initialize auto-backup hook (runs silently in background for COMPANY_ADMIN only)
   const { toast, closeToast } = useAutoBackup();
@@ -193,7 +199,7 @@ const Layout: React.FC = () => {
                     )}
 
                     {/* Attendance Report - for Manager, SuperAdmin, SessionAdmin, CompanyAdmin and Platform Owner */}
-                    {(isSuperAdmin || isManager || isPlatformOwner || isSessionAdmin || isCompanyAdmin) && (
+                    {canAccessAttendanceReports && (
                       <li>
                         <NavLinkItem to="/reports" icon="summarize">Attendance Report</NavLinkItem>
                       </li>
@@ -410,7 +416,7 @@ const Layout: React.FC = () => {
                       </li>
                     )}
 
-                    {(isSuperAdmin || isManager || isPlatformOwner || isSessionAdmin || isCompanyAdmin) && (
+                    {canAccessAttendanceReports && (
                       <li>
                         <NavLinkItem to="/reports" icon="summarize">Attendance Report</NavLinkItem>
                       </li>

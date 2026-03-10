@@ -57,14 +57,35 @@ const clampPercentage = (value: number): number => {
   return Math.min(100, Math.max(0, value));
 };
 
+const isClassEnded = (classBatch: IClassBatch): boolean => {
+  if (classBatch.isActive === false) return true;
+  const state = String(classBatch.lifecycleState || '').toUpperCase();
+  if (state === 'ARCHIVED') return true;
+  if (classBatch.endDate) {
+    const endKey = toISTDateString(new Date(classBatch.endDate));
+    const todayKey = toISTDateString(nowIST());
+    return endKey < todayKey;
+  }
+  return false;
+};
+
+const formatClassLabel = (classBatch: IClassBatch): string =>
+  isClassEnded(classBatch) ? `${classBatch.name} (Ended)` : classBatch.name;
+
 const AttendanceReport: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [classes, setClasses] = useState<IClassBatch[]>([]);
   const [selectedClass, setSelectedClass] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const { isSuperAdmin, isCompanyAdmin, isManager, isPlatformOwner, isSessionAdmin } = useAuth();
-  const isAdmin = isSuperAdmin || isCompanyAdmin || isManager || isPlatformOwner || isSessionAdmin;
+  const { user, isSuperAdmin, isCompanyAdmin, isManager, isPlatformOwner, isSessionAdmin } = useAuth();
+  const staffReportAccess = user?.organizationSettings?.staffAttendanceAccess === true;
+  const canViewReports =
+    isSuperAdmin ||
+    isCompanyAdmin ||
+    isPlatformOwner ||
+    ((isManager || isSessionAdmin) && staffReportAccess);
+  const canApproveShares = isSuperAdmin || isCompanyAdmin || isPlatformOwner;
 
   const [activeTab, setActiveTab] = useState<'analytics' | 'logs' | 'approval'>('analytics');
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
@@ -81,7 +102,9 @@ const AttendanceReport: React.FC = () => {
       setIsLoadingFilters(true);
       setError('');
       try {
-        const { data } = await api.get('/api/classes');
+        const { data } = await api.get('/api/classes', {
+          params: { includeInactive: true },
+        });
         const classList = Array.isArray(data) ? data : [];
         setClasses(classList);
         const preferredClass = searchParams.get('classId') || searchParams.get('classBatchId');
@@ -114,8 +137,12 @@ const AttendanceReport: React.FC = () => {
     if (classBatchId && classes.some((item) => item._id === classBatchId)) {
       setSelectedClass(classBatchId);
     }
-    if (tab === 'logs' || tab === 'analytics' || tab === 'approval') setActiveTab(tab as any);
-  }, [searchParams, classes]);
+    if (tab === 'logs' || tab === 'analytics') {
+      setActiveTab(tab as any);
+    } else if (tab === 'approval' && canApproveShares) {
+      setActiveTab('approval');
+    }
+  }, [searchParams, classes, canApproveShares]);
 
   useEffect(() => {
     const range = getCurrentMonthRange();
@@ -124,6 +151,10 @@ const AttendanceReport: React.FC = () => {
   }, []);
 
   const handleViewReport = async () => {
+    if (!canViewReports) {
+      setError('You are not authorized to view reports.');
+      return;
+    }
     if (!selectedClass || !startDate || !endDate) {
       setError('Please select a class and date range.');
       return;
@@ -193,11 +224,14 @@ const AttendanceReport: React.FC = () => {
     if (!selectedClass || !startDate || !endDate || classes.length === 0) {
       return;
     }
+    if (!canViewReports) {
+      return;
+    }
     const timer = setTimeout(() => {
       handleViewReport();
     }, 100);
     return () => clearTimeout(timer);
-  }, [selectedClass, startDate, endDate, classes.length, activeTab]);
+  }, [selectedClass, startDate, endDate, classes.length, activeTab, canViewReports]);
 
   const downloadSessionCSV = async (sessionId: string, sessionName: string, date: string) => {
     try {
@@ -333,6 +367,16 @@ const AttendanceReport: React.FC = () => {
     );
   }
 
+  if (!canViewReports && !canApproveShares) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-text-secondary-light dark:text-text-secondary-dark">
+          Access denied. Ask an admin to enable staff attendance report access in organization settings.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden">
       <div className="layout-container flex h-full grow flex-col">
@@ -370,7 +414,7 @@ const AttendanceReport: React.FC = () => {
                       disabled={isLoading}
                     >
                       <option value="">-- Select Class --</option>
-                      {classes.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
+                      {classes.map((c) => <option key={c._id} value={c._id}>{formatClassLabel(c)}</option>)}
                     </select>
                     <span className="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#8a7b60] dark:text-gray-400">unfold_more</span>
                   </div>
@@ -405,7 +449,7 @@ const AttendanceReport: React.FC = () => {
               </div>
             </div>
 
-            {(analyticsData || sessionLogs.length > 0) && (
+            {(analyticsData || sessionLogs.length > 0) && canViewReports && (
               <div className="mb-4 sm:mb-6 flex gap-1 sm:gap-2 border-b border-[#e6e2db] dark:border-slate-700">
                 <button
                   onClick={() => { setActiveTab('analytics'); if (selectedClass && startDate && endDate) handleViewReport(); }}
@@ -419,7 +463,7 @@ const AttendanceReport: React.FC = () => {
                 >
                   <span className="material-symbols-outlined align-middle mr-2">description</span> Attendance Logs
                 </button>
-                {isAdmin && (
+                {canApproveShares && (
                   <button
                     onClick={() => setActiveTab('approval')}
                     className={`px-6 py-3 text-sm font-semibold transition-colors ${activeTab === 'approval' ? 'bg-white dark:bg-slate-800 text-[#f04129] border-b-2 border-[#f04129]' : 'text-gray-500 dark:text-gray-400 hover:text-[#181511] dark:hover:text-white'}`}
@@ -430,7 +474,7 @@ const AttendanceReport: React.FC = () => {
               </div>
             )}
 
-            {!analyticsData && sessionLogs.length === 0 && isAdmin && (
+            {!analyticsData && sessionLogs.length === 0 && canApproveShares && (
               <div className="mb-4 sm:mb-6 flex gap-1 sm:gap-2 border-b border-[#e6e2db] dark:border-slate-700">
                 <button
                   onClick={() => setActiveTab('approval')}
@@ -450,7 +494,7 @@ const AttendanceReport: React.FC = () => {
               </div>
             )}
 
-            {!isLoading && activeTab === 'approval' && isAdmin && (
+            {!isLoading && activeTab === 'approval' && canApproveShares && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <ReportApprovalPanel />
               </div>

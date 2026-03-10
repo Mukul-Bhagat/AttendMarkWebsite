@@ -5,13 +5,13 @@ import { useAuth } from '../../../contexts/AuthContext';
 
 import { appLogger } from '../../../shared/logger';
 const RequestQueueNotification: React.FC = () => {
-    const { isSuperAdmin, isCompanyAdmin, isManager, isSessionAdmin, isPlatformOwner } = useAuth();
+    const { isSuperAdmin, isCompanyAdmin, isPlatformOwner } = useAuth();
     const [pendingCount, setPendingCount] = useState(0);
     const [isVisible, setIsVisible] = useState(false);
 
     // Check for pending requests if user is an admin
     const checkRequests = async () => {
-        if (!(isSuperAdmin || isCompanyAdmin || isManager || isSessionAdmin || isPlatformOwner)) {
+        if (!(isSuperAdmin || isCompanyAdmin || isPlatformOwner)) {
             return;
         }
 
@@ -37,7 +37,7 @@ const RequestQueueNotification: React.FC = () => {
         // Polling every 5 minutes to keep it updated without being too heavy
         const interval = setInterval(checkRequests, 5 * 60 * 1000);
         return () => clearInterval(interval);
-    }, [isSuperAdmin, isCompanyAdmin, isManager, isSessionAdmin, isPlatformOwner]);
+    }, [isSuperAdmin, isCompanyAdmin, isPlatformOwner]);
 
     if (!isVisible || pendingCount === 0) return null;
 
