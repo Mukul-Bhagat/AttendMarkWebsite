@@ -62,6 +62,8 @@ export interface IClassBatch {
       };
     };
     frequency: 'OneTime' | 'Daily' | 'Weekly' | 'Monthly' | 'Random';
+    attendanceAccess?: IAttendanceAccess;
+    availableMethods?: AttendanceMethod[];
   };
   nextSession?: {
     _id: string;
@@ -81,6 +83,8 @@ export interface IClassBatch {
       };
     };
     frequency: 'OneTime' | 'Daily' | 'Weekly' | 'Monthly' | 'Random';
+    attendanceAccess?: IAttendanceAccess;
+    availableMethods?: AttendanceMethod[];
   } | null;
 }
 
@@ -173,5 +177,57 @@ export interface IMyAttendanceRecord {
   } | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface IAttendanceAttemptLog {
+  id: string;
+  attemptedAt: string;
+  status: 'MARKED' | 'ALREADY_MARKED' | 'FAILED' | 'PENDING';
+  reason?: string | null;
+  msg?: string | null;
+  markingMethod?: AttendanceMethod | null;
+  markingChannel?: AttendanceChannel | null;
+  sourceContext?: AttendanceSourceContext | null;
+  source?: string | null;
+  sessionInstanceId?: string | null;
+  classBatchId?: string | null;
+  sessionDateKey?: string | null;
+  userId?: string | null;
+  userName?: string | null;
+  userEmail?: string | null;
+  validationTimeline?: Array<{
+    key: string;
+    label: string;
+    status: 'passed' | 'failed' | 'skipped' | 'pending';
+    detail: string;
+    at: string;
+  }>;
+  validationSummary?: {
+    resultStatus?: string;
+    failedStep?: string | null;
+  } | null;
+  securityChecks?: {
+    deviceVerified?: boolean;
+    locationVerified?: boolean;
+    hardwareBackedKeyVerified?: boolean;
+    qrVerified?: boolean;
+    faceVerified?: boolean;
+  } | null;
+  geo?: {
+    required?: boolean;
+    verified?: boolean;
+    distanceMeters?: number;
+    radiusMeters?: number;
+  } | null;
+  device?: {
+    id?: string;
+    userAgent?: string;
+  } | null;
+  httpStatusCode?: number;
+  requestMeta?: {
+    requestId?: string;
+    ipAddress?: string;
+    userAgent?: string;
+  } | null;
 }
 

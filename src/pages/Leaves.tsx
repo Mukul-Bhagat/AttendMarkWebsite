@@ -141,12 +141,6 @@ const normalizeDateOnly = (value: string): string => {
     : value;
 };
 
-const formatFileSize = (bytes: number) => {
-  if (!Number.isFinite(bytes)) return '';
-  const sizeMB = bytes / (1024 * 1024);
-  return `${sizeMB.toFixed(2)} MB`;
-};
-
 const Leaves: React.FC = () => {
   const { user, isSuperAdmin, isCompanyAdmin, isManager, isSessionAdmin } = useAuth();
   const [leaveRequests, setLeaveRequests] = useState<ILeaveRequest[]>([]);
@@ -206,11 +200,8 @@ const Leaves: React.FC = () => {
   });
   const [isSendToDropdownOpen, setIsSendToDropdownOpen] = useState(false);
   const [selectedDates, setSelectedDates] = useState<Date[]>([]);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   // Helper to normalize leave data
   const normalizeLeaves = (data: any): ILeaveRequest[] => {
@@ -471,15 +462,6 @@ const Leaves: React.FC = () => {
         : 'Please select at least one recipient other than yourself';
     }
 
-    if (selectedFile) {
-      const isPdf = selectedFile.type === 'application/pdf' || selectedFile.name.toLowerCase().endsWith('.pdf');
-      if (!isPdf) {
-        errors.attachment = 'Only PDF files are allowed';
-      } else if (selectedFile.size > 5 * 1024 * 1024) {
-        errors.attachment = 'PDF must be smaller than 5MB';
-      }
-    }
-
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -494,29 +476,18 @@ const Leaves: React.FC = () => {
 
     try {
       setIsSubmitting(true);
-      if (selectedFile) {
-        setUploadProgress(0);
-      } else {
-        setUploadProgress(null);
-      }
 
       // Convert selected dates to ISO strings (YYYY-MM-DD format)
       const datesArray = selectedDates
         .sort((a, b) => a.getTime() - b.getTime())
         .map(date => toISTDateOnly(date));
 
-      // Create FormData for file upload
-      const formDataToSend = new FormData();
-      formDataToSend.append('leaveType', formData.leaveType);
-      formDataToSend.append('dates', JSON.stringify(datesArray));
-      formDataToSend.append('reason', formData.reason);
       const sanitizedRecipients = (formData.sendTo || []).filter((recipientId) =>
         canSelfReview || recipientId !== currentUserId,
       );
 
-      // Append sendTo as array
       if (sanitizedRecipients.length > 0) {
-        formDataToSend.append('sendTo', JSON.stringify(sanitizedRecipients));
+        // ok
       } else {
         setFormErrors({
           sendTo: canSelfReview
@@ -524,24 +495,14 @@ const Leaves: React.FC = () => {
             : 'Please select at least one recipient other than yourself',
         });
         setIsSubmitting(false);
-        setUploadProgress(null);
         return;
       }
 
-      // Append file if selected
-      if (selectedFile) {
-        formDataToSend.append('attachment', selectedFile);
-      }
-
-      await api.post('/api/leaves', formDataToSend, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        onUploadProgress: (progressEvent) => {
-          if (!progressEvent.total) return;
-          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          setUploadProgress(percent);
-        },
+      await api.post('/api/leaves', {
+        leaveType: formData.leaveType,
+        dates: datesArray,
+        reason: formData.reason,
+        sendTo: sanitizedRecipients,
       });
 
       // Refresh data
@@ -558,7 +519,6 @@ const Leaves: React.FC = () => {
         sendTo: [],
       });
       setSelectedDates([]);
-      clearSelectedFile();
       setFormErrors({});
       setIsModalOpen(false);
     } catch (err: any) {
@@ -568,7 +528,6 @@ const Leaves: React.FC = () => {
       setToast({ message: errorMsg, type: 'error' });
     } finally {
       setIsSubmitting(false);
-      setUploadProgress(null);
     }
   };
 
@@ -619,21 +578,6 @@ const Leaves: React.FC = () => {
       ...prev,
       sendTo: (prev.sendTo || []).filter(id => id !== userId)
     }));
-  };
-
-  const clearSelectedFile = (options: { keepError?: boolean } = {}) => {
-    setSelectedFile(null);
-    setUploadProgress(null);
-    if (!options.keepError) {
-      setFormErrors(prev => {
-        const next = { ...prev };
-        delete next.attachment;
-        return next;
-      });
-    }
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
   };
 
   // Format date for display
@@ -1746,91 +1690,6 @@ const Leaves: React.FC = () => {
                     {formErrors.reason && (
                       <p className="text-red-500 text-xs mt-1">{formErrors.reason}</p>
                     )}
-                  </div>
-
-                  {/* File Upload */}
-                  <div>
-                    <label className="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-1">
-                      Attach Document (Optional)
-                    </label>
-                    <div className="space-y-2">
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="application/pdf"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0] || null;
-                          if (!file) {
-                            clearSelectedFile();
-                            return;
-                          }
-                          const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-                          if (!isPdf) {
-                            setFormErrors(prev => ({ ...prev, attachment: 'Only PDF files are allowed' }));
-                            setToast({ message: 'Only PDF files are allowed', type: 'error' });
-                            clearSelectedFile({ keepError: true });
-                            return;
-                          }
-                          if (file.size > 5 * 1024 * 1024) {
-                            setFormErrors(prev => ({ ...prev, attachment: 'PDF must be smaller than 5MB' }));
-                            setToast({ message: 'File must be less than 5MB', type: 'error' });
-                            clearSelectedFile({ keepError: true });
-                            return;
-                          }
-                          setFormErrors(prev => {
-                            const next = { ...prev };
-                            delete next.attachment;
-                            return next;
-                          });
-                          setUploadProgress(null);
-                          setSelectedFile(file);
-                        }}
-                        className="w-full px-3 py-1.5 h-9 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#f04129] file:text-white hover:file:bg-[#d63a25] file:cursor-pointer text-sm"
-                      />
-                      {selectedFile ? (
-                        <div className="flex items-center justify-between gap-3 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-background-dark px-3 py-2">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <span className="material-symbols-outlined text-red-500 text-xl">picture_as_pdf</span>
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-text-primary-light dark:text-text-primary-dark truncate">
-                                {selectedFile.name}
-                              </p>
-                              <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
-                                File size: {formatFileSize(selectedFile.size)}
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => clearSelectedFile()}
-                            className="flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            Remove
-                          </button>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
-                          PDF only (Max 5MB)
-                        </p>
-                      )}
-                      {uploadProgress !== null && isSubmitting && (
-                        <div className="space-y-1">
-                          <div className="h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-                            <div
-                              className="h-1.5 bg-[#f04129] transition-all duration-200"
-                              style={{ width: `${uploadProgress}%` }}
-                            />
-                          </div>
-                          <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
-                            Uploading... {uploadProgress}%
-                          </p>
-                        </div>
-                      )}
-                      {formErrors.attachment && (
-                        <p className="text-red-500 text-xs">{formErrors.attachment}</p>
-                      )}
-                    </div>
                   </div>
 
                   {/* Send To (Required - Multi-Select) */}

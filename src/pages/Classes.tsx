@@ -5,6 +5,11 @@ import { IClassBatch } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { Eye, Calendar, Users, Edit, Trash2 } from 'lucide-react';
 import { nowIST, formatIST, sessionTimeToIST, istDayEnd } from '../utils/time';
+import {
+  getAttendanceMethodLabel,
+  getAvailableAttendanceMethods,
+  normalizeAttendanceAccess,
+} from '../utils/attendanceAccess';
 import SkeletonCard from '../components/SkeletonCard';
 
 import { appLogger } from '../shared/logger';
@@ -140,6 +145,15 @@ const Classes: React.FC = () => {
     });
   };
 
+  const getDisplayMethods = (session?: IClassBatch['firstSession'] | null) => {
+    if (!session) return [];
+    if (Array.isArray(session.availableMethods) && session.availableMethods.length > 0) {
+      return session.availableMethods;
+    }
+    const normalizedAccess = normalizeAttendanceAccess(session.attendanceAccess);
+    return getAvailableAttendanceMethods(normalizedAccess, 'WEB');
+  };
+
   if (isLoading) {
     return (
       <div className="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden bg-background-light dark:bg-background-dark">
@@ -272,6 +286,7 @@ const Classes: React.FC = () => {
                   const firstSession = classBatch.firstSession;
                   const nextSession = classBatch.nextSession || null;
                   const displaySession = nextSession || firstSession;
+                  const displayMethods = getDisplayMethods(displaySession);
                   const isPast = isClassPast(classBatch);
                   const classStartDate = classBatch.startDate || firstSession?.startDate;
                   const classEndDate = classBatch.endDate || classBatch.latestSessionDate || firstSession?.endDate;
@@ -336,6 +351,18 @@ const Classes: React.FC = () => {
                             <span className="whitespace-nowrap rounded-full bg-slate-100 dark:bg-slate-700 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">
                               {formatFrequency(firstSession.frequency)}
                             </span>
+                          </div>
+                        )}
+                        {displayMethods.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            {displayMethods.map((method) => (
+                              <span
+                                key={`${classBatch._id}-${method}`}
+                                className="whitespace-nowrap rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                              >
+                                {getAttendanceMethodLabel(method)}
+                              </span>
+                            ))}
                           </div>
                         )}
                         <div className="flex items-center text-sm">

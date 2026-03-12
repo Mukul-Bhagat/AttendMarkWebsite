@@ -1,15 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../api';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
-import { ISession } from '../types';
+import { IAttendanceAttemptLog, ISession } from '../types';
 import { QRCodeCanvas } from 'qrcode.react';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { formatIST, nowIST, toISTDateString } from '../utils/time';
 import ModeBadge from '../components/ModeBadge';
 import { normalizeSessionMode } from '../utils/sessionMode';
+import {
+  getAttendanceMethodLabel,
+  getAvailableAttendanceMethods,
+  normalizeAttendanceAccess,
+} from '../utils/attendanceAccess';
 import SkeletonCard from '../components/SkeletonCard';
 import AttendanceHub from './AttendanceHub';
+import { getSessionAttendanceAttempts } from '../api/analyticsApi';
 
 import { appLogger } from '../shared/logger';
 
@@ -89,6 +95,10 @@ const SessionDetails: React.FC = () => {
   const [isQrLoading, setIsQrLoading] = useState(false);
   const [isSharingQr, setIsSharingQr] = useState(false);
   const [qrSecondsRemaining, setQrSecondsRemaining] = useState<number | null>(null);
+  const [attemptLogs, setAttemptLogs] = useState<IAttendanceAttemptLog[]>([]);
+  const [attemptLogLoading, setAttemptLogLoading] = useState(false);
+  const [attemptLogError, setAttemptLogError] = useState('');
+  const [attemptStatusFilter, setAttemptStatusFilter] = useState<'ALL' | 'MARKED' | 'ALREADY_MARKED' | 'FAILED'>('ALL');
   const qrCanvasWrapperRef = useRef<HTMLDivElement | null>(null);
   const qrTokenRef = useRef('');
   const qrExpiresAtRef = useRef<string | null>(null);
@@ -189,12 +199,64 @@ const SessionDetails: React.FC = () => {
     fetchSession();
   }, [id, isEndUser, location.search]);
 
+  useEffect(() => {
+    if (!session || !canManageSession()) {
+      setAttemptLogs([]);
+      setAttemptLogError('');
+      return;
+    }
+
+    let isMounted = true;
+    const fetchAttemptLogs = async () => {
+      setAttemptLogLoading(true);
+      setAttemptLogError('');
+      try {
+        const query = new URLSearchParams(location.search);
+        const dateParam = query.get('date') || undefined;
+        const response = await getSessionAttendanceAttempts(session._id, {
+          date: dateParam,
+          status: attemptStatusFilter === 'ALL' ? undefined : attemptStatusFilter,
+          page: 1,
+          limit: 20,
+        });
+        if (!isMounted) return;
+        setAttemptLogs(Array.isArray(response.attempts) ? response.attempts : []);
+      } catch (err: any) {
+        if (!isMounted) return;
+        setAttemptLogError(err?.response?.data?.msg || 'Failed to load attendance attempt logs.');
+      } finally {
+        if (isMounted) {
+          setAttemptLogLoading(false);
+        }
+      }
+    };
+
+    fetchAttemptLogs();
+    return () => {
+      isMounted = false;
+    };
+  }, [session?._id, location.search, attemptStatusFilter, isSuperAdmin, isSessionAdmin, user?.id]);
+
   const query = new URLSearchParams(location.search);
   const queryDate = query.get('date');
+  const normalizedAttendanceAccess = normalizeAttendanceAccess(session?.attendanceAccess);
+  const resolvedMethods =
+    session?.availableMethods && session.availableMethods.length > 0
+      ? session.availableMethods
+      : getAvailableAttendanceMethods(normalizedAttendanceAccess, 'WEB');
+  const hasQrMethodForWebAdmin =
+    resolvedMethods.includes('QR') ||
+    (
+      normalizedAttendanceAccess.qr.enabled &&
+      (
+        normalizedAttendanceAccess.qr.channels.includes('WEB') ||
+        normalizedAttendanceAccess.qr.channels.includes('ADMIN')
+      )
+    );
   const qrDateSource = queryDate || session?.occurrenceDate || session?.startDate;
   const qrDateKey = qrDateSource ? toISTDateString(qrDateSource) : null;
   const todayKey = toISTDateString(nowIST());
-  const isQrDayActive = Boolean(qrDateKey && qrDateKey === todayKey);
+  const isQrDayActive = Boolean(qrDateKey && qrDateKey === todayKey && hasQrMethodForWebAdmin);
 
   useEffect(() => {
     qrTokenRef.current = qrToken;
@@ -654,6 +716,36 @@ const SessionDetails: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Attendance Methods */}
+                <div className="flex items-start gap-4 px-0 min-h-14">
+                  <div className="flex items-center gap-4">
+                    <div className="text-[#181511] dark:text-gray-200 flex items-center justify-center rounded-lg bg-[#f5f3f0] dark:bg-background-dark/50 shrink-0 size-10 mt-1">
+                      <span className="material-symbols-outlined">verified_user</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col flex-1">
+                    <div className="flex justify-between w-full">
+                      <p className="text-[#181511] dark:text-gray-200 text-base font-medium leading-normal truncate">Attendance Methods</p>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {resolvedMethods.length > 0 ? (
+                        resolvedMethods.map((method) => (
+                          <span
+                            key={`session-method-${method}`}
+                            className="whitespace-nowrap rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                          >
+                            {getAttendanceMethodLabel(method)}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                          No attendance methods are enabled for web.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Date */}
                 <div className="flex items-center gap-4 px-0 min-h-14 justify-between">
                   <div className="flex items-center gap-4">
@@ -760,6 +852,16 @@ const SessionDetails: React.FC = () => {
                     </p>
                   )}
                 </div>
+              </div>
+            ) : !hasQrMethodForWebAdmin ? (
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 sm:p-8 flex flex-col items-center justify-center text-center min-h-[400px]">
+                <span className="material-symbols-outlined text-5xl text-slate-500 dark:text-slate-400 mb-3">qr_code_off</span>
+                <h2 className="text-xl font-semibold text-[#181511] dark:text-white">
+                  QR Check-In Disabled
+                </h2>
+                <p className="mt-3 text-sm text-gray-600 dark:text-gray-300 max-w-md">
+                  This session does not allow QR attendance on web/admin channels. Use the enabled attendance method shown in the details.
+                </p>
               </div>
             ) : (
               <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 sm:p-8 flex flex-col items-center justify-between text-center relative">
@@ -883,6 +985,80 @@ const SessionDetails: React.FC = () => {
               </div>
             )}
           </div>
+
+          {canManageSession() && (
+            <section className="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-bold text-[#181511] dark:text-white">Attendance Attempts</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Latest successful and failed attendance attempts for this session.
+                  </p>
+                </div>
+                <select
+                  value={attemptStatusFilter}
+                  onChange={(event) => setAttemptStatusFilter(event.target.value as any)}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-[#181511] dark:border-slate-600 dark:bg-slate-900 dark:text-gray-200"
+                >
+                  <option value="ALL">All statuses</option>
+                  <option value="FAILED">Failed</option>
+                  <option value="MARKED">Marked</option>
+                  <option value="ALREADY_MARKED">Already Marked</option>
+                </select>
+              </div>
+
+              {attemptLogLoading ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">Loading attempt logs...</p>
+              ) : attemptLogError ? (
+                <p className="text-sm text-red-600 dark:text-red-400">{attemptLogError}</p>
+              ) : attemptLogs.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">No attempts found for the selected filter.</p>
+              ) : (
+                <div className="space-y-3">
+                  {attemptLogs.map((attempt) => (
+                    <details
+                      key={attempt.id}
+                      className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-900/40"
+                    >
+                      <summary className="cursor-pointer list-none">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            attempt.status === 'FAILED'
+                              ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                              : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                          }`}>
+                            {attempt.status}
+                          </span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {new Date(attempt.attemptedAt).toLocaleString()}
+                          </span>
+                          <span className="text-xs text-gray-600 dark:text-gray-300">
+                            {attempt.userName || attempt.userEmail || attempt.userId || 'Unknown user'}
+                          </span>
+                          <span className="text-xs text-gray-600 dark:text-gray-300">
+                            {(attempt.markingMethod || 'UNKNOWN').replace('_', ' ')} / {attempt.markingChannel || 'N/A'}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm text-[#181511] dark:text-gray-200">
+                          {attempt.msg || attempt.reason || 'No message'}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Attempt Log ID: {attempt.id}</p>
+                      </summary>
+                      {Array.isArray(attempt.validationTimeline) && attempt.validationTimeline.length > 0 && (
+                        <ul className="mt-3 space-y-1 text-xs text-gray-600 dark:text-gray-300">
+                          {attempt.validationTimeline.map((step) => (
+                            <li key={`${attempt.id}-${step.key}-${step.at}`}>
+                              <span className="font-semibold">{step.label}</span>: {step.status} - {step.detail}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </details>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
           {/* Delete Confirmation Modal */}
           {showDeleteModal && (

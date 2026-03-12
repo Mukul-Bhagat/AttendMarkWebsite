@@ -27,12 +27,19 @@ if (import.meta.env.PROD) {
 // For development: Uses Vite proxy (all /api/* requests are proxied to backend)
 // For production: VITE_API_URL should be set in environment variables
 const api = axios.create({
-  baseURL: API_BASE_URL, withCredentials: true,
+  baseURL: API_BASE_URL,
+  withCredentials: true,
+  headers: {
+    'x-attendance-channel': 'WEB',
+  },
 });
 
 const csrfClient = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
+  headers: {
+    'x-attendance-channel': 'WEB',
+  },
 });
 
 let csrfToken: string | null = null;

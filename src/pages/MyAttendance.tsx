@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { BarChart3, CircleAlert, Table as TableIcon } from 'lucide-react';
 import { nowIST, toISTDateString } from '../utils/time';
-import { getMyDashboard, getMySessions } from '../api/analyticsApi';
+import { getMyAttendanceAttempts, getMyDashboard, getMySessions } from '../api/analyticsApi';
 import AnalyticsFilters from '../components/attendance/AnalyticsFilters';
 import AnalyticsTab from '../components/attendance/AnalyticsTab';
 import AttendanceReportTab from '../components/attendance/reporting/AttendanceReportTab';
@@ -14,6 +14,7 @@ import { AutomationIndicator } from '../components/attendance/reporting/Automati
 import { getEmailAutomationConfigs, toggleEmailAutomation, deleteEmailAutomation } from '../api/reportingApi';
 import toast from 'react-hot-toast';
 import AttendanceIssuePanel from '../components/attendance/AttendanceIssuePanel';
+import { IAttendanceAttemptLog } from '../types';
 
 import { appLogger } from '../shared/logger';
 
@@ -139,6 +140,10 @@ const MyAttendance: React.FC = () => {
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [isIssuePanelOpen, setIsIssuePanelOpen] = useState(false);
+  const [attemptLogs, setAttemptLogs] = useState<IAttendanceAttemptLog[]>([]);
+  const [attemptLogsLoading, setAttemptLogsLoading] = useState(false);
+  const [attemptLogsError, setAttemptLogsError] = useState('');
+  const [attemptStatusFilter, setAttemptStatusFilter] = useState<'ALL' | 'MARKED' | 'ALREADY_MARKED' | 'FAILED'>('ALL');
 
   const { user, isSuperAdmin, isCompanyAdmin, isManager, isPlatformOwner, isSessionAdmin } = useAuth();
   const isAdmin = isSuperAdmin || isCompanyAdmin || isManager || isPlatformOwner || isSessionAdmin;
@@ -212,6 +217,35 @@ const MyAttendance: React.FC = () => {
     }
   }, []);
 
+  const loadAttemptLogs = useCallback(async () => {
+    if (!selectedClass || !analyticsStartDate || !analyticsEndDate) {
+      setAttemptLogs([]);
+      setAttemptLogsError('');
+      return;
+    }
+
+    setAttemptLogsLoading(true);
+    setAttemptLogsError('');
+    try {
+      const response = await getMyAttendanceAttempts({
+        classId: selectedClass,
+        userId,
+        startDate: analyticsStartDate,
+        endDate: analyticsEndDate,
+        status: attemptStatusFilter === 'ALL' ? undefined : attemptStatusFilter,
+        limit: 50,
+        page: 1,
+      });
+      setAttemptLogs(Array.isArray(response.attempts) ? response.attempts : []);
+    } catch (err: any) {
+      appLogger.error('Error fetching attendance attempts:', err);
+      setAttemptLogs([]);
+      setAttemptLogsError(err?.response?.data?.msg || 'Failed to load attendance attempts.');
+    } finally {
+      setAttemptLogsLoading(false);
+    }
+  }, [selectedClass, analyticsStartDate, analyticsEndDate, userId, attemptStatusFilter]);
+
   useEffect(() => {
     fetchClasses();
 
@@ -235,6 +269,10 @@ const MyAttendance: React.FC = () => {
   useEffect(() => {
     fetchAutomationConfigs();
   }, [fetchAutomationConfigs]);
+
+  useEffect(() => {
+    loadAttemptLogs();
+  }, [loadAttemptLogs]);
 
   useEffect(() => {
     if (classes.length === 0) {
@@ -272,6 +310,18 @@ const MyAttendance: React.FC = () => {
     }
   };
 
+  const statusPillClass = (status: IAttendanceAttemptLog['status']) => {
+    if (status === 'MARKED') return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+    if (status === 'ALREADY_MARKED') return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
+    if (status === 'FAILED') return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+    return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
+  };
+
+  const methodLabel = (attempt: IAttendanceAttemptLog) => {
+    const method = attempt.markingMethod ? attempt.markingMethod.replace('_', ' ') : 'UNKNOWN';
+    return `${method} / ${attempt.markingChannel || 'N/A'}`;
+  };
+
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -305,6 +355,20 @@ const MyAttendance: React.FC = () => {
           </div>
         </div>
 
+        {activeTab !== 'approval' && (
+          <AnalyticsFilters
+            classes={classes}
+            selectedClass={selectedClass}
+            onClassChange={setSelectedClass}
+            startDate={analyticsStartDate}
+            onStartDateChange={setAnalyticsStartDate}
+            endDate={analyticsEndDate}
+            onEndDateChange={setAnalyticsEndDate}
+            onViewReport={handleRefreshDashboard}
+            loading={analyticsLoading}
+          />
+        )}
+
         <div className="flex flex-wrap items-center p-1.5 bg-border-light/50 dark:bg-border-dark/50 rounded-2xl w-fit mb-8 gap-1">
           <button
             onClick={() => setActiveTab('analytics')}
@@ -333,19 +397,7 @@ const MyAttendance: React.FC = () => {
 
         <div className="mt-8">
           {activeTab === 'analytics' && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <AnalyticsFilters
-                classes={classes}
-                selectedClass={selectedClass}
-                onClassChange={setSelectedClass}
-                startDate={analyticsStartDate}
-                onStartDateChange={setAnalyticsStartDate}
-                endDate={analyticsEndDate}
-                onEndDateChange={setAnalyticsEndDate}
-                onViewReport={handleRefreshDashboard}
-                loading={analyticsLoading}
-                hideClassFilter={classes.length <= 1}
-              />
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <AnalyticsTab analyticsData={analyticsData} loading={analyticsLoading} />
             </div>
           )}
@@ -358,6 +410,84 @@ const MyAttendance: React.FC = () => {
                 startDate={analyticsStartDate}
                 endDate={analyticsEndDate}
               />
+              <div className="mt-6 rounded-2xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-lg font-black text-text-primary-light dark:text-text-primary-dark">
+                      Attendance Attempts
+                    </h3>
+                    <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                      Every successful and failed marking attempt for this class and date range.
+                    </p>
+                  </div>
+                  <select
+                    value={attemptStatusFilter}
+                    onChange={(event) => setAttemptStatusFilter(event.target.value as typeof attemptStatusFilter)}
+                    className="rounded-xl border border-border-light bg-background-light px-3 py-2 text-sm font-semibold text-text-primary-light focus:border-primary focus:outline-none dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark"
+                  >
+                    <option value="ALL">All statuses</option>
+                    <option value="MARKED">Marked</option>
+                    <option value="ALREADY_MARKED">Already Marked</option>
+                    <option value="FAILED">Failed</option>
+                  </select>
+                </div>
+
+                {attemptLogsLoading ? (
+                  <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark">Loading attendance attempts...</p>
+                ) : attemptLogsError ? (
+                  <p className="text-sm font-semibold text-red-600 dark:text-red-400">{attemptLogsError}</p>
+                ) : attemptLogs.length === 0 ? (
+                  <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                    No attempts found for the selected filters.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {attemptLogs.map((attempt) => (
+                      <details
+                        key={attempt.id}
+                        className="rounded-xl border border-border-light bg-background-light p-4 dark:border-border-dark dark:bg-background-dark"
+                      >
+                        <summary className="cursor-pointer list-none">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="mb-1 flex flex-wrap items-center gap-2">
+                                <span className={`rounded-full px-2.5 py-1 text-xs font-black ${statusPillClass(attempt.status)}`}>
+                                  {attempt.status}
+                                </span>
+                                <span className="text-xs font-semibold text-text-secondary-light dark:text-text-secondary-dark">
+                                  {new Date(attempt.attemptedAt).toLocaleString()}
+                                </span>
+                              </div>
+                              <p className="truncate text-sm font-bold text-text-primary-light dark:text-text-primary-dark">
+                                {attempt.msg || attempt.reason || 'No message'}
+                              </p>
+                              <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                                {methodLabel(attempt)}
+                              </p>
+                            </div>
+                            <span className="text-xs font-mono text-text-secondary-light dark:text-text-secondary-dark">
+                              {attempt.id}
+                            </span>
+                          </div>
+                        </summary>
+
+                        {Array.isArray(attempt.validationTimeline) && attempt.validationTimeline.length > 0 && (
+                          <ul className="mt-3 space-y-2 border-t border-border-light pt-3 dark:border-border-dark">
+                            {attempt.validationTimeline.map((step, index) => (
+                              <li key={`${attempt.id}-${step.key}-${index}`} className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                                <span className="font-semibold text-text-primary-light dark:text-text-primary-dark">
+                                  {step.label}
+                                </span>
+                                {`: ${step.detail}`}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </details>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

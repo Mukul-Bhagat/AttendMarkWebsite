@@ -96,8 +96,8 @@ describe('SessionOverride', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /Save Override/i }));
 
-    const cancelButton = await screen.findByRole('button', { name: /Cancel/i });
-    fireEvent.click(cancelButton);
+    const cancelButtons = await screen.findAllByRole('button', { name: /Cancel/i });
+    fireEvent.click(cancelButtons[cancelButtons.length - 1]);
 
     expect((api.patch as any).mock.calls.length).toBe(0);
   });

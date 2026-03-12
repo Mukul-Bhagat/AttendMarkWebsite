@@ -51,6 +51,8 @@ const SCAN_VALIDATION_STEP_INDEX: Record<ScanValidationTimelineStep['key'], numb
 
 const RESULT_REVEAL_DELAY_MS = 700;
 const RESULT_FINAL_HOLD_MS = 1800;
+const withAttemptLogId = (text: string, payload?: { attemptLogId?: string }) =>
+  payload?.attemptLogId ? `${text} (Attempt Log: ${payload.attemptLogId})` : text;
 
 const ScanQR: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -740,28 +742,28 @@ const ScanQR: React.FC = () => {
     if (data.reason === 'OUT_OF_RANGE') {
       const dist = data.distanceMeters || 0;
       const distanceText = dist >= 1000 ? `${(dist / 1000).toFixed(1)} km` : `${dist} meters`;
-      setMessage(`You are ${distanceText} away from the session location.`);
+      setMessage(withAttemptLogId(`You are ${distanceText} away from the session location.`, data));
     } else if (data.reason === 'DEVICE_MISMATCH' || data.reason === 'BROWSER_MISMATCH') {
-      setMessage('Device Mismatch: Attendance must be marked from the same device/browser used earlier.');
+      setMessage(withAttemptLogId('Device Mismatch: Attendance must be marked from the same device/browser used earlier.', data));
     } else if (data.reason === 'INVALID_QR') {
-      setMessage('Invalid QR Code. Please scan the correct code.');
+      setMessage(withAttemptLogId('Invalid QR Code. Please scan the correct code.', data));
     } else if (data.reason === 'ORG_MISMATCH') {
-      setMessage('This QR code does not belong to your organization.');
+      setMessage(withAttemptLogId('This QR code does not belong to your organization.', data));
     } else if (data.reason === 'ORG_FORBIDDEN') {
-      setMessage('You do not have access to the organization that issued this QR code.');
+      setMessage(withAttemptLogId('You do not have access to the organization that issued this QR code.', data));
     } else if (data.reason === 'SECURE_QR_REQUIRED') {
-      setMessage('Secure QR required. Please scan the latest QR displayed by the instructor.');
+      setMessage(withAttemptLogId('Secure QR required. Please scan the latest QR displayed by the instructor.', data));
     } else if (data.reason === 'INVALID_QR_CLASS') {
-      setMessage('This QR code does not match the session class. Please scan the latest valid QR.');
+      setMessage(withAttemptLogId('This QR code does not match the session class. Please scan the latest valid QR.', data));
     } else if (data.reason === 'QR_VERSION_EXPIRED') {
-      setMessage('This QR code version has expired. Please scan the latest QR displayed by the instructor.');
+      setMessage(withAttemptLogId('This QR code version has expired. Please scan the latest QR displayed by the instructor.', data));
     } else if (data.reason === 'USER_NOT_ASSIGNED') {
-      setMessage('Access Denied: You are not assigned to this session.');
+      setMessage(withAttemptLogId('Access Denied: You are not assigned to this session.', data));
     } else if (data.type === 'TOO_EARLY' || data.reason === 'ATTENDANCE_WINDOW_CLOSED') {
-      setMessage(data.msg || 'Attendance is not open yet.');
+      setMessage(withAttemptLogId(data.msg || 'Attendance is not open yet.', data));
     } else {
       const debugInfo = data.debug ? `\n[Debug: ${data.debug}]` : '';
-      setMessage((data.msg || 'Attendance Failed') + debugInfo);
+      setMessage(withAttemptLogId((data.msg || 'Attendance Failed') + debugInfo, data));
     }
   };
 
@@ -828,13 +830,14 @@ const ScanQR: React.FC = () => {
       const orgLine = sessionInfo?.organizationName ? `\nOrganization: ${sessionInfo.organizationName}` : '';
       const statusLine = sessionInfo?.attendanceStatus ? `\nStatus: ${sessionInfo.attendanceStatus}${sessionInfo.attendanceStatus === 'Late' && sessionInfo.lateByMinutes ? ` (${sessionInfo.lateByMinutes}m late)` : ''}` : '';
       const checkInLine = sessionInfo?.checkInTime ? `\nTime: ${new Date(sessionInfo.checkInTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` : '';
+      const attemptLine = sessionInfo?.attemptLogId ? `\nAttempt Log: ${sessionInfo.attemptLogId}` : '';
       const confirmationLine = sessionInfo?.confirmationMessage || '';
 
       return (
         <FullScreenAnimation
           src="/animations/success.lottie"
           title={isAlreadyMarked ? 'Attendance Already Marked' : 'Attendance Marked Successfully'}
-          description={`${confirmationLine}\nClass: ${sessionInfo?.className || 'Class'}\nSession: ${sessionInfo?.name || sessionInfo?.sessionName || 'Session'}\nDate: ${sessionDate}${orgLine}${statusLine}${checkInLine}${subText}`}
+          description={`${confirmationLine}\nClass: ${sessionInfo?.className || 'Class'}\nSession: ${sessionInfo?.name || sessionInfo?.sessionName || 'Session'}\nDate: ${sessionDate}${orgLine}${statusLine}${checkInLine}${attemptLine}${subText}`}
           timeline={validationTimeline}
           revealDelayMs={RESULT_REVEAL_DELAY_MS}
           finalHoldMs={RESULT_FINAL_HOLD_MS}

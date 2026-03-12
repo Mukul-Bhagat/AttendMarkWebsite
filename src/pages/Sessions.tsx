@@ -10,6 +10,11 @@ import Toast from '../components/Toast';
 import { getSessionStatus, getSessionStartTimeIST, nowIST } from '../utils/sessionStatusUtils';
 import { isSameISTDay, toISTDateString } from '../utils/time';
 import { normalizeSessionMode } from '../utils/sessionMode';
+import {
+  getAttendanceMethodLabel,
+  getAvailableAttendanceMethods,
+  normalizeAttendanceAccess,
+} from '../utils/attendanceAccess';
 import SkeletonCard from '../components/SkeletonCard';
 
 import { appLogger } from '../shared/logger';
@@ -159,6 +164,14 @@ const Sessions: React.FC = () => {
     } catch {
       return session.name;
     }
+  };
+
+  const getSessionMethods = (session: ISession) => {
+    if (Array.isArray(session.availableMethods) && session.availableMethods.length > 0) {
+      return session.availableMethods;
+    }
+    const attendanceAccess = normalizeAttendanceAccess(session.attendanceAccess);
+    return getAvailableAttendanceMethods(attendanceAccess, 'WEB');
   };
 
   // Check if a session is scheduled for today using IST day boundaries
@@ -489,7 +502,10 @@ const Sessions: React.FC = () => {
                       const isLive = sessionStatus === 'live';
                       const isUpcoming = sessionStatus === 'upcoming';
                       const isToday = isSessionToday(session);
-                      const showScanButton = isEndUser && isToday;
+                      const dateParam = session.occurrenceDate ? `?date=${session.occurrenceDate}` : '';
+                      const supportedMethods = getSessionMethods(session);
+                      const hasAttendanceMethod = supportedMethods.length > 0;
+                      const showAttendanceButton = isEndUser && isToday && hasAttendanceMethod && !session.isCancelled;
                       const sessionMode = normalizeSessionMode(session.sessionType || session.locationType);
 
                       // Fix 2: Date-Based Title (en-GB for "Thu, 8 Jan 2026")
@@ -500,9 +516,6 @@ const Sessions: React.FC = () => {
                         e?.stopPropagation();
                         // Don't navigate if session is cancelled
                         if (session.isCancelled) return;
-
-                        // Add date query param for correct context
-                        const dateParam = session.occurrenceDate ? `?date=${session.occurrenceDate}` : '';
 
                         // Smart navigation based on session status
                         if (isPast) {
@@ -611,6 +624,14 @@ const Sessions: React.FC = () => {
                               <span className="whitespace-nowrap rounded-full bg-slate-100 dark:bg-slate-800 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">
                                 {formatFrequency(session.frequency)}
                               </span>
+                              {supportedMethods.map((method) => (
+                                <span
+                                  key={`${session._id}-${method}`}
+                                  className="whitespace-nowrap rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                                >
+                                  {getAttendanceMethodLabel(method)}
+                                </span>
+                              ))}
                             </div>
                           </div>
                           <div className="flex-grow space-y-3 text-slate-700 dark:text-slate-300 mb-4">
@@ -632,16 +653,16 @@ const Sessions: React.FC = () => {
                             {/* Fix 3: Duplicate Description Removed */}
                           </div>
                           <div className="mt-auto flex flex-col sm:flex-row items-stretch gap-3">
-                            {showScanButton ? (
+                            {showAttendanceButton ? (
                               <button
                                 className="flex w-full sm:flex-1 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-3 md:px-4 bg-gradient-to-r from-orange-500 to-[#f04129] text-white text-sm font-bold hover:from-orange-600 hover:to-[#d63a25] transition-colors"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigate(`/scan-web?sessionId=${session._id}`);
+                                  navigate(`/sessions/${session._id}${dateParam}`);
                                 }}
                               >
-                                <span className="material-symbols-outlined text-lg">qr_code_scanner</span>
-                                <span className="truncate whitespace-normal">Scan Attendance</span>
+                                <span className="material-symbols-outlined text-lg">how_to_reg</span>
+                                <span className="truncate whitespace-normal">Mark Attendance</span>
                               </button>
                             ) : (
                               <>
@@ -654,7 +675,13 @@ const Sessions: React.FC = () => {
                                     disabled
                                   >
                                     <span className="truncate whitespace-normal">
-                                      {isLive ? 'In Progress' : isPast ? 'Past Session' : 'Upcoming'}
+                                      {!hasAttendanceMethod && isToday
+                                        ? 'No Method Enabled'
+                                        : isLive
+                                          ? 'In Progress'
+                                          : isPast
+                                            ? 'Past Session'
+                                            : 'Upcoming'}
                                     </span>
                                   </button>
                                 ) : (
@@ -674,7 +701,6 @@ const Sessions: React.FC = () => {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   // Add date query param for correct context when editing a specific occurrence
-                                  const dateParam = session.occurrenceDate ? `?date=${session.occurrenceDate}` : '';
                                   navigate(`/sessions/edit/${session._id}${dateParam}`);
                                 }}
                               >

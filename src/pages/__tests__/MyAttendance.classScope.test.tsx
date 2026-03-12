@@ -9,6 +9,10 @@ import { getMyDashboard, getMySessions } from '../../api/analyticsApi';
 vi.mock('../../api/analyticsApi', () => ({
   getMyDashboard: vi.fn(),
   getMySessions: vi.fn(),
+  getMyAttendanceAttempts: vi.fn().mockResolvedValue({
+    attempts: [],
+    pagination: { page: 1, limit: 50, total: 0, totalPages: 1 },
+  }),
 }));
 
 vi.mock('../../api/reportingApi', () => ({
@@ -38,7 +42,7 @@ vi.mock('../../components/attendance/AnalyticsFilters', () => ({
     <div
       data-testid="analytics-filters"
       data-selected={props.selectedClass}
-      data-hide={String(props.hideClassFilter)}
+      data-class-count={String(props.classes?.length ?? 0)}
     />
   ),
 }));
@@ -114,7 +118,7 @@ describe('MyAttendance class-scoped behavior', () => {
 
     const filterNode = screen.getByTestId('analytics-filters');
     expect(filterNode.getAttribute('data-selected')).toBe('class-1');
-    expect(filterNode.getAttribute('data-hide')).toBe('true');
+    expect(filterNode.getAttribute('data-class-count')).toBe('1');
   });
 
   it('restores persisted class when still enrolled', async () => {
@@ -146,6 +150,7 @@ describe('MyAttendance class-scoped behavior', () => {
 
     const filterNode = screen.getByTestId('analytics-filters');
     expect(filterNode.getAttribute('data-selected')).toBe('class-2');
+    expect(filterNode.getAttribute('data-class-count')).toBe('2');
   });
 
   it('falls back to first class when persisted class is no longer valid', async () => {
@@ -177,6 +182,7 @@ describe('MyAttendance class-scoped behavior', () => {
 
     const filterNode = screen.getByTestId('analytics-filters');
     expect(filterNode.getAttribute('data-selected')).toBe('class-1');
+    expect(filterNode.getAttribute('data-class-count')).toBe('2');
   });
 
   it('shows class filter when user has multiple classes', async () => {
@@ -199,7 +205,7 @@ describe('MyAttendance class-scoped behavior', () => {
 
     await waitFor(() => {
       const filterNode = screen.getByTestId('analytics-filters');
-      expect(filterNode.getAttribute('data-hide')).toBe('false');
+      expect(filterNode.getAttribute('data-class-count')).toBe('2');
     });
   });
 });

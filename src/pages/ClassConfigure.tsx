@@ -174,6 +174,10 @@ const ClassConfigure: React.FC = () => {
         if (configData) {
           const mode = normalizeSessionMode(configData.defaults?.mode || 'PHYSICAL');
           const schedule = configData.scheduleRule;
+          const safeEffectiveFrom =
+            configData.effectiveFromKey && configData.effectiveFromKey > todayKey
+              ? configData.effectiveFromKey
+              : todayKey;
 
           const meetingLink = mode === 'REMOTE'
             ? configData.defaults?.remotePolicy?.meetingLink || ''
@@ -194,7 +198,7 @@ const ClassConfigure: React.FC = () => {
           setFormData({
             name: classData.name || '',
             description: classData.description || '',
-            effectiveFrom: configData.effectiveFromKey || todayKey,
+            effectiveFrom: safeEffectiveFrom,
             frequency: schedule.frequency,
             startDate: schedule.startDateKey,
             endDate: schedule.endDateKey || '',

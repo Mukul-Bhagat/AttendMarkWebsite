@@ -4,6 +4,11 @@ import api from '../api';
 import { ISession } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { formatIST } from '../utils/time';
+import {
+  getAttendanceMethodLabel,
+  getAvailableAttendanceMethods,
+  normalizeAttendanceAccess,
+} from '../utils/attendanceAccess';
 import SkeletonCard from '../components/SkeletonCard';
 
 import { appLogger } from '../shared/logger';
@@ -72,9 +77,21 @@ const MySessions: React.FC = () => {
     }
   };
 
-  const handleSessionClick = (sessionId: string) => {
-    // Navigate to Scan QR page with session ID
-    navigate(`/scan-web?sessionId=${sessionId}`);
+  const getSessionMethods = (session: ISession) => {
+    if (Array.isArray(session.availableMethods) && session.availableMethods.length > 0) {
+      return session.availableMethods;
+    }
+    const attendanceAccess = normalizeAttendanceAccess(session.attendanceAccess);
+    return getAvailableAttendanceMethods(attendanceAccess, 'WEB');
+  };
+
+  const buildSessionUrl = (session: ISession) => {
+    const dateParam = session.occurrenceDate ? `?date=${session.occurrenceDate}` : '';
+    return `/sessions/${session._id}${dateParam}`;
+  };
+
+  const handleSessionClick = (session: ISession) => {
+    navigate(buildSessionUrl(session));
   };
 
   if (isLoading) {
@@ -129,7 +146,7 @@ const MySessions: React.FC = () => {
                 <h1 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white leading-tight tracking-[-0.033em]">My Classes/Batches</h1>
               </div>
               <p className="text-[#8a7b60] dark:text-gray-400 text-sm ml-14">
-                Click on a class/batch to scan QR code and mark attendance
+                Open any session to mark attendance using enabled methods
               </p>
             </div>
           </header>
@@ -149,18 +166,32 @@ const MySessions: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {sessions.map((session) => (
-                <div
-                  key={session._id}
-                  className="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 p-6 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => handleSessionClick(session._id)}
-                >
+              {sessions.map((session) => {
+                const methods = getSessionMethods(session);
+                return (
+                  <div
+                    key={session._id}
+                    className="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 p-6 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                    onClick={() => handleSessionClick(session)}
+                  >
                   <div className="flex items-start justify-between mb-4">
                     <h2 className="text-xl font-bold text-slate-900 dark:text-white pr-4">{session.name}</h2>
                     <span className="whitespace-nowrap rounded-full bg-slate-100 dark:bg-slate-800 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">
                       {formatFrequency(session.frequency)}
                     </span>
                   </div>
+                  {methods.length > 0 && (
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {methods.map((method) => (
+                        <span
+                          key={`${session._id}-${method}`}
+                          className="whitespace-nowrap rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                        >
+                          {getAttendanceMethodLabel(method)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex-grow space-y-3 text-slate-700 dark:text-slate-300 mb-4">
                     {session.description && (
                       <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2">{session.description}</p>
@@ -190,15 +221,16 @@ const MySessions: React.FC = () => {
                       className="flex w-full cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-[#d63a25] transition-colors"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleSessionClick(session._id);
+                        handleSessionClick(session);
                       }}
                     >
-                      <span className="material-symbols-outlined text-xl">qr_code_scanner</span>
-                      <span className="truncate">Scan QR Code</span>
+                      <span className="material-symbols-outlined text-xl">how_to_reg</span>
+                      <span className="truncate">Open Attendance</span>
                     </button>
                   </div>
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           )}
         </main>

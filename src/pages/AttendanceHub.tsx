@@ -32,6 +32,7 @@ type AttendanceHubResponse = {
 
 type MarkResponse = {
   status: 'MARKED' | 'ALREADY_MARKED' | 'FAILED';
+  attemptLogId?: string;
   msg?: string;
   reason?: string | null;
   className?: string;
@@ -42,6 +43,9 @@ type MarkResponse = {
   checkInTime?: string;
   markedVia?: string;
 };
+
+const withAttemptLog = (message: string, attemptLogId?: string) =>
+  attemptLogId ? `${message} (Attempt Log: ${attemptLogId})` : message;
 
 const locationReasons = new Set([
   'LOCATION_REQUIRED',
@@ -249,7 +253,7 @@ const AttendanceHub: React.FC = () => {
         return;
       }
 
-      setError(response.msg || 'Attendance could not be marked.');
+      setError(withAttemptLog(response.msg || 'Attendance could not be marked.', response.attemptLogId));
     } catch (err: any) {
       const reason = err?.response?.data?.reason;
       if (locationReasons.has(reason)) {
@@ -261,7 +265,7 @@ const AttendanceHub: React.FC = () => {
           });
 
           if (response.status === 'FAILED') {
-            setError(response.msg || 'Attendance could not be marked.');
+            setError(withAttemptLog(response.msg || 'Attendance could not be marked.', response.attemptLogId));
             return;
           }
 
@@ -293,6 +297,7 @@ const AttendanceHub: React.FC = () => {
           title={successData.status === 'ALREADY_MARKED' ? 'Attendance Already Recorded' : 'Attendance Marked'}
           description={[
             successData.msg || 'Attendance confirmed.',
+            successData.attemptLogId ? `Attempt Log: ${successData.attemptLogId}` : '',
             successData.className ? `Class: ${successData.className}` : '',
             successData.sessionName ? `Session: ${successData.sessionName}` : '',
             successData.sessionDate ? `Date: ${successData.sessionDate}` : '',
