@@ -5,6 +5,7 @@ import { formatIST } from '../utils/time';
 import { getApiUrl } from '../utils/apiUrl';
 import Cropper, { Area } from 'react-easy-crop';
 import { getCroppedImageBlob, getCroppedPreviewUrl } from '../utils/imageCrop';
+import { safeLocalStorage } from '../utils/safeStorage';
 
 import { appLogger } from '../shared/logger';
 interface Organization {
@@ -59,7 +60,7 @@ const Profile: React.FC = () => {
   const [preferences, setPreferences] = useState({
     emailNotifications: true,
     twoFactorAuth: false,
-    darkMode: localStorage.getItem('theme') === 'dark',
+    darkMode: safeLocalStorage.getItem('theme') === 'dark',
   });
 
 
@@ -309,7 +310,7 @@ const Profile: React.FC = () => {
     // Handle dark mode toggle
     if (key === 'darkMode') {
       const theme = newValue ? 'dark' : 'light';
-      localStorage.setItem('theme', theme);
+      safeLocalStorage.setItem('theme', theme);
       if (theme === 'dark') {
         document.documentElement.classList.add('dark');
       } else {

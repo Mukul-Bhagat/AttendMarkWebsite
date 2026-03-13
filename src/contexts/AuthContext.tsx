@@ -2,6 +2,7 @@ import { createContext, useContext, useState, ReactNode, useEffect } from 'react
 import api from '../api';
 import { Role, RoleProfile, resolveRole } from '../shared/roles';
 import { deactivateWebPushDevice, registerWebPushDevice } from '../firebase/notificationPermission';
+import { safeLocalStorage, safeSessionStorage } from '../utils/safeStorage';
 
 import { appLogger } from '../shared/logger';
 // Define the shape of the user object and the auth context
@@ -131,13 +132,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const { user } = response.data;
 
         setUser(normalizeAuthUser(user));
-        setToken(localStorage.getItem('token') || 'cookie-auth');
+        setToken(safeLocalStorage.getItem('token') || 'cookie-auth');
       } catch (err: any) {
         appLogger.error('Failed to verify session:', err);
         setToken(null);
         setUser(null);
-        localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-        localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+        safeLocalStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+        safeLocalStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
       }
       setIsLoading(false);
     };
@@ -160,7 +161,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(true);
     try {
       if (formDataOrAuth.user) {
-        setToken(localStorage.getItem('token') || 'cookie-auth');
+        setToken(safeLocalStorage.getItem('token') || 'cookie-auth');
         setUser(normalizeAuthUser(formDataOrAuth.user));
         setIsLoading(false);
         return;
@@ -180,14 +181,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Logout function
   const logout = () => {
-    const refreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+    const refreshToken = safeLocalStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
     deactivateWebPushDevice().catch((error) => {
       appLogger.warn('Failed to deactivate web push device during logout', error);
     });
     setToken(null);
     setUser(null);
-    localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    safeLocalStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+    safeLocalStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
     api
       .post(
         '/api/auth/logout',
@@ -233,16 +234,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       // Clear org-scoped UI state/cache before applying new context
       // Keep auth tokens written by response interceptor for the newly selected organization.
-      try {
-        sessionStorage.clear();
-      } catch {
-        // Ignore storage errors (private mode / disabled storage)
-      }
+      safeSessionStorage.clear();
 
       // Update user state
       if (newAccessToken) {
         setToken(newAccessToken);
-        localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, newAccessToken);
+        safeLocalStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, newAccessToken);
       } else {
         setToken('cookie-auth');
       }

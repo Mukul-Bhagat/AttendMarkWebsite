@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getApiUrl } from './utils/apiUrl';
+import { safeLocalStorage } from './utils/safeStorage';
 
 import { appLogger } from './shared/logger';
 // Get API base URL from centralized utility (includes production fallback)
@@ -110,8 +111,8 @@ const clearStoredAuthTokens = () => {
     return;
   }
 
-  localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+  safeLocalStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+  safeLocalStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
 };
 
 const persistAuthTokensFromPayload = (
@@ -127,11 +128,11 @@ const persistAuthTokensFromPayload = (
   const refreshToken = normalizeOpaqueToken(data.refreshToken);
 
   if (accessToken) {
-    localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, accessToken);
+    safeLocalStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, accessToken);
   }
 
   if (refreshToken) {
-    localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
+    safeLocalStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
   }
 
   return { accessToken, refreshToken };
@@ -159,14 +160,14 @@ const decodeJwtPayload = (token: string): Record<string, unknown> | null => {
 };
 
 const readStoredBearerToken = (): string | null => {
-  const rawToken = localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
+  const rawToken = safeLocalStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
   if (!rawToken) {
     return null;
   }
 
   const token = normalizeJwtLikeToken(rawToken);
   if (!token) {
-    localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+    safeLocalStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
     return null;
   }
 
@@ -175,7 +176,7 @@ const readStoredBearerToken = (): string | null => {
   if (typeof exp === 'number' && Number.isFinite(exp)) {
     const expiresAtMs = exp * 1000;
     if (Date.now() >= expiresAtMs) {
-      localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+      safeLocalStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
       return null;
     }
   }
@@ -184,14 +185,14 @@ const readStoredBearerToken = (): string | null => {
 };
 
 const readStoredRefreshToken = (): string | null => {
-  const rawToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+  const rawToken = safeLocalStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
   if (!rawToken) {
     return null;
   }
 
   const token = normalizeOpaqueToken(rawToken);
   if (!token) {
-    localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    safeLocalStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
     return null;
   }
 
@@ -356,7 +357,7 @@ api.interceptors.response.use(
         const refreshResponse = await api.post('/api/auth/refresh');
         const refreshedTokens = persistAuthTokensFromPayload(refreshResponse.data);
         if (!refreshedTokens.accessToken) {
-          localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+          safeLocalStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
         }
 
         // If successful, process the queued requests

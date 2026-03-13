@@ -4,25 +4,18 @@ import { useAuth } from '../contexts/AuthContext';
 import OrganizationSelector from '../components/OrganizationSelector';
 import api from '../api';
 import { Role, normalizeRole } from '../shared/roles';
+import { safeSessionStorage } from '../utils/safeStorage';
 
 // Helper functions for sessionStorage (moved outside component to avoid recreation)
 const getStoredError = (): string => {
-  try {
-    return sessionStorage.getItem('loginError') || '';
-  } catch {
-    return '';
-  }
+  return safeSessionStorage.getItem('loginError') || '';
 };
 
 const setStoredError = (errorMsg: string): void => {
-  try {
-    if (errorMsg) {
-      sessionStorage.setItem('loginError', errorMsg);
-    } else {
-      sessionStorage.removeItem('loginError');
-    }
-  } catch {
-    // Ignore sessionStorage errors
+  if (errorMsg) {
+    safeSessionStorage.setItem('loginError', errorMsg);
+  } else {
+    safeSessionStorage.removeItem('loginError');
   }
 };
 

@@ -10,10 +10,11 @@ import App from './App'
 import { AuthProvider } from './contexts/AuthContext' // Import the provider
 import { OrganizationProvider } from './contexts/OrganizationContext'
 import { bootstrapNotificationServiceWorker } from './firebase/notificationPermission'
+import { safeLocalStorage } from './utils/safeStorage'
 import './index.css'
 
 // Set default theme to light mode on initial load
-const storedTheme = localStorage.getItem('theme');
+const storedTheme = safeLocalStorage.getItem('theme');
 if (!storedTheme || storedTheme === 'light') {
   document.documentElement.classList.remove('dark');
 } else if (storedTheme === 'dark') {

@@ -16,6 +16,7 @@ import {
 import SkeletonCard from '../components/SkeletonCard';
 import AttendanceHub from './AttendanceHub';
 import { getSessionAttendanceAttempts } from '../api/analyticsApi';
+import { safeSessionStorage } from '../utils/safeStorage';
 
 import { appLogger } from '../shared/logger';
 
@@ -36,7 +37,7 @@ const buildQrCacheKey = (sessionId: string, dateKey?: string) =>
 const readCachedQrToken = (cacheKey: string): CachedQrTokenPayload | null => {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = window.sessionStorage.getItem(cacheKey);
+    const raw = safeSessionStorage.getItem(cacheKey);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CachedQrTokenPayload;
     if (!parsed?.token || !parsed?.expiresAt) {
@@ -44,7 +45,7 @@ const readCachedQrToken = (cacheKey: string): CachedQrTokenPayload | null => {
     }
     const expiresAtMs = Date.parse(parsed.expiresAt);
     if (!Number.isFinite(expiresAtMs) || expiresAtMs <= nowIST() + QR_CACHE_EXPIRY_BUFFER_MS) {
-      window.sessionStorage.removeItem(cacheKey);
+      safeSessionStorage.removeItem(cacheKey);
       return null;
     }
     return parsed;
@@ -56,7 +57,7 @@ const readCachedQrToken = (cacheKey: string): CachedQrTokenPayload | null => {
 const writeCachedQrToken = (cacheKey: string, payload: CachedQrTokenPayload) => {
   if (typeof window === 'undefined') return;
   try {
-    window.sessionStorage.setItem(cacheKey, JSON.stringify(payload));
+    safeSessionStorage.setItem(cacheKey, JSON.stringify(payload));
   } catch {
     // Best-effort cache only.
   }

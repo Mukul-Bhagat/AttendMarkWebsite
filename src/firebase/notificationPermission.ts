@@ -2,6 +2,7 @@ import { getToken } from 'firebase/messaging';
 
 import api from '../api';
 import { appLogger } from '../shared/logger';
+import { safeLocalStorage } from '../utils/safeStorage';
 import {
   firebaseWebConfig,
   firebaseWebConfigIssues,
@@ -14,7 +15,7 @@ const FCM_TOKEN_STORAGE_KEY = 'notification_web_fcm_token';
 const DEVICE_ID_STORAGE_KEY = 'notification_web_device_id';
 
 const getOrCreateDeviceId = (): string => {
-  const existing = localStorage.getItem(DEVICE_ID_STORAGE_KEY);
+  const existing = safeLocalStorage.getItem(DEVICE_ID_STORAGE_KEY);
   if (existing) {
     return existing;
   }
@@ -24,7 +25,7 @@ const getOrCreateDeviceId = (): string => {
       ? crypto.randomUUID()
       : `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-  localStorage.setItem(DEVICE_ID_STORAGE_KEY, generated);
+  safeLocalStorage.setItem(DEVICE_ID_STORAGE_KEY, generated);
   return generated;
 };
 
@@ -99,15 +100,15 @@ export const requestNotificationPermission = async (): Promise<NotificationPermi
 };
 
 const getStoredToken = (): string | null => {
-  return localStorage.getItem(FCM_TOKEN_STORAGE_KEY);
+  return safeLocalStorage.getItem(FCM_TOKEN_STORAGE_KEY);
 };
 
 const storeToken = (token: string): void => {
-  localStorage.setItem(FCM_TOKEN_STORAGE_KEY, token);
+  safeLocalStorage.setItem(FCM_TOKEN_STORAGE_KEY, token);
 };
 
 const clearStoredToken = (): void => {
-  localStorage.removeItem(FCM_TOKEN_STORAGE_KEY);
+  safeLocalStorage.removeItem(FCM_TOKEN_STORAGE_KEY);
 };
 
 export const registerWebPushDevice = async (): Promise<string | null> => {

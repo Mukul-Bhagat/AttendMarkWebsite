@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import { getApiUrl } from '../utils/apiUrl';
+import { safeLocalStorage } from '../utils/safeStorage';
 
 import { appLogger } from '../shared/logger';
 interface ProfileMenuProps {
@@ -28,8 +29,8 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userInitials, userName, userR
   const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    // Check localStorage first, default to 'light' if not set
-    const stored = localStorage.getItem('theme');
+    // Check stored theme first, default to 'light' if not set
+    const stored = safeLocalStorage.getItem('theme');
     if (stored === 'light' || stored === 'dark') return stored;
     return 'light'; // Default to light mode
   });
@@ -78,7 +79,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ userInitials, userName, userR
     } else {
       document.documentElement.classList.remove('dark');
     }
-    localStorage.setItem('theme', theme);
+    safeLocalStorage.setItem('theme', theme);
   }, [theme]);
 
   // Fetch user's organizations when modal opens

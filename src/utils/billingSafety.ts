@@ -1,4 +1,5 @@
 import { appLogger } from '../shared/logger';
+import { safeLocalStorage } from './safeStorage';
 /**
  * Billing Safety Utilities
  * 
@@ -46,11 +47,11 @@ interface UsageTracking {
 const STORAGE_KEY = 'google_maps_api_usage';
 
 /**
- * Get usage tracking from localStorage
+ * Get usage tracking from storage
  */
 function getUsageTracking(): UsageTracking {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = safeLocalStorage.getItem(STORAGE_KEY);
     if (stored) {
       const data = JSON.parse(stored);
       // Reset if it's a new day
@@ -92,11 +93,11 @@ function getUsageTracking(): UsageTracking {
 }
 
 /**
- * Save usage tracking to localStorage
+ * Save usage tracking to storage
  */
 function saveUsageTracking(tracking: UsageTracking): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(tracking));
+    safeLocalStorage.setItem(STORAGE_KEY, JSON.stringify(tracking));
   } catch (error) {
     appLogger.warn('Failed to save usage tracking:', error);
   }

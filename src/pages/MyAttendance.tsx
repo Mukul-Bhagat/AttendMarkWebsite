@@ -15,6 +15,7 @@ import { getEmailAutomationConfigs, toggleEmailAutomation, deleteEmailAutomation
 import toast from 'react-hot-toast';
 import AttendanceIssuePanel from '../components/attendance/AttendanceIssuePanel';
 import { IAttendanceAttemptLog } from '../types';
+import { safeLocalStorage } from '../utils/safeStorage';
 
 import { appLogger } from '../shared/logger';
 
@@ -110,22 +111,14 @@ const getPreferredClassFromUrl = (): string => {
 };
 
 const getStoredClass = (storageKey: string): string => {
-  try {
-    return localStorage.getItem(storageKey) || '';
-  } catch {
-    return '';
-  }
+  return safeLocalStorage.getItem(storageKey) || '';
 };
 
 const persistClassSelection = (storageKey: string, classId: string) => {
-  try {
-    if (classId) {
-      localStorage.setItem(storageKey, classId);
-    } else {
-      localStorage.removeItem(storageKey);
-    }
-  } catch {
-    // Ignore storage failures (private mode, blocked storage).
+  if (classId) {
+    safeLocalStorage.setItem(storageKey, classId);
+  } else {
+    safeLocalStorage.removeItem(storageKey);
   }
 };
 
