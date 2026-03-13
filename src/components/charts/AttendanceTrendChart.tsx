@@ -33,7 +33,7 @@ const AttendanceTrendChart: React.FC<AttendanceTrendChartProps> = ({ data }) => 
             const date = new Date(point.date);
 
             // Exclude Sundays entirely as per "Remove Sunday" request
-            if (date.getDay() === 0 || point.status === 'NO_SESSION') return;
+            if (date.getDay() === 0 || point.status === 'NO_SESSION' || point.status === 'PENDING') return;
 
             const weekStr = `Week ${getWeek(date, { weekStartsOn: 1 })}`;
 

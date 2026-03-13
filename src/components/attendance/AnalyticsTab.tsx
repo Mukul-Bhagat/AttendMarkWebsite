@@ -4,7 +4,7 @@ import { CalendarDays, PieChart as PieChartIcon, TrendingUp } from 'lucide-react
 
 interface DashboardDay {
     date: string;
-    status: 'PRESENT' | 'LATE' | 'HALF_DAY' | 'APPROVED_LEAVE' | 'ABSENT' | 'NO_SESSION';
+    status: 'PRESENT' | 'LATE' | 'HALF_DAY' | 'APPROVED_LEAVE' | 'PENDING' | 'ABSENT' | 'NO_SESSION';
     lateMinutes?: number;
     isHalfDay?: boolean;
     symbol?: string | null;
@@ -23,6 +23,7 @@ interface DashboardData {
         late: number;
         approvedLeave: number;
         absent: number;
+        pending: number;
         halfDay: number;
         noSession: number;
     };
@@ -33,6 +34,7 @@ interface DashboardData {
         late: number;
         approvedLeave: number;
         absent: number;
+        pending: number;
         halfDay: number;
     }>;
     pieBreakdown: {
@@ -64,6 +66,7 @@ const STATUS_META: Record<DashboardDay['status'], { label: string; color: string
     LATE: { label: 'Late', color: '#eab308', chip: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
     APPROVED_LEAVE: { label: 'Approved Leave', color: '#3b82f6', chip: 'bg-blue-100 text-blue-700 border-blue-200' },
     ABSENT: { label: 'Absent / Unapproved Leave', color: '#ef4444', chip: 'bg-red-100 text-red-700 border-red-200' },
+    PENDING: { label: 'Pending', color: '#f97316', chip: 'bg-orange-100 text-orange-700 border-orange-200' },
     NO_SESSION: { label: 'No Session', color: '#9ca3af', chip: 'bg-slate-100 text-slate-700 border-slate-200' },
     HALF_DAY: { label: 'Half Day', color: '#0ea5e9', chip: 'bg-sky-100 text-sky-700 border-sky-200' },
 };
@@ -152,6 +155,7 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ analyticsData, loading }) =
                 <SummaryPill label="Half Day" value={analyticsData.summary.halfDay} tone="sky" />
                 <SummaryPill label="Leave" value={analyticsData.summary.approvedLeave} tone="blue" />
                 <SummaryPill label="Absent" value={analyticsData.summary.absent} tone="red" />
+                <SummaryPill label="Pending" value={analyticsData.summary.pending} tone="orange" />
                 <SummaryPill label="No Session" value={analyticsData.summary.noSession} tone="gray" />
                 <SummaryPill label="Total Days" value={analyticsData.summary.totalDays} tone="slate" />
             </div>
@@ -219,6 +223,7 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ analyticsData, loading }) =
                             <Bar dataKey="approvedLeave" name="Leave" stackId="a" fill={STATUS_META.APPROVED_LEAVE.color} />
                             <Bar dataKey="halfDay" name="Half Day" stackId="a" fill={STATUS_META.HALF_DAY.color} />
                             <Bar dataKey="absent" name="Absent" stackId="a" fill={STATUS_META.ABSENT.color} />
+                            <Bar dataKey="pending" name="Pending" stackId="a" fill={STATUS_META.PENDING.color} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
@@ -290,7 +295,7 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ analyticsData, loading }) =
     );
 };
 
-const SummaryPill: React.FC<{ label: string; value: number; tone: 'green' | 'yellow' | 'red' | 'blue' | 'sky' | 'gray' | 'slate' }> = ({ label, value, tone }) => {
+const SummaryPill: React.FC<{ label: string; value: number; tone: 'green' | 'yellow' | 'red' | 'blue' | 'sky' | 'gray' | 'slate' | 'orange' }> = ({ label, value, tone }) => {
     const toneClass: Record<string, string> = {
         green: 'bg-emerald-100 text-emerald-700 border-emerald-200',
         yellow: 'bg-yellow-100 text-yellow-700 border-yellow-200',
@@ -299,6 +304,7 @@ const SummaryPill: React.FC<{ label: string; value: number; tone: 'green' | 'yel
         sky: 'bg-sky-100 text-sky-700 border-sky-200',
         gray: 'bg-slate-100 text-slate-700 border-slate-200',
         slate: 'bg-zinc-100 text-zinc-700 border-zinc-200',
+        orange: 'bg-orange-100 text-orange-700 border-orange-200',
     };
 
     return (
