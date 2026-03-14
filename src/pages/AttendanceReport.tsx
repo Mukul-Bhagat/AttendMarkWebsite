@@ -11,6 +11,40 @@ import SessionAttendanceView from '../components/attendance/SessionAttendanceVie
 import SkeletonCard from '../components/SkeletonCard';
 import { appLogger } from '../shared/logger';
 
+const ATTENDMARK_LOGO_URL = '/assets/attendmarklogo.png';
+let attendmarkLogoCache: string | null | undefined;
+
+const getAttendMarkLogoDataUrl = async (): Promise<string | null> => {
+  if (attendmarkLogoCache !== undefined) return attendmarkLogoCache;
+  try {
+    const response = await fetch(ATTENDMARK_LOGO_URL);
+    if (!response.ok) {
+      attendmarkLogoCache = null;
+      return attendmarkLogoCache;
+    }
+    const blob = await response.blob();
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('Failed to read logo data'));
+      reader.readAsDataURL(blob);
+    });
+    attendmarkLogoCache = dataUrl;
+    return attendmarkLogoCache;
+  } catch {
+    attendmarkLogoCache = null;
+    return attendmarkLogoCache;
+  }
+};
+
+const getImageDimensions = (dataUrl: string): Promise<{ width: number; height: number }> =>
+  new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.width, height: img.height });
+    img.onerror = () => resolve({ width: 0, height: 0 });
+    img.src = dataUrl;
+  });
+
 interface AnalyticsData {
   totalSessions: number;
   overallPresent: number;
@@ -281,6 +315,32 @@ const AttendanceReport: React.FC = () => {
       const startY = 20;
       let yPos = startY;
 
+      const logoDataUrl = await getAttendMarkLogoDataUrl();
+      let logoHeight = 0;
+      const logoWidth = 18;
+      if (logoDataUrl) {
+        const { width, height } = await getImageDimensions(logoDataUrl);
+        if (width > 0 && height > 0) {
+          logoHeight = (logoWidth * height) / width;
+        }
+      }
+      const renderLogo = () => {
+        if (!logoDataUrl || !logoHeight) return;
+        try {
+          pdf.addImage(
+            logoDataUrl,
+            'PNG',
+            pageWidth - margin - logoWidth,
+            8,
+            logoWidth,
+            logoHeight
+          );
+        } catch {
+          // Ignore logo failures to avoid blocking PDF generation
+        }
+      };
+
+      renderLogo();
       pdf.setFontSize(18);
       pdf.setFont('helvetica', 'bold');
       pdf.text(sessionName, margin, yPos);
@@ -319,7 +379,7 @@ const AttendanceReport: React.FC = () => {
         const splitCells = rowData.map((cell, cellIndex) => pdf.splitTextToSize(String(cell), colWidths[cellIndex] - 2));
         const maxLines = Math.max(...splitCells.map(cell => cell.length));
         const lineHeight = 6;
-        if (yPos + maxLines * lineHeight > pageHeight - 20) { pdf.addPage(); yPos = startY; }
+        if (yPos + maxLines * lineHeight > pageHeight - 20) { pdf.addPage(); yPos = startY; renderLogo(); }
         xPos = margin;
         splitCells.forEach((cellText, cellIndex) => {
           const cellYStart = yPos;

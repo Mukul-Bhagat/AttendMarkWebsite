@@ -434,6 +434,7 @@ const ClassConfigure: React.FC = () => {
 
   const buildDefaults = () => {
     const locationLabel = formData.locationLabel || classBatch?.name || 'Class Location';
+    const normalizedMeetingLink = formData.meetingLink.trim();
     const normalizedAttendanceAccess = {
       ...normalizeAttendanceAccess(attendanceAccess),
       allowLiveMethodSwitch: false,
@@ -454,7 +455,7 @@ const ClassConfigure: React.FC = () => {
         sessionAdminIds,
         physicalPolicy: preservedPhysicalPolicy,
         remotePolicy: {
-          meetingLink: formData.meetingLink || undefined,
+          meetingLink: normalizedMeetingLink || undefined,
           geoRequired: false,
         },
       };
@@ -478,7 +479,7 @@ const ClassConfigure: React.FC = () => {
           },
           remotePolicy: {
             geoRequired: false,
-            meetingLink: formData.meetingLink || undefined,
+            meetingLink: normalizedMeetingLink || undefined,
           },
         },
       };

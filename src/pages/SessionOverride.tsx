@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import api from '../api';
+import AddUsersModal from '../components/AddUsersModal';
 import GoogleMapPicker from '../components/GoogleMapPicker';
 import ModeSelector from '../components/ModeSelector';
 import AttendanceAccessConfigurator from '../components/attendance/AttendanceAccessConfigurator';
@@ -15,6 +16,16 @@ import { normalizeSessionMode, type SessionMode } from '../utils/sessionMode';
 import SkeletonCard from '../components/SkeletonCard';
 import { nowIST } from '../utils/time';
 import { createDefaultAttendanceAccess, normalizeAttendanceAccess } from '../utils/attendanceAccess';
+
+interface IUser {
+  _id: string;
+  email: string;
+  role: string;
+  profile: {
+    firstName: string;
+    lastName: string;
+  };
+}
 
 const SessionOverride: React.FC = () => {
   const navigate = useNavigate();
@@ -44,6 +55,12 @@ const SessionOverride: React.FC = () => {
     reason: '',
   });
   const [attendanceAccess, setAttendanceAccess] = useState<IAttendanceAccess>(createDefaultAttendanceAccess());
+  const [assignedUsers, setAssignedUsers] = useState<IUser[]>([]);
+  const [physicalUsers, setPhysicalUsers] = useState<IUser[]>([]);
+  const [remoteUsers, setRemoteUsers] = useState<IUser[]>([]);
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [userModalContext, setUserModalContext] = useState<'PHYSICAL' | 'REMOTE' | 'ALL'>('ALL');
+  const [participantsDirty, setParticipantsDirty] = useState(false);
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -89,6 +106,49 @@ const SessionOverride: React.FC = () => {
             longitude: sessionData.geolocation.longitude,
           });
         }
+
+        if (sessionData.assignedUsers && Array.isArray(sessionData.assignedUsers)) {
+          const physical: IUser[] = [];
+          const remote: IUser[] = [];
+          const all: IUser[] = [];
+
+          sessionData.assignedUsers.forEach((u) => {
+            const userObj: IUser = {
+              _id: u.userId,
+              email: u.email,
+              role: '',
+              profile: {
+                firstName: u.firstName,
+                lastName: u.lastName,
+              },
+            };
+
+            all.push(userObj);
+
+            if (u.mode) {
+              if (u.mode === 'PHYSICAL') {
+                physical.push(userObj);
+              } else if (u.mode === 'REMOTE') {
+                remote.push(userObj);
+              }
+            } else if (mode === 'PHYSICAL') {
+              physical.push(userObj);
+            } else if (mode === 'REMOTE') {
+              remote.push(userObj);
+            }
+          });
+
+          if (mode === 'HYBRID') {
+            setPhysicalUsers(physical);
+            setRemoteUsers(remote);
+            setAssignedUsers([]);
+          } else {
+            setAssignedUsers(all);
+            setPhysicalUsers([]);
+            setRemoteUsers([]);
+          }
+        }
+        setParticipantsDirty(false);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         appLogger.error('Failed to load session', err);
@@ -100,6 +160,55 @@ const SessionOverride: React.FC = () => {
 
     fetchSession();
   }, [sessionId, location.search]);
+
+  const handleModeChange = (mode: SessionMode) => {
+    const previousMode = formData.mode;
+    setFormData((prev) => ({ ...prev, mode }));
+
+    if (mode === 'HYBRID') {
+      if (previousMode === 'REMOTE') {
+        setRemoteUsers(assignedUsers);
+        setPhysicalUsers([]);
+      } else {
+        setPhysicalUsers(assignedUsers);
+        setRemoteUsers([]);
+      }
+      setAssignedUsers([]);
+    } else {
+      const mergedUsers = [...physicalUsers, ...remoteUsers];
+      setAssignedUsers(mergedUsers);
+      setPhysicalUsers([]);
+      setRemoteUsers([]);
+    }
+  };
+
+  const handleSaveUsers = (users: IUser[]) => {
+    if (userModalContext === 'PHYSICAL') {
+      setPhysicalUsers(users);
+    } else if (userModalContext === 'REMOTE') {
+      setRemoteUsers(users);
+    } else {
+      setAssignedUsers(users);
+    }
+    setParticipantsDirty(true);
+    setShowUserModal(false);
+  };
+
+  const openUserModal = (context: 'PHYSICAL' | 'REMOTE' | 'ALL') => {
+    setUserModalContext(context);
+    setShowUserModal(true);
+  };
+
+  const handleRemoveUser = (userId: string, mode: 'PHYSICAL' | 'REMOTE' | 'ALL') => {
+    if (mode === 'PHYSICAL') {
+      setPhysicalUsers((prev) => prev.filter((u) => u._id !== userId));
+    } else if (mode === 'REMOTE') {
+      setRemoteUsers((prev) => prev.filter((u) => u._id !== userId));
+    } else {
+      setAssignedUsers((prev) => prev.filter((u) => u._id !== userId));
+    }
+    setParticipantsDirty(true);
+  };
 
   const validateForm = () => {
     if (!formData.startTime || !formData.endTime) {
@@ -128,12 +237,37 @@ const SessionOverride: React.FC = () => {
     setError('');
 
     try {
+      let combinedAssignedUsers: Array<{ userId: string; mode: 'PHYSICAL' | 'REMOTE' }> = [];
+
+      if (formData.mode === 'HYBRID') {
+        combinedAssignedUsers = [
+          ...physicalUsers.map((u) => ({
+            userId: u._id,
+            mode: 'PHYSICAL' as const,
+          })),
+          ...remoteUsers.map((u) => ({
+            userId: u._id,
+            mode: 'REMOTE' as const,
+          })),
+        ];
+      } else {
+        const mode = formData.mode === 'PHYSICAL' ? 'PHYSICAL' : 'REMOTE';
+        combinedAssignedUsers = assignedUsers.map((u) => ({
+          userId: u._id,
+          mode,
+        }));
+      }
+
       const patch: Record<string, unknown> = {
         mode: formData.mode,
         startTime: formData.startTime,
         endTime: formData.endTime,
         attendanceAccess: normalizeAttendanceAccess(attendanceAccess),
       };
+
+      if (participantsDirty) {
+        patch.assignedUsers = combinedAssignedUsers;
+      }
 
       if (formData.mode === 'PHYSICAL' || formData.mode === 'HYBRID') {
         patch.physicalPolicy = {
@@ -149,7 +283,12 @@ const SessionOverride: React.FC = () => {
         };
       }
 
-      await api.patch(`/api/sessions/${sessionId}/override`, {
+      const dateParam = new URLSearchParams(location.search).get('date');
+      const overrideUrl = dateParam
+        ? `/api/sessions/${sessionId}/override?date=${dateParam}`
+        : `/api/sessions/${sessionId}/override`;
+
+      await api.patch(overrideUrl, {
         reason: formData.reason.trim(),
         patch,
       });
@@ -285,7 +424,7 @@ const SessionOverride: React.FC = () => {
               <span className="material-symbols-outlined text-2xl text-[#f04129]">hub</span>
               <h2 className="text-xl font-bold leading-tight tracking-[-0.015em] text-[#181511] dark:text-white">Mode</h2>
             </div>
-            <ModeSelector value={formData.mode} onChange={(mode) => setFormData((prev) => ({ ...prev, mode }))} />
+            <ModeSelector value={formData.mode} onChange={handleModeChange} />
           </div>
 
           <AttendanceAccessConfigurator
@@ -317,6 +456,108 @@ const SessionOverride: React.FC = () => {
                 required
               />
             </label>
+          </div>
+
+          <div className="flex flex-col gap-6 rounded-xl border border-[#e6e2db] bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-2xl text-[#f04129]">group</span>
+              <h2 className="text-xl font-bold leading-tight tracking-[-0.015em] text-[#181511] dark:text-white">Assigned Users</h2>
+            </div>
+
+            {formData.mode === 'HYBRID' ? (
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div className="flex flex-col gap-4">
+                  <h3 className="font-semibold text-[#181511] dark:text-slate-200">Physical Attendees ({physicalUsers.length})</h3>
+                  <div className="flex flex-col gap-3 rounded-lg border border-[#e6e2db] bg-[#faf8f4] p-4 dark:border-slate-700 dark:bg-slate-900/60 min-h-[120px]">
+                    {physicalUsers.length > 0 ? (
+                      physicalUsers.map((user) => (
+                        <div key={user._id} className="flex items-center justify-between text-sm">
+                          <span className="text-[#181511] dark:text-slate-300">
+                            {user.profile.firstName} {user.profile.lastName}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveUser(user._id, 'PHYSICAL')}
+                            className="text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-slate-500 dark:text-slate-400">No physical attendees assigned yet.</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openUserModal('PHYSICAL')}
+                    className="flex items-center justify-center rounded-lg border-2 border-[#f04129] px-4 py-2 text-sm font-semibold text-[#f04129] hover:bg-red-50 dark:hover:bg-red-900/10"
+                  >
+                    {physicalUsers.length > 0 ? `Edit Physical Users (${physicalUsers.length})` : 'Add Physical Users'}
+                  </button>
+                </div>
+                <div className="flex flex-col gap-4">
+                  <h3 className="font-semibold text-[#181511] dark:text-slate-200">Remote Attendees ({remoteUsers.length})</h3>
+                  <div className="flex flex-col gap-3 rounded-lg border border-[#e6e2db] bg-[#faf8f4] p-4 dark:border-slate-700 dark:bg-slate-900/60 min-h-[120px]">
+                    {remoteUsers.length > 0 ? (
+                      remoteUsers.map((user) => (
+                        <div key={user._id} className="flex items-center justify-between text-sm">
+                          <span className="text-[#181511] dark:text-slate-300">
+                            {user.profile.firstName} {user.profile.lastName}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveUser(user._id, 'REMOTE')}
+                            className="text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-slate-500 dark:text-slate-400">No remote attendees assigned yet.</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openUserModal('REMOTE')}
+                    className="flex items-center justify-center rounded-lg border-2 border-[#f04129] px-4 py-2 text-sm font-semibold text-[#f04129] hover:bg-red-50 dark:hover:bg-red-900/10"
+                  >
+                    {remoteUsers.length > 0 ? `Edit Remote Users (${remoteUsers.length})` : 'Add Remote Users'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-3 rounded-lg border border-[#e6e2db] bg-[#faf8f4] p-4 dark:border-slate-700 dark:bg-slate-900/60 min-h-[120px]">
+                  {assignedUsers.length > 0 ? (
+                    assignedUsers.map((user) => (
+                      <div key={user._id} className="flex items-center justify-between text-sm">
+                        <span className="text-[#181511] dark:text-slate-300">
+                          {user.profile.firstName} {user.profile.lastName}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveUser(user._id, 'ALL')}
+                          className="text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-500 dark:text-slate-400">No users assigned yet.</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openUserModal('ALL')}
+                  className="flex items-center justify-center rounded-lg border-2 border-[#f04129] px-4 py-2 text-sm font-semibold text-[#f04129] hover:bg-red-50 dark:hover:bg-red-900/10"
+                >
+                  {assignedUsers.length > 0 ? `Edit Users (${assignedUsers.length})` : 'Add Users'}
+                </button>
+              </div>
+            )}
           </div>
 
           {(formData.mode === 'PHYSICAL' || formData.mode === 'HYBRID') && (
@@ -443,6 +684,27 @@ const SessionOverride: React.FC = () => {
           </div>
         </form>
       </div>
+
+      {showUserModal && (
+        <AddUsersModal
+          onClose={() => setShowUserModal(false)}
+          onSave={handleSaveUsers}
+          initialSelectedUsers={
+            userModalContext === 'PHYSICAL'
+              ? physicalUsers
+              : userModalContext === 'REMOTE'
+                ? remoteUsers
+                : assignedUsers
+          }
+          context={
+            userModalContext === 'PHYSICAL'
+              ? 'Add Physical Attendees'
+              : userModalContext === 'REMOTE'
+                ? 'Add Remote Attendees'
+                : 'Add Users to Session'
+          }
+        />
+      )}
 
       <ConfirmDialog
         open={showConfirmDialog}

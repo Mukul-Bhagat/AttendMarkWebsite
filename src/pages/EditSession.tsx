@@ -368,6 +368,7 @@ const EditSession: React.FC = () => {
         };
       }
 
+      const normalizedVirtualLocation = formData.virtualLocation.trim();
       const sessionData = {
         name: formData.name,
         description: formData.description || undefined,
@@ -382,7 +383,7 @@ const EditSession: React.FC = () => {
         assignedUsers: combinedAssignedUsers,
         weeklyDays: formData.frequency === 'Weekly' ? formData.weeklyDays : undefined,
         virtualLocation: formData.sessionType === 'REMOTE' || formData.sessionType === 'HYBRID'
-          ? formData.virtualLocation
+          ? normalizedVirtualLocation
           : undefined,
         location: locationObj,
         radius: (formData.sessionType === 'PHYSICAL' || formData.sessionType === 'HYBRID') && formData.radius
@@ -724,7 +725,6 @@ const EditSession: React.FC = () => {
                         name="virtualLocation"
                         value={formData.virtualLocation}
                         onChange={handleChange}
-                        required={formData.sessionType === 'REMOTE'}
                         placeholder="https://meet.google.com/xyz-abc-def"
                       />
                     </label>
