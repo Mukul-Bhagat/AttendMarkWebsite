@@ -167,11 +167,11 @@ describe('SessionAttendanceView', () => {
       expect(screen.getAllByText('User Two').length).toBeGreaterThan(0);
     });
 
-    expect(screen.getByText('On time (Grace)')).toBeTruthy();
-    expect(screen.getByText('One-Tap Check-In')).toBeTruthy();
-    expect(screen.getByText('Not Verified')).toBeTruthy();
-    expect(screen.getByText('Leave Approved (Casual)')).toBeTruthy();
-    expect(screen.getByText('Modified by Manager One -> Admin Two')).toBeTruthy();
+    expect(screen.getAllByText('On time (Grace)').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('One-Tap Check-In').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Not Verified').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Leave Approved (Casual)').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Modified by Manager One -> Admin Two').length).toBeGreaterThan(0);
     expect(screen.queryByText('Modified by User One')).toBeNull();
   });
 

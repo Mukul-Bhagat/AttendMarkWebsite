@@ -246,28 +246,6 @@ const AttendanceAccessConfigurator: React.FC<AttendanceAccessConfiguratorProps> 
       <div className={`grid gap-4 ${compact ? 'lg:grid-cols-1' : 'lg:grid-cols-3'}`}>
         {methodCards.map(renderCard)}
       </div>
-
-      <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white/70 px-4 py-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Live Session Switching</p>
-          <p className="mt-1 text-sm text-slate-600">
-            Allow active sessions to switch between enabled attendance methods without rewriting past records.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => onChange({ ...attendanceAccess, allowLiveMethodSwitch: !attendanceAccess.allowLiveMethodSwitch })}
-          className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
-            attendanceAccess.allowLiveMethodSwitch ? 'bg-slate-900' : 'bg-slate-300'
-          }`}
-        >
-          <span
-            className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-              attendanceAccess.allowLiveMethodSwitch ? 'translate-x-6' : 'translate-x-1'
-            }`}
-          />
-        </button>
-      </div>
     </section>
   );
 };

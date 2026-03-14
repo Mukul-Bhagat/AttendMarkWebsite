@@ -36,7 +36,7 @@ export const createDefaultAttendanceAccess = (): IAttendanceAccess => ({
     readiness: 'PLANNED',
   },
   defaultMethod: 'QR',
-  allowLiveMethodSwitch: true,
+  allowLiveMethodSwitch: false,
 });
 
 export const normalizeAttendanceAccess = (
@@ -68,7 +68,7 @@ export const normalizeAttendanceAccess = (
       defaultMethod === 'ONE_TAP' || defaultMethod === 'FACE_VERIFY' || defaultMethod === 'QR'
         ? defaultMethod
         : fallback.defaultMethod,
-    allowLiveMethodSwitch: input.allowLiveMethodSwitch ?? fallback.allowLiveMethodSwitch,
+    allowLiveMethodSwitch: false,
   };
 };
 

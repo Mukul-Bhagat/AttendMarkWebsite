@@ -22,6 +22,7 @@ export interface AdjustAttendancePayload {
     reason: string; // Required: 10-500 chars
     lateMinutes?: number; // Required if newStatus = 'LATE'
     targetDate?: string; // Required for recurring sessions (ISO date string)
+    allowOutOfRoster?: boolean;
 }
 
 export interface AdjustAttendanceResponse {
@@ -221,10 +222,17 @@ export const validateAdjustmentPayload = (
 
     // Validate targetDate format if provided
     if (payload.targetDate) {
-        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-        if (!dateRegex.test(payload.targetDate)) {
-            errors.push('Target date must be in YYYY-MM-DD format');
-        }
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(payload.targetDate)) {
+        errors.push('Target date must be in YYYY-MM-DD format');
+      }
+    }
+
+    if (
+      payload.allowOutOfRoster !== undefined
+      && typeof payload.allowOutOfRoster !== 'boolean'
+    ) {
+      errors.push('allowOutOfRoster must be a boolean');
     }
 
     return {

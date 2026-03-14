@@ -27,6 +27,11 @@ interface ClassBatchSummary {
   name: string;
   description?: string;
   configRevision?: number;
+  startDate?: string;
+  endDate?: string;
+  sessionAdmin?: string | null;
+  useOrganizationGracePeriod?: boolean;
+  gracePeriod?: number | null;
 }
 
 type Frequency = 'ONE_TIME' | 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'CUSTOM_DATES';
@@ -46,6 +51,7 @@ interface ConfigVersionPayload {
   };
   defaults: {
     mode: SessionMode;
+    sessionAdminIds?: string[];
     attendanceAccess?: IAttendanceAccess;
     physicalPolicy?: {
       radiusMeters?: number;
@@ -66,6 +72,24 @@ interface ConfigVersionPayload {
         meetingLink?: string;
       };
     };
+  };
+}
+
+interface ClassPatchPrefill {
+  name?: string;
+  description?: string;
+  sessionAdminId?: string | null;
+  useOrganizationGracePeriod?: boolean;
+  gracePeriod?: number | null;
+}
+
+interface ClassConfigurationResponse {
+  classBatch: ClassBatchSummary;
+  configVersion: ConfigVersionPayload | null;
+  classPatch?: ClassPatchPrefill;
+  recommendedEffectiveFromKey?: string;
+  organizationPolicy?: {
+    defaultGracePeriod?: number;
   };
 }
 
@@ -107,6 +131,7 @@ const ClassConfigure: React.FC = () => {
 
   const [classBatch, setClassBatch] = useState<ClassBatchSummary | null>(null);
   const [enrollments, setEnrollments] = useState<EnrollmentUser[]>([]);
+  const [sessionAdmins, setSessionAdmins] = useState<OrgUser[]>([]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -126,6 +151,12 @@ const ClassConfigure: React.FC = () => {
     radius: 100,
     hybridDefaultMode: 'PHYSICAL' as 'PHYSICAL' | 'REMOTE',
   });
+  const [sessionAdminId, setSessionAdminId] = useState('');
+  const [useOrgGracePeriod, setUseOrgGracePeriod] = useState(true);
+  const [customGracePeriod, setCustomGracePeriod] = useState(30);
+  const [organizationGraceDefault, setOrganizationGraceDefault] = useState<number | null>(null);
+  const [recommendedEffectiveFrom, setRecommendedEffectiveFrom] = useState('');
+  const [rosterSearch, setRosterSearch] = useState('');
   const [attendanceAccess, setAttendanceAccess] = useState<IAttendanceAccess>(createDefaultAttendanceAccess());
 
   const [selectedCoordinates, setSelectedCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -145,6 +176,19 @@ const ClassConfigure: React.FC = () => {
     [formData.customDates]
   );
 
+  const filteredEnrollments = useMemo(() => {
+    const query = rosterSearch.trim().toLowerCase();
+    if (!query) return enrollments;
+    return enrollments.filter((entry) => {
+      const fullName = `${entry.firstName} ${entry.lastName}`.toLowerCase();
+      return (
+        fullName.includes(query)
+        || entry.email.toLowerCase().includes(query)
+        || entry.role.toLowerCase().includes(query)
+      );
+    });
+  }, [enrollments, rosterSearch]);
+
   const fetchEnrollments = async (classId: string) => {
     try {
       const { data } = await api.get(`/api/classes/${classId}/enrollments`);
@@ -163,41 +207,85 @@ const ClassConfigure: React.FC = () => {
       }
 
       try {
-        const { data } = await api.get(`/api/classes/${id}/configuration`);
+        const [configurationResponse, usersResponse] = await Promise.all([
+          api.get(`/api/classes/${id}/configuration`),
+          api.get('/api/users/my-organization').catch(() => null),
+        ]);
+
+        const data = configurationResponse.data as ClassConfigurationResponse;
         const classData = data.classBatch as ClassBatchSummary;
         const configData = data.configVersion as ConfigVersionPayload | null;
+        const classPatch = data.classPatch || {};
 
         setClassBatch(classData);
         // eslint-disable-next-line no-restricted-syntax
         const todayKey = toISTDateString(new Date());
+        const recommendedKey = data.recommendedEffectiveFromKey || todayKey;
+        setRecommendedEffectiveFrom(recommendedKey);
+
+        const defaultOrgGrace = data.organizationPolicy?.defaultGracePeriod;
+        setOrganizationGraceDefault(
+          typeof defaultOrgGrace === 'number' ? defaultOrgGrace : null,
+        );
+
+        const classUsesOrgGrace =
+          classPatch.useOrganizationGracePeriod !== undefined
+            ? classPatch.useOrganizationGracePeriod
+            : classData.useOrganizationGracePeriod !== false;
+        setUseOrgGracePeriod(classUsesOrgGrace);
+        const graceFromClass = Number(
+          classPatch.gracePeriod ?? classData.gracePeriod ?? defaultOrgGrace ?? 30,
+        );
+        setCustomGracePeriod(
+          Number.isFinite(graceFromClass) && graceFromClass >= 0 && graceFromClass <= 180
+            ? graceFromClass
+            : 30,
+        );
+        const sessionAdminFromConfig = configData?.defaults?.sessionAdminIds?.[0];
+        setSessionAdminId(String(classPatch.sessionAdminId || classData.sessionAdmin || sessionAdminFromConfig || ''));
+
+        const allUsers = Array.isArray(usersResponse?.data) ? usersResponse?.data as OrgUser[] : [];
+        const isSessionAdminCandidate = (entry: OrgUser) => {
+          const role = String(entry.role || '').trim().toLowerCase();
+          return (
+            role.includes('sessionadmin')
+            || role.includes('session_admin')
+            || role.includes('session admin')
+            || role.includes('superadmin')
+            || role.includes('companyadmin')
+            || role.includes('platformowner')
+            || role.includes('manager')
+          );
+        };
+        const adminCandidates = allUsers.filter(isSessionAdminCandidate);
+        setSessionAdmins(adminCandidates.length > 0 ? adminCandidates : allUsers);
 
         if (configData) {
           const mode = normalizeSessionMode(configData.defaults?.mode || 'PHYSICAL');
           const schedule = configData.scheduleRule;
-          const safeEffectiveFrom =
-            configData.effectiveFromKey && configData.effectiveFromKey > todayKey
-              ? configData.effectiveFromKey
-              : todayKey;
+          const safeEffectiveFrom = recommendedKey;
 
           const meetingLink = mode === 'REMOTE'
             ? configData.defaults?.remotePolicy?.meetingLink || ''
             : mode === 'HYBRID'
               ? configData.defaults?.hybridPolicy?.remotePolicy?.meetingLink || ''
-              : '';
+              : configData.defaults?.remotePolicy?.meetingLink || '';
 
-          const physicalPolicy = mode === 'HYBRID'
-            ? configData.defaults?.hybridPolicy?.physicalPolicy
-            : configData.defaults?.physicalPolicy;
+          const preservedPhysicalPolicy =
+            configData.defaults?.physicalPolicy || configData.defaults?.hybridPolicy?.physicalPolicy;
 
           setSelectedCoordinates(
-            physicalPolicy?.center
-              ? { latitude: physicalPolicy.center.latitude, longitude: physicalPolicy.center.longitude }
-              : null
+            preservedPhysicalPolicy?.center
+              ? {
+                latitude: preservedPhysicalPolicy.center.latitude,
+                longitude: preservedPhysicalPolicy.center.longitude,
+              }
+              : null,
           );
 
           setFormData({
-            name: classData.name || '',
-            description: classData.description || '',
+            name: classPatch.name || classData.name || '',
+            description: classPatch.description || classData.description || '',
             effectiveFrom: safeEffectiveFrom,
             frequency: schedule.frequency,
             startDate: schedule.startDateKey,
@@ -209,20 +297,20 @@ const ClassConfigure: React.FC = () => {
             customDates: schedule.customDates || [],
             mode,
             meetingLink,
-            locationLabel: physicalPolicy?.locationLabel || '',
-            radius: physicalPolicy?.radiusMeters || 100,
+            locationLabel: preservedPhysicalPolicy?.locationLabel || '',
+            radius: preservedPhysicalPolicy?.radiusMeters || 100,
             hybridDefaultMode: configData.defaults?.hybridPolicy?.defaultParticipantMode || 'PHYSICAL',
           });
           setAttendanceAccess(normalizeAttendanceAccess(configData.defaults?.attendanceAccess));
-
           setInitialMode(mode);
         } else {
           setFormData((prev) => ({
             ...prev,
-            name: classData.name || '',
-            description: classData.description || '',
-            effectiveFrom: todayKey,
-            startDate: todayKey,
+            name: classPatch.name || classData.name || '',
+            description: classPatch.description || classData.description || '',
+            effectiveFrom: recommendedKey,
+            startDate: classData.startDate ? toISTDateString(classData.startDate) : todayKey,
+            endDate: classData.endDate ? toISTDateString(classData.endDate) : '',
           }));
           setInitialMode('PHYSICAL');
           setAttendanceAccess(createDefaultAttendanceAccess());
@@ -277,8 +365,16 @@ const ClassConfigure: React.FC = () => {
       setError('Effective date is required.');
       return false;
     }
+    if (recommendedEffectiveFrom && formData.effectiveFrom < recommendedEffectiveFrom) {
+      setError(`Effective date cannot be before ${recommendedEffectiveFrom}.`);
+      return false;
+    }
     if (!formData.startDate) {
       setError('Start date is required.');
+      return false;
+    }
+    if (formData.endDate && formData.endDate < formData.startDate) {
+      setError('End date cannot be before start date.');
       return false;
     }
     if (!formData.startTime || !formData.endTime) {
@@ -300,6 +396,17 @@ const ClassConfigure: React.FC = () => {
     if ((formData.mode === 'PHYSICAL' || formData.mode === 'HYBRID') && (!selectedCoordinates || !formData.radius)) {
       setError('Physical sessions require location and radius.');
       return false;
+    }
+    if (!useOrgGracePeriod) {
+      if (
+        !Number.isFinite(customGracePeriod)
+        || customGracePeriod < 0
+        || customGracePeriod > 180
+        || !Number.isInteger(customGracePeriod)
+      ) {
+        setError('Custom grace period must be an integer between 0 and 180.');
+        return false;
+      }
     }
     return true;
   };
@@ -327,12 +434,25 @@ const ClassConfigure: React.FC = () => {
 
   const buildDefaults = () => {
     const locationLabel = formData.locationLabel || classBatch?.name || 'Class Location';
-    const normalizedAttendanceAccess = normalizeAttendanceAccess(attendanceAccess);
+    const normalizedAttendanceAccess = {
+      ...normalizeAttendanceAccess(attendanceAccess),
+      allowLiveMethodSwitch: false,
+    };
+    const sessionAdminIds = sessionAdminId ? [sessionAdminId] : [];
+    const preservedPhysicalPolicy = {
+      mapRequired: true,
+      geoRequired: true,
+      radiusMeters: formData.radius,
+      center: selectedCoordinates || undefined,
+      locationLabel,
+    };
 
     if (formData.mode === 'REMOTE') {
       return {
         mode: 'REMOTE' as SessionMode,
         attendanceAccess: normalizedAttendanceAccess,
+        sessionAdminIds,
+        physicalPolicy: preservedPhysicalPolicy,
         remotePolicy: {
           meetingLink: formData.meetingLink || undefined,
           geoRequired: false,
@@ -344,6 +464,7 @@ const ClassConfigure: React.FC = () => {
       return {
         mode: 'HYBRID' as SessionMode,
         attendanceAccess: normalizedAttendanceAccess,
+        sessionAdminIds,
         hybridPolicy: {
           allowPhysical: true,
           allowRemote: true,
@@ -366,6 +487,7 @@ const ClassConfigure: React.FC = () => {
     return {
       mode: 'PHYSICAL' as SessionMode,
       attendanceAccess: normalizedAttendanceAccess,
+      sessionAdminIds,
       physicalPolicy: {
         mapRequired: true,
         geoRequired: true,
@@ -383,23 +505,23 @@ const ClassConfigure: React.FC = () => {
     setError('');
 
     try {
-      if (classBatch && (formData.name !== classBatch.name || formData.description !== (classBatch.description || ''))) {
-        await api.put(`/api/classes/${id}`, {
-          name: formData.name.trim(),
-          description: formData.description.trim() || undefined,
-        });
-      }
-
       const payload = {
         effectiveFrom: formData.effectiveFrom,
         expectedRevision: classBatch?.configRevision ?? 0,
         scheduleRule: buildScheduleRule(),
         defaults: buildDefaults(),
+        classPatch: {
+          name: formData.name.trim(),
+          description: formData.description.trim() || undefined,
+          sessionAdminId: sessionAdminId || null,
+          useOrganizationGracePeriod: useOrgGracePeriod,
+          gracePeriod: useOrgGracePeriod ? null : customGracePeriod,
+        },
       };
 
       const idempotencyKey = uuidv4();
 
-      await api.put(`/api/classes/${id}/configure`, payload, {
+      const { data } = await api.put(`/api/classes/${id}/configure`, payload, {
         headers: {
           'Idempotency-Key': idempotencyKey,
           ...(classBatch?.configRevision !== undefined
@@ -407,6 +529,10 @@ const ClassConfigure: React.FC = () => {
             : {}),
         },
       });
+
+      if (typeof data?.newRevision === 'number') {
+        setClassBatch((prev) => (prev ? { ...prev, configRevision: data.newRevision } : prev));
+      }
 
       setInitialMode(formData.mode);
 
@@ -593,18 +719,24 @@ const ClassConfigure: React.FC = () => {
                   required
                 />
               </label>
-              <label className="flex flex-col">
-                <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Effective From</p>
-                <input
-                  className="form-input flex w-full resize-none overflow-hidden rounded-lg border border-[#e6e2db] bg-white p-3 text-base font-normal leading-normal text-[#181511] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                  name="effectiveFrom"
-                  type="date"
-                  value={formData.effectiveFrom}
-                  onChange={(event) => setFormData((prev) => ({ ...prev, effectiveFrom: event.target.value }))}
-                  required
-                />
-              </label>
-            </div>
+	              <label className="flex flex-col">
+	                <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Effective From</p>
+	                <input
+	                  className="form-input flex w-full resize-none overflow-hidden rounded-lg border border-[#e6e2db] bg-white p-3 text-base font-normal leading-normal text-[#181511] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+	                  name="effectiveFrom"
+	                  type="date"
+	                  value={formData.effectiveFrom}
+                    min={recommendedEffectiveFrom || undefined}
+	                  onChange={(event) => setFormData((prev) => ({ ...prev, effectiveFrom: event.target.value }))}
+	                  required
+	                />
+                  {recommendedEffectiveFrom && (
+                    <span className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      Recommended from next mutable session: {recommendedEffectiveFrom}
+                    </span>
+                  )}
+	              </label>
+	            </div>
             <label className="flex flex-col">
               <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Description</p>
               <textarea
@@ -771,8 +903,83 @@ const ClassConfigure: React.FC = () => {
             value={attendanceAccess}
             onChange={setAttendanceAccess}
             title="Attendance Access"
-            description="Set class-level attendance access defaults for generated sessions. You can still override a live session later."
+            description="Set class-level attendance access defaults for generated sessions."
           />
+
+          <div className="flex flex-col gap-6 rounded-xl border border-[#e6e2db] bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-2xl text-[#f04129]">admin_panel_settings</span>
+              <h2 className="text-xl font-bold leading-tight tracking-[-0.015em] text-[#181511] dark:text-white">Administration</h2>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label className="flex flex-col">
+                <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Session Admin</p>
+                <select
+                  className="form-select w-full appearance-none rounded-lg border border-[#e6e2db] bg-white p-3 text-[#181511] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                  value={sessionAdminId}
+                  onChange={(event) => setSessionAdminId(event.target.value)}
+                >
+                  <option value="">No Session Admin</option>
+                  {sessionAdminId && !sessionAdmins.some((entry) => entry._id === sessionAdminId) && (
+                    <option value={sessionAdminId}>Current Session Admin</option>
+                  )}
+                  {sessionAdmins.map((admin) => (
+                    <option key={admin._id} value={admin._id}>
+                      {admin.profile?.firstName} {admin.profile?.lastName} ({admin.email})
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="flex flex-col">
+                <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Grace Period</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setUseOrgGracePeriod(true)}
+                    className={`rounded-lg px-4 py-2 text-sm font-semibold border ${
+                      useOrgGracePeriod
+                        ? 'border-[#f04129] text-[#f04129] bg-red-50 dark:bg-red-900/10'
+                        : 'border-[#e6e2db] text-[#5c5445] dark:border-slate-600 dark:text-slate-200'
+                    }`}
+                  >
+                    Organization Default
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUseOrgGracePeriod(false)}
+                    className={`rounded-lg px-4 py-2 text-sm font-semibold border ${
+                      !useOrgGracePeriod
+                        ? 'border-[#f04129] text-[#f04129] bg-red-50 dark:bg-red-900/10'
+                        : 'border-[#e6e2db] text-[#5c5445] dark:border-slate-600 dark:text-slate-200'
+                    }`}
+                  >
+                    Class Custom
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  {organizationGraceDefault !== null
+                    ? `Organization default: ${organizationGraceDefault} min`
+                    : 'Organization default configured in Organization Settings.'}
+                </p>
+              </div>
+            </div>
+
+            {!useOrgGracePeriod && (
+              <label className="flex flex-col md:max-w-xs">
+                <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Custom Grace (minutes)</p>
+                <input
+                  className="form-input flex w-full resize-none overflow-hidden rounded-lg border border-[#e6e2db] bg-white p-3 text-base font-normal leading-normal text-[#181511] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                  type="number"
+                  min={0}
+                  max={180}
+                  value={customGracePeriod}
+                  onChange={(event) => setCustomGracePeriod(Number(event.target.value))}
+                />
+              </label>
+            )}
+          </div>
 
           {(formData.mode === 'PHYSICAL' || formData.mode === 'HYBRID') && (
             <div className="flex flex-col gap-6 rounded-xl border border-[#e6e2db] bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
@@ -870,11 +1077,13 @@ const ClassConfigure: React.FC = () => {
           )}
 
           <div className="flex flex-col gap-6 rounded-xl border border-[#e6e2db] bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-2xl text-[#f04129]">group</span>
-                <h2 className="text-xl font-bold leading-tight tracking-[-0.015em] text-[#181511] dark:text-white">Class Roster</h2>
-              </div>
+	            <div className="flex items-center justify-between flex-wrap gap-3">
+	              <div className="flex items-center gap-3">
+	                <span className="material-symbols-outlined text-2xl text-[#f04129]">group</span>
+	                <h2 className="text-xl font-bold leading-tight tracking-[-0.015em] text-[#181511] dark:text-white">
+	                  Class Roster ({enrollments.length})
+	                </h2>
+	              </div>
               <button
                 type="button"
                 onClick={() => setShowUserModal(true)}
@@ -882,16 +1091,29 @@ const ClassConfigure: React.FC = () => {
               >
                 <span className="material-symbols-outlined text-xl">add_circle</span>
                 Add Users
-              </button>
-            </div>
+	              </button>
+	            </div>
 
-            <div className="space-y-3">
-              {enrollments.length === 0 ? (
-                <p className="text-sm text-[#8a7b60] dark:text-slate-400">No users enrolled yet.</p>
-              ) : (
-                enrollments.map((user) => (
-                  <div
-                    key={user.userId}
+            <label className="flex flex-col">
+              <p className="pb-2 text-sm font-medium leading-normal text-[#5c5445] dark:text-slate-300">Search Users</p>
+              <input
+                className="form-input flex w-full resize-none overflow-hidden rounded-lg border border-[#e6e2db] bg-white p-3 text-base font-normal leading-normal text-[#181511] placeholder:text-[#8a7b60] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-400"
+                type="text"
+                value={rosterSearch}
+                onChange={(event) => setRosterSearch(event.target.value)}
+                placeholder="Search by name, email, or role"
+              />
+            </label>
+
+	            <div className="space-y-3">
+	              {filteredEnrollments.length === 0 ? (
+	                <p className="text-sm text-[#8a7b60] dark:text-slate-400">
+                    {enrollments.length === 0 ? 'No users enrolled yet.' : 'No users match your search.'}
+                  </p>
+	              ) : (
+	                filteredEnrollments.map((user) => (
+	                  <div
+	                    key={user.userId}
                     className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e6e2db] p-4 dark:border-slate-700"
                   >
                     <div>

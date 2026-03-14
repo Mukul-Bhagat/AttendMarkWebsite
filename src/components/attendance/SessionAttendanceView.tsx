@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../../api';
 import { useAuth } from '../../contexts/AuthContext';
 import AttendanceCheckbox from './AttendanceCheckbox';
+import AddUsersModal from '../AddUsersModal';
 // ❌ DEPRECATED - Keeping for backward compatibility but not using
 // import ManualUpdateModal from './ManualUpdateModal';
 
@@ -88,6 +89,16 @@ interface Summary {
     late: number;
 }
 
+interface OrgUser {
+    _id: string;
+    email: string;
+    role: string;
+    profile: {
+        firstName: string;
+        lastName: string;
+    };
+}
+
 interface SessionAttendanceViewProps {
     sessionId: string;
     sessionDate?: string;
@@ -132,6 +143,8 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
     const [selectedUserForAdjust, setSelectedUserForAdjust] = useState<User | null>(null);
     const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
     const [newStatusForModal, setNewStatusForModal] = useState<'PRESENT' | 'ABSENT' | 'LATE'>('PRESENT');
+    const [allowOutOfRosterAdjust, setAllowOutOfRosterAdjust] = useState(false);
+    const [showOutOfRosterUserModal, setShowOutOfRosterUserModal] = useState(false);
 
     // ✅ NEW: Audit viewer state
     // Permissions (using new permission system)
@@ -284,6 +297,7 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
     const handleCheckboxChange = (user: User, checked: boolean) => {
         if (!canEdit) return;
 
+        setAllowOutOfRosterAdjust(false);
         setSelectedUserForAdjust(user);
         setNewStatusForModal(checked ? 'PRESENT' : 'ABSENT');
         setIsAdjustModalOpen(true);
@@ -302,7 +316,8 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                 newStatus: finalStatus,
                 reason,
                 lateMinutes,
-                targetDate: normalizeTargetDate(sessionDate)
+                targetDate: normalizeTargetDate(sessionDate),
+                ...(allowOutOfRosterAdjust ? { allowOutOfRoster: true } : {}),
             });
 
             // 🔥 CRITICAL: Re-fetch from backend (single source of truth)
@@ -312,11 +327,52 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
             // Close modal
             setIsAdjustModalOpen(false);
             setSelectedUserForAdjust(null);
+            setAllowOutOfRosterAdjust(false);
         } catch (err: any) {
             appLogger.error('Error adjusting attendance:', err);
             // Error handling is done in the modal via toast
             throw err; // Re-throw so modal can handle it
         }
+    };
+
+    const buildManualUserFromOrgUser = (orgUser: OrgUser): User => ({
+        userId: orgUser._id,
+        name: `${orgUser.profile.firstName} ${orgUser.profile.lastName}`.trim() || orgUser.email,
+        email: orgUser.email,
+        role: orgUser.role || 'Member',
+        status: 'ABSENT',
+        checkInTime: null,
+        isLate: false,
+        lateByMinutes: null,
+        locationVerified: false,
+        isManuallyModified: false,
+        updatedBy: null,
+        manualUpdatedAt: null,
+        updateReason: null,
+        modificationHistory: [],
+        markedViaLabel: null,
+        markingMethod: null,
+        markingChannel: null,
+        sourceContext: null,
+        gracePeriodMinutes: null,
+        onTimeWithinGrace: false,
+        leaveStatus: 'None',
+        leaveType: null,
+        modifiedByNames: [],
+    });
+
+    const handleOutOfRosterSelection = (selectedUsers: OrgUser[]) => {
+        setShowOutOfRosterUserModal(false);
+        if (!selectedUsers || selectedUsers.length === 0) return;
+
+        const selected = selectedUsers[0];
+        const existingRosterUser = users.find((entry) => entry.userId === selected._id);
+        const targetUser = existingRosterUser || buildManualUserFromOrgUser(selected);
+
+        setSelectedUserForAdjust(targetUser);
+        setNewStatusForModal('PRESENT');
+        setAllowOutOfRosterAdjust(!existingRosterUser);
+        setIsAdjustModalOpen(true);
     };
 
     // Format date/time
@@ -521,6 +577,16 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                             <option value="LATE">Late</option>
                             <option value="ABSENT">Absent</option>
                         </select>
+
+                        {canEdit && (
+                            <button
+                                type="button"
+                                onClick={() => setShowOutOfRosterUserModal(true)}
+                                className="w-full sm:w-auto px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-medium transition-colors"
+                            >
+                                Manual (Non-Roster)
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -611,6 +677,7 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                                                     <button
                                                         data-testid="adjust-button"
                                                         onClick={() => {
+                                                            setAllowOutOfRosterAdjust(false);
                                                             setSelectedUserForAdjust(user);
                                                             setNewStatusForModal(user.status === 'ABSENT' ? 'PRESENT' : 'ABSENT');
                                                             setIsAdjustModalOpen(true);
@@ -673,6 +740,7 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                                         {canEdit && (
                                             <button
                                                 onClick={() => {
+                                                    setAllowOutOfRosterAdjust(false);
                                                     setSelectedUserForAdjust(user);
                                                     setNewStatusForModal(user.status === 'ABSENT' ? 'PRESENT' : 'ABSENT');
                                                     setIsAdjustModalOpen(true);
@@ -722,6 +790,15 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
             </div>
 
             {/* ✅ NEW: Enhanced Manual Update Modal */}
+            {showOutOfRosterUserModal && (
+                <AddUsersModal
+                    onClose={() => setShowOutOfRosterUserModal(false)}
+                    onSave={(selectedUsers) => handleOutOfRosterSelection(selectedUsers as OrgUser[])}
+                    initialSelectedUsers={[]}
+                    context="Manual Attendance User"
+                />
+            )}
+
             {isAdjustModalOpen && selectedUserForAdjust && (
                 <EnhancedManualUpdateModal
                     isOpen={isAdjustModalOpen}
@@ -733,6 +810,7 @@ const SessionAttendanceView: React.FC<SessionAttendanceViewProps> = ({
                     onCancel={() => {
                         setIsAdjustModalOpen(false);
                         setSelectedUserForAdjust(null);
+                        setAllowOutOfRosterAdjust(false);
                     }}
                 />
             )}

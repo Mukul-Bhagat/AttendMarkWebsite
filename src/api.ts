@@ -273,7 +273,7 @@ api.interceptors.response.use(
     const url = response.config.url || '';
     const normalizedPath = normalizeRequestPath(url);
     const isTokenIssuerRoute =
-      /^\/api\/(?:v1\/)?auth\/(login|select-organization|mobile\/select-organization|switch-organization|refresh)$/.test(
+      /^\/api\/(?:v1\/)?auth\/(login|select-organization|mobile\/select-organization|switch-organization|refresh|me)$/.test(
         normalizedPath,
       ) ||
       /^\/api\/(?:v1\/)?platform\/login$/.test(normalizedPath);
